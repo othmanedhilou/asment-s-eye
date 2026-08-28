@@ -1,0 +1,34 @@
+{
+  "arc": {
+    "detect": true,
+    "alert": true
+  },
+  "conveyor": {
+    "detect": true,
+    "alert": true
+  },
+  "epi": {
+    "detect": true,
+    "alert": true
+  },
+  "fire_smoke": {
+    "detect": true,
+    "alert": true
+  },
+  "gloves_glasses": {
+    "detect": true,
+    "alert": true
+  },
+  "load_control": {
+    "detect": false,
+    "alert": false
+  },
+  "person_animal": {
+    "detect": true,
+    "alert": true
+  },
+  "vehicles": {
+    "detect": true,
+    "alert": true
+  }
+}

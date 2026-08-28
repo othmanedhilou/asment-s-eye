@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SmokeWatch VMS</title>
+  <link rel="stylesheet" href="/static/css/dashboard.css" />
+</head>
+<body>
+  <div class="app">
+    <!-- ── Barre latérale ── -->
+    <nav class="sidenav">
+      <div class="brand">
+        <span class="brand-icon">🔥</span>
+        <div>
+          <div class="brand-name">SmokeWatch</div>
+          <div class="brand-sub">Supervision intelligente</div>
+        </div>
+      </div>
+
+      <div class="nav-links">
+        <button class="nav-link active" data-page="dashboard">📊 Tableau de bord</button>
+        <button class="nav-link" data-page="cameras">🎥 Caméras</button>
+        <button class="nav-link" data-page="alerts">🚨 Alertes <span class="nav-badge" id="unack-badge"></span></button>
+        <button class="nav-link" data-page="usecases">🧠 Cas d'usage</button>
+        <button class="nav-link" data-page="reports">📈 Rapports</button>
+        <button class="nav-link" data-page="settings">⚙️ Paramètres</button>
+      </div>
+
+      <div class="nav-footer">
+        <div class="sys-status"><span class="status-dot"></span> Système actif</div>
+        <div class="sys-info" id="sys-info"></div>
+      </div>
+    </nav>
+
+    <!-- ── Contenu ── -->
+    <div class="content">
+
+      <!-- Tableau de bord -->
+      <section class="page active" id="page-dashboard">
+        <h1>Tableau de bord</h1>
+        <div class="kpi-row">
+          <div class="kpi"><div class="kpi-value" id="kpi-24h">–</div><div class="kpi-label">Alertes 24h</div></div>
+          <div class="kpi kpi-crit"><div class="kpi-value" id="kpi-crit">–</div><div class="kpi-label">Critiques 24h</div></div>
+          <div class="kpi kpi-warn"><div class="kpi-value" id="kpi-unack">–</div><div class="kpi-label">Non acquittées</div></div>
+          <div class="kpi"><div class="kpi-value" id="kpi-7d">–</div><div class="kpi-label">Alertes 7 jours</div></div>
+        </div>
+
+        <div class="dash-grid">
+          <div class="card">
+            <h2>Activité — dernières 24h</h2>
+            <div class="chart" id="timeline-chart"></div>
+          </div>
+          <div class="card">
+            <h2>Répartition par modèle (7 j)</h2>
+            <div id="model-bars"></div>
+          </div>
+          <div class="card wide">
+            <h2>Dernières alertes</h2>
+            <div id="dash-alerts"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Caméras -->
+      <section class="page" id="page-cameras">
+        <h1>Caméras</h1>
+        <div class="camera-grid" id="camera-grid"></div>
+      </section>
+
+      <!-- Alertes -->
+      <section class="page" id="page-alerts">
+        <h1>Alertes</h1>
+        <div class="filters">
+          <select id="filter-model">
+            <option value="">Tous les modèles</option>
+          </select>
+          <select id="filter-severity">
+            <option value="">Toutes sévérités</option>
+            <option value="critique">Critique</option>
+            <option value="haute">Haute</option>
+            <option value="moyenne">Moyenne</option>
+          </select>
+          <select id="filter-ack">
+            <option value="">Toutes</option>
+            <option value="false">À traiter</option>
+            <option value="true">Acquittées</option>
+          </select>
+          <select id="filter-period">
+            <option value="">Tout l'historique</option>
+            <option value="1">Dernière heure</option>
+            <option value="24" selected>Dernières 24h</option>
+            <option value="168">7 jours</option>
+          </select>
+        </div>
+        <div class="alerts-table" id="alerts-table"></div>
+      </section>
+
+      <!-- Cas d'usage -->
+      <section class="page" id="page-usecases">
+        <h1>Cas d'usage — cahier des charges</h1>
+        <p class="muted" style="margin-bottom:18px">
+          Les 12 cas d'usage définis en section 3.2 du cahier des charges, et leur état d'implémentation réel.
+        </p>
+        <div class="uc-legend">
+          <span><span class="uc-dot operationnel"></span> Opérationnel</span>
+          <span><span class="uc-dot partiel"></span> Partiel</span>
+          <span><span class="uc-dot a_entrainer"></span> À entraîner</span>
+        </div>
+        <div class="uc-table" id="usecases-table"></div>
+      </section>
+
+      <!-- Rapports -->
+      <section class="page" id="page-reports">
+        <h1>Rapports</h1>
+        <div class="dash-grid">
+          <div class="card">
+            <h2>Répartition par sévérité (7 j)</h2>
+            <div id="severity-bars"></div>
+          </div>
+          <div class="card">
+            <h2>Export</h2>
+            <p class="muted">Exporte l'historique complet des alertes pour le service HSE (format CSV, compatible Excel).</p>
+            <a class="btn" href="/api/export/csv">⬇ Télécharger le rapport CSV</a>
+          </div>
+        </div>
+      </section>
+
+      <!-- Paramètres -->
+      <section class="page" id="page-settings">
+        <h1>Paramètres</h1>
+        <div class="card">
+          <h2>Modèles de détection</h2>
+          <p class="muted">Active ou désactive la détection et les alertes par modèle. Effet immédiat, sans redémarrage.</p>
+          <div id="controls-list"></div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+
+  <script src="/static/js/dashboard.js"></script>
+</body>
+</html>

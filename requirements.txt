@@ -1,0 +1,32 @@
+# Vidéo & inférence (Personne A)
+opencv-python
+numpy
+ultralytics
+pillow
+
+# Interface de test
+streamlit
+
+# Backend & API (Personne C)
+fastapi
+uvicorn
+sqlalchemy
+pydantic
+python-jose
+passlib
+python-multipart
+websockets
+pyyaml
+aiofiles
+
+# Notifications (Personne B)
+python-telegram-bot
+aiosmtplib
+
+# Tests
+pytest
+pytest-asyncio
+
+# Utilitaires
+python-dotenv
+loguru

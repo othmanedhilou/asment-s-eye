@@ -1,0 +1,12 @@
+# Relais RTSP pour simuler une camera IP a partir d'une webcam locale.
+# Inutile avec les vraies cameras du site : elles parlent RTSP nativement.
+
+services:
+  mediamtx:
+    image: bluenviron/mediamtx:latest
+    container_name: smokewatch_mediamtx
+    restart: unless-stopped
+    ports:
+      - "8554:8554"   # RTSP
+      - "1935:1935"   # RTMP (optionnel)
+      - "8888:8888"   # HLS (optionnel)

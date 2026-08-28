@@ -1,0 +1,57 @@
+# Configuration SmokeWatch — caméras, modèles, ROI
+
+cameras:
+  webcam_test:
+    # source: indice de webcam locale (0) OU URL RTSP d'une caméra IP du site.
+    # Cette machine n'a pas Docker/mediamtx : lecture directe de la webcam.
+    source: 0
+    rtsp_url: "rtsp://localhost:8554/webcam"
+    models:
+      - arc
+      - conveyor
+      - epi
+      - fire_smoke
+      - gloves_glasses
+      - load_control
+      - person_animal
+      - vehicles
+    # les 7 modèles sont chargés ; activer/désactiver détection et alertes
+    # se fait en direct depuis le panneau de contrôle (pas ici)
+
+models:
+  arc:
+    file: models/smokewatch_arc_best_openvino_model
+    conf: 0.4
+    enabled: true
+  conveyor:
+    file: models/smokewatch_conveyor_best_openvino_model
+    conf: 0.4
+    enabled: true  # bande transporteuse : classe unique "crack" (fissure/déchirure)
+  epi:
+    file: models/smokewatch_epi_best_openvino_model
+    conf: 0.4
+    enabled: true
+  fire_smoke:
+    file: models/smokewatch_fire_smoke_best_openvino_model
+    conf: 0.35
+    enabled: true
+  gloves_glasses:
+    file: models/smokewatch_gloves_glasses_best_openvino_model
+    conf: 0.4
+    enabled: true
+  load_control:
+    file: models/smokewatch_load_control_best_openvino_model
+    conf: 0.4
+    enabled: true  # faux positifs connus (0.89) -> désactivé PAR DÉFAUT via le panneau (data/settings.json), pas ici
+  person_animal:
+    file: models/smokewatch_person_animal_best_openvino_model
+    conf: 0.4
+    enabled: true
+  vehicles:
+    file: models/smokewatch_vehicles_best_openvino_model
+    conf: 0.4
+    enabled: true
+
+inference:
+  fps: 4          # images analysées par seconde et par caméra (OpenVINO permet plus)
+  imgsz: 640      # doit correspondre à la taille figée à l'export OpenVINO
