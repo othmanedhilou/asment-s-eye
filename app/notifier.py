@@ -7,10 +7,13 @@ import cv2
 import requests
 from dotenv import load_dotenv
 
+from app.logging_setup import setup_logging
 from app.models import Alert
 from app.storage import log_alert, severity_for
 
 load_dotenv()
+
+log = setup_logging()
 
 SNAPSHOTS_DIR = Path(__file__).resolve().parent.parent / "clips" / "snapshots"
 
@@ -67,12 +70,12 @@ def _telegram_alert(alert: Alert, snapshot_path: str | None, severity: str):
                 url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
                 requests.post(url, data={"chat_id": chat_id, "text": caption}, timeout=10)
         except requests.RequestException as e:
-            print(f"Échec envoi Telegram ({chat_id}) : {e}")
+            log.error(f"échec envoi Telegram ({chat_id}) : {e}")
 
 
 def local_alert(alert: Alert, frame=None) -> Alert:
     severity = severity_for(alert.model, alert.label)
-    print(f"\n🚨 ALERTE [{severity}] — {alert.message}\n")
+    log.warning(f"ALERTE [{severity}] — {alert.message}")
     _beep()
 
     snapshot_path = None
@@ -83,9 +86,9 @@ def local_alert(alert: Alert, frame=None) -> Alert:
             filename = SNAPSHOTS_DIR / f"{alert.camera}_{alert.model}_{alert.label}_{ts}.jpg"
             cv2.imwrite(str(filename), frame)
             snapshot_path = str(filename)
-            print(f"Snapshot sauvegardé : {filename}")
+            log.info(f"snapshot : {filename.name}")
         except Exception as e:
-            print(f"Échec snapshot : {e}")
+            log.error(f"échec snapshot : {e}")
 
     alert.db_id = log_alert(alert, snapshot_path)
     _telegram_alert(alert, snapshot_path, severity)

@@ -1,32 +1,36 @@
-# Vidéo & inférence (Personne A)
-opencv-python
-numpy
-ultralytics
-pillow
+# Versions épinglées : sans cela, deux machines installées à quelques mois
+# d'écart n'ont pas le même environnement, et un modèle exporté par l'une peut
+# refuser de se charger sur l'autre. Mettre à jour volontairement, jamais par
+# accident.
 
-# Interface de test
-streamlit
+# Vidéo & inférence
+opencv-python==5.0.0.93
+numpy==2.5.2
+ultralytics==8.4.129
+pillow==12.3.0
+torch==2.13.0
+torchvision==0.28.0
 
-# Backend & API (Personne C)
-fastapi
-uvicorn
-sqlalchemy
-pydantic
-python-jose
-passlib
-python-multipart
-websockets
-pyyaml
-aiofiles
+# Accélération CPU (aucun GPU sur la machine cible)
+openvino==2026.3.1
 
-# Notifications (Personne B)
-python-telegram-bot
-aiosmtplib
+# Backend & API
+fastapi==0.141.1
+uvicorn==0.52.4
+sqlalchemy==2.0.52
+pydantic==2.13.4
+python-multipart==0.0.32
+websockets==16.1.1
+pyyaml==6.0.3
+aiofiles==25.1.0
 
-# Tests
-pytest
-pytest-asyncio
+# Notifications
+requests==2.34.2
 
 # Utilitaires
-python-dotenv
-loguru
+python-dotenv==1.2.3
+loguru==0.7.3
+
+# Tests
+pytest==9.1.1
+pytest-asyncio==1.4.0

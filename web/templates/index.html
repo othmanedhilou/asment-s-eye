@@ -22,6 +22,7 @@
         <button class="nav-link active" data-page="dashboard">📊 Tableau de bord</button>
         <button class="nav-link" data-page="cameras">🎥 Caméras</button>
         <button class="nav-link" data-page="alerts">🚨 Alertes <span class="nav-badge" id="unack-badge"></span></button>
+        <button class="nav-link" data-page="zones">📐 Zones</button>
         <button class="nav-link" data-page="usecases">🧠 Cas d'usage</button>
         <button class="nav-link" data-page="reports">📈 Rapports</button>
         <button class="nav-link" data-page="settings">⚙️ Paramètres</button>
@@ -94,6 +95,51 @@
           </select>
         </div>
         <div class="alerts-table" id="alerts-table"></div>
+      </section>
+
+      <!-- Zones d'intérêt -->
+      <section class="page" id="page-zones">
+        <h1>Zones d'intérêt</h1>
+        <p class="muted" style="margin-bottom:18px">
+          Délimitez les secteurs à surveiller et les modèles qui s'y appliquent : le contrôle des EPI
+          dans l'atelier, les véhicules sur le quai. Hors zone, les détections sont ignorées — c'est le
+          principal levier contre les fausses alertes. Sans aucune zone, la caméra est analysée en entier.
+        </p>
+
+        <div class="zone-layout">
+          <div class="card">
+            <h2>Tracé</h2>
+            <div class="zone-toolbar">
+              <select id="zone-camera"></select>
+              <button class="btn small" id="zone-undo">↶ Dernier point</button>
+              <button class="btn small ghost" id="zone-clear">Effacer le tracé</button>
+            </div>
+            <div class="zone-canvas-wrap" id="zone-canvas-wrap">
+              <img id="zone-frame" alt="flux caméra" />
+              <canvas id="zone-canvas"></canvas>
+            </div>
+            <p class="muted" id="zone-hint">Cliquez sur l'image pour poser les sommets (3 minimum).</p>
+          </div>
+
+          <div class="card">
+            <h2>Nouvelle zone</h2>
+            <label class="zone-field">
+              <span>Nom</span>
+              <input type="text" id="zone-name" placeholder="ex : atelier, quai de chargement" />
+            </label>
+            <div class="zone-field">
+              <span>Modèles surveillés dans cette zone</span>
+              <div id="zone-models" class="zone-models"></div>
+              <p class="muted" style="font-size:12px">Aucun coché = tous les modèles s'appliquent.</p>
+            </div>
+            <button class="btn" id="zone-add">+ Ajouter la zone</button>
+
+            <h2 style="margin-top:24px">Zones de cette caméra</h2>
+            <div id="zone-list"></div>
+            <button class="btn" id="zone-save" style="margin-top:12px">💾 Enregistrer</button>
+            <p class="muted" id="zone-status"></p>
+          </div>
+        </div>
       </section>
 
       <!-- Cas d'usage -->

@@ -1,8 +1,16 @@
+"""Liste les modeles presents et les classes que chacun sait detecter.
+
+Utile pour verifier apres un transfert de machine que les .pt sont complets,
+et pour retrouver le nom exact des classes a declarer dans rules.py.
+
+Usage : python scripts/inspect_models.py
+"""
+
 from pathlib import Path
 
 from ultralytics import YOLO
 
-MODELS_DIR = Path("models")
+MODELS_DIR = Path(__file__).resolve().parent.parent / "models"
 
 
 def main():

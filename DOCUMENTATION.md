@@ -49,15 +49,19 @@ Caméra
 app/capture.py ........ RTSPStream : thread de lecture dédié
   |                     ne garde que l'image la plus récente
   v
-app/pipeline.py ....... boucle principale : N modèles en parallèle par image
+app/pipeline.py ....... un thread par caméra ; N modèles en parallèle par image
   |                     (ThreadPoolExecutor + OpenVINO)
   v
-app/rules.py .......... filtrage : classes surveillées, seuils renforcés,
+app/zones.py .......... filtrage géographique : la détection est-elle dans une
+  |                     zone surveillée pour ce modèle ?
+  v
+app/rules.py .......... filtrage métier : classes surveillées, seuils renforcés,
   |                     anti-répétition calé sur la sévérité
   v
 app/notifier.py ....... snapshot + bip + Telegram (routage par sévérité)
 app/recorder.py ....... clip MP4 : 5 s avant / 10 s après l'alerte
 app/storage.py ........ SQLite : historique, sévérité, acquittement, purge
+app/logging_setup.py .. journal console + fichier tournant (logs/)
   v
 app/api.py ............ API REST + interface web (port 8000)
 ```
@@ -122,11 +126,23 @@ os.environ.setdefault("OPENCV_FFMPEG_CAPTURE_OPTIONS", "rtsp_transport;tcp")
 En UDP (le défaut), le NAT de Docker Desktop coupait le flux après une dizaine
 de secondes.
 
-### 2.2 `app/detectors.py` — chargement des modèles
+### 2.2 `app/detectors.py` — chargement et préchauffage des modèles
 
 `ModelRegistry` charge les modèles YOLO à la demande et les garde en mémoire.
-Le chargement est coûteux (compilation OpenVINO à la première inférence), il ne
-doit se produire qu'une fois par processus.
+
+**Le préchauffage n'est pas un détail de confort.** `YOLO(chemin)` ne lit que
+les métadonnées : la compilation OpenVINO, elle, n'a lieu qu'à la **première
+inférence** — mesurée à 5,3 s pour le premier modèle (initialisation du runtime
+comprise) puis ~1 s par modèle suivant.
+
+Si on laisse la boucle principale la déclencher, plusieurs modèles compilent
+simultanément dans le pool de threads pendant que le flux caméra tourne. Sur une
+machine à deux cœurs, la contention est telle que **le pipeline ne démarre
+jamais** : le processus consomme du CPU sans jamais produire un seul cycle. Le
+symptôme trompe, car il ressemble à un blocage réseau.
+
+`warmup()` compile les modèles **un par un** avant d'entrer dans la boucle : une
+dizaine de secondes au démarrage, puis plus rien.
 
 ### 2.3 `app/pipeline.py` — la boucle principale
 
@@ -153,13 +169,71 @@ La liste des modèles actifs est **relue à chaque image**, pas figée au
 démarrage : cocher une case dans l'interface prend effet au cycle suivant, sans
 redémarrage.
 
+**Une caméra, un thread.** `main()` démarre `run_camera` dans un thread par
+caméra déclarée. Le choix du thread plutôt que du processus est délibéré : les
+modèles OpenVINO sont chargés **une seule fois et partagés** par toutes les
+caméras (un jeu de modèles par processus coûterait plusieurs centaines de Mo
+chacun), et l'inférence libère le GIL, donc le parallélisme est réel.
+
+Chaque caméra peut surcharger `fps`, `imgsz` et `workers` dans sa propre section
+de `config.yaml` : sur une machine contrainte, on ralentit une caméra secondaire
+sans toucher aux autres.
+
+**Un modèle qui échoue n'arrête plus le cycle.** `_run_one_model` absorbe ses
+exceptions et renvoie une liste vide : sans cela, un seul modèle défaillant
+remonterait par `future.result()` et interromprait la surveillance de tous les
+autres.
+
 Chaque détection est dessinée sur une copie de l'image (`annotated`), qui sert à
 la fois au flux live et aux clips vidéo — l'opérateur voit les boîtes
 englobantes.
 
 En cas de perte de flux, la boucle extérieure reconnecte toutes les 2 s.
 
-### 2.4 `app/rules.py` — du bruit brut aux alertes exploitables
+### 2.4 `app/zones.py` — zones d'intérêt (ROI)
+
+Sans zones, un modèle analyse toute l'image : le détecteur d'EPI se déclenche sur
+le parking, celui de véhicules sur la route derrière la clôture. **C'est la
+première cause de fausses alertes sur site réel**, et donc l'obstacle principal à
+l'objectif « moins de 2 fausses alertes par jour et par caméra ».
+
+Une zone est un polygone associé aux modèles qui ont un sens dedans :
+
+```json
+{
+  "webcam_test": [
+    {"name": "atelier", "polygon": [[0.1, 0.2], [0.7, 0.2], [0.7, 0.9], [0.1, 0.9]],
+     "models": ["epi", "gloves_glasses"]},
+    {"name": "quai", "polygon": [[0.7, 0.3], [1.0, 0.3], [1.0, 1.0], [0.7, 1.0]],
+     "models": ["vehicles"]}
+  ]
+}
+```
+
+Trois décisions de conception :
+
+**Coordonnées normalisées (0.0 à 1.0).** Les zones restent valides si la
+résolution de la caméra change, et l'interface peut les dessiner sans connaître
+les dimensions réelles du flux.
+
+**Point d'ancrage au sol.** L'appartenance est testée sur le milieu du bord bas
+de la boîte, pas sur son centre : pour une personne debout ou un véhicule, c'est
+le point de contact avec le sol. Le centre placerait un ouvrier au niveau de son
+torse, donc potentiellement hors zone alors que ses pieds y sont.
+
+**Test par lancer de rayon**, implémenté à la main plutôt qu'avec `shapely` :
+une dépendance de moins à installer sur le serveur, pour vingt lignes stables.
+Les polygones concaves sont gérés correctement (couvert par les tests).
+
+Une caméra **sans zone déclarée** analyse toute l'image — le comportement
+d'avant, pour ne rien casser tant que les zones ne sont pas dessinées.
+
+Les zones se tracent à la souris dans l'interface (page **Zones**), sont
+enregistrées dans `config/zones.json` et **prises en compte au cycle suivant**,
+sans redémarrage. Elles sont aussi tracées sur l'image live, pour que l'opérateur
+voie ce qui est réellement surveillé.
+
+### 2.5 `app/rules.py` — du bruit brut aux alertes exploitables
 
 C'est la couche qui rend le système utilisable. Trois filtres successifs.
 
@@ -204,13 +278,15 @@ COOLDOWN_BY_SEVERITY = {
 }
 ```
 
-Le délai s'applique par **(caméra, modèle, classe)**. Un ouvrier sans casque qui
+Le délai s'applique par **(caméra, zone, modèle, classe)** — un véhicule sur le
+quai et un autre devant l'atelier sont deux situations distinctes, chacune doit
+alerter. Un ouvrier sans casque qui
 reste à son poste génère une alerte toutes les 5 minutes, pas une par image.
 Avec l'ancien délai unique de 15 s, une personne assise devant la caméra
 produisait **448 alertes en 24 h** ; après ce changement, la même scène en
 produit une poignée.
 
-### 2.5 `app/storage.py` — base de données et sévérité
+### 2.6 `app/storage.py` — base de données et sévérité
 
 **La sévérité métier** est calculée à l'enregistrement, pas saisie :
 
@@ -245,7 +321,7 @@ fonctionner sans manipulation.
 `cleanup_old_data()` purge au démarrage les médias de plus de 30 jours et les
 alertes de plus d'un an — sans quoi le disque se remplit silencieusement.
 
-### 2.6 `app/notifier.py` — notification
+### 2.7 `app/notifier.py` — notification
 
 Pour chaque alerte : log console, bip sonore (`winsound`), snapshot JPEG dans
 `clips/snapshots/`, insertion en base, puis envoi Telegram.
@@ -263,7 +339,7 @@ Les destinataires viennent de `.env` (`TELEGRAM_CHAT_IDS=111,222,333`).
 Telegram a été retenu plutôt que SMS ou WhatsApp : gratuit, illimité, aucun
 compte tiers payant, et l'application est déjà installée sur les téléphones.
 
-### 2.7 `app/recorder.py` — clips vidéo
+### 2.8 `app/recorder.py` — clips vidéo
 
 Un snapshot ne dit pas ce qui s'est passé **avant** l'alerte. Le `ClipRecorder`
 garde en mémoire un tampon glissant des 5 dernières secondes :
@@ -278,7 +354,7 @@ un MP4 (codec `mp4v`), puis lie le fichier à l'alerte en base.
 Un seul clip à la fois : `trigger()` sort immédiatement si un enregistrement est
 en cours, sinon des dizaines de vidéos se chevaucheraient.
 
-### 2.8 `app/settings.py` — réglages en direct
+### 2.9 `app/settings.py` — réglages en direct
 
 `data/settings.json` porte, pour chaque modèle, deux booléens : `detect`
 (exécuter le modèle) et `alert` (déclencher une alerte). Modifiables depuis
@@ -289,14 +365,14 @@ Une première version relisait le fichier à chaque appel — 28 lectures disque
 seconde. D'où le cache d'une seconde : assez court pour rester réactif à l'UI,
 assez long pour supprimer le martèlement disque.
 
-### 2.9 `app/usecases.py` — traçabilité du cahier des charges
+### 2.10 `app/usecases.py` — traçabilité du cahier des charges
 
 Registre des **12 cas d'usage** du cahier des charges, mappés sur les modèles
 réellement entraînés, avec un état honnête par cas : `operationnel`, `partiel`,
 `a_entrainer`. Un modèle peut couvrir plusieurs cas (`fire_smoke` couvre fumée
 *et* feu ; `epi` couvre casque, gilet et masque).
 
-### 2.10 `app/api.py` — API REST et interface
+### 2.11 `app/api.py` — API REST et interface
 
 FastAPI. Endpoints :
 
@@ -304,18 +380,41 @@ FastAPI. Endpoints :
 |---|---|
 | `GET /` | interface web |
 | `GET /video/{caméra}.jpg` | dernière image annotée |
-| `GET /api/cameras` | caméras, modèles affectés, état en ligne |
+| `GET /api/cameras` | caméras, modèles affectés, zones, état en ligne et âge de la dernière image |
 | `GET /api/alerts` | historique filtrable (modèle, sévérité, acquittement, période) |
 | `POST /api/alerts/{id}/ack` | prise en charge par un opérateur |
 | `GET /api/stats/summary` | indicateurs 24 h / 7 j |
 | `GET /api/stats/timeline` | activité heure par heure |
 | `GET /api/settings` · `POST /api/settings/{modèle}/{clé}` | réglages en direct |
+| `GET /api/zones` · `GET/POST /api/zones/{caméra}` | lecture et enregistrement des zones |
 | `GET /api/usecases` | les 12 cas d'usage et leur état |
 | `GET /api/snapshot` · `GET /api/clip` | médias d'une alerte |
 | `GET /api/export/csv` | export pour le service HSE |
 
-L'interface (`web/`) comporte cinq pages : tableau de bord, mur de caméras,
-alertes, cas d'usage, rapports.
+L'interface (`web/`) comporte six pages : tableau de bord, mur de caméras,
+**zones**, alertes, cas d'usage, rapports.
+
+**L'état « en ligne » repose sur la fraîcheur de l'image**, pas sur l'existence
+du fichier : une vignette figée laissée par un pipeline mort passerait sinon pour
+du direct indéfiniment. Au-delà de 15 s sans nouvelle image, la caméra est
+déclarée hors ligne.
+
+### 2.12 `app/logging_setup.py` — journalisation
+
+Tout passait auparavant par `print()` : rien n'était conservé. Après un incident
+nocturne — flux perdu, modèle qui plante, alerte non partie — il ne restait
+aucune trace à analyser le lendemain.
+
+Les messages partent maintenant vers la console **et** vers `logs/`, avec un
+fichier par jour, rotation automatique et rétention de 30 jours. Le niveau se
+règle sans toucher au code :
+
+```powershell
+$env:SMOKEWATCH_LOG_LEVEL = "DEBUG"   # trace chaque détection
+```
+
+`DEBUG` est précieux pour comprendre pourquoi une zone ne déclenche pas ou pour
+régler un seuil ; trop verbeux en exploitation, où `INFO` suffit.
 
 ---
 
@@ -392,6 +491,17 @@ inference:
   imgsz: 640   # DOIT correspondre à la taille figée à l'export OpenVINO
 ```
 
+Chaque caméra peut surcharger `fps`, `imgsz` et `workers`, et tourne dans son
+propre thread. Déclarer une caméra supplémentaire suffit à la mettre en service :
+
+```yaml
+  quai_chargement:
+    rtsp_url: "rtsp://user:motdepasse@192.168.1.42:554/stream1"
+    models: [vehicles, person_animal, epi]
+    fps: 2        # cadence propre à cette caméra
+    workers: 2    # threads d'inférence dédiés
+```
+
 **Deux niveaux d'activation, à ne pas confondre :**
 
 - `enabled` dans `config.yaml` → le modèle n'est **jamais chargé** (gain mémoire)
@@ -440,6 +550,17 @@ Interface : **http://localhost:8000**
 Le dossier `venv/` et les modèles ne sont pas versionnés : ils se recréent sur
 chaque machine.
 
+Les versions sont **épinglées** dans `requirements.txt`. Sans cela, deux machines
+installées à quelques mois d'écart n'ont pas le même environnement, et un modèle
+exporté par l'une peut refuser de se charger sur l'autre.
+
+Vérifier que tout est sain :
+
+```powershell
+.\venv\Scripts\python.exe -m pytest tests -q            # logique métier
+.\venv\Scripts\python.exe scripts\inspect_models.py    # modèles et classes
+```
+
 ### 5.2 Source vidéo
 
 Deux voies, **mutuellement exclusives** — une webcam ne peut être ouverte que
@@ -478,7 +599,17 @@ Serveur (PC dédié, allumé en permanence, sur le réseau de l'entreprise)
 Côté équipe sécurité : **aucune installation**. Un navigateur, et l'application
 Telegram déjà présente sur leur téléphone.
 
-`scripts/install.ps1` installe les deux processus en services Windows.
+`scripts/install.ps1` installe les deux processus en services Windows
+(démarrage au boot, redémarrage automatique après un crash, logs tournants). Il
+est **rejouable** : le relancer après une mise à jour du code réinstalle
+proprement les services. `scripts/uninstall.ps1` fait l'inverse sans toucher au
+code, aux modèles ni à la base.
+
+Il exige NSSM (`https://nssm.cc/download`) dans le PATH — Python n'étant pas un
+service Windows natif — et vérifie avant d'agir : droits administrateur, présence
+de NSSM, environnement virtuel complet, port 8000 libre. Chacune de ces erreurs
+produirait sinon un échec au milieu de l'installation, avec des services à moitié
+créés.
 
 ---
 
@@ -486,36 +617,81 @@ Telegram déjà présente sur leur téléphone.
 
 Toutes les mesures sont faites **sans GPU**.
 
+### 6.1 Machine de développement d'origine
+
 | Configuration | Temps par cycle |
 |---|---|
 | 6 modèles, séquentiel, PyTorch CPU | 2000–2800 ms |
 | 6 modèles, parallèle, OpenVINO | 900–1140 ms |
 | idem, après arrêt de Frigate (CPU rendu) | 176–273 ms |
 
-Trois gains cumulés : le runtime OpenVINO, la parallélisation des modèles avec
-un thread chacun, et la suppression du détecteur Frigate redondant.
+Trois gains cumulés : le runtime OpenVINO, la parallélisation des modèles avec un
+thread chacun, et la suppression du détecteur Frigate redondant.
 
-**Ces chiffres dépendent fortement du processeur.** Ils ont été obtenus sur la
-machine de développement d'origine. Sur un CPU à 2 cœurs (type i5-5300U), faire
-tourner 8 modèles par image n'est pas réaliste : il faut réduire le nombre de
-modèles actifs simultanément — ce que l'interface permet en un clic — ou baisser
-`fps`.
+### 6.2 Machine de reprise — Intel i5-5300U, 2 cœurs / 4 threads
+
+Mesures faites sur ce processeur d'ordinateur portable de 2015, volontairement
+modeste, pour donner une borne basse crédible :
+
+| Mesure | Valeur |
+|---|---|
+| Inférence à chaud, **par modèle** | 178–227 ms |
+| Cycle complet, **7 modèles en parallèle** | 1130–1604 ms |
+| Compilation OpenVINO du 1er modèle (démarrage) | 5,3 s |
+| Compilation de chaque modèle suivant | 0,6–1,0 s |
+| Mémoire, par modèle supplémentaire | ~50 Mo |
+| Mémoire, 3 modèles chargés (processus complet) | ~480 Mo |
+
+Deux enseignements : la mémoire n'est **pas** le facteur limitant (8 modèles
+tiennent dans moins de 800 Mo), et le coût dominant est le temps CPU d'inférence.
+
+### 6.3 Dimensionner le serveur
+
+Le raisonnement tient en une règle : **chaque inférence coûte environ 0,19 s de
+temps CPU** (sur le processeur ci-dessus ; un CPU serveur récent divise cette
+valeur par 2 à 3). Un cœur fournit 1 s de temps CPU par seconde. D'où :
+
+```
+cœurs nécessaires ≈ caméras × modèles par caméra × images/s × 0,19
+```
+
+| Scénario | Calcul | Cœurs |
+|---|---|---|
+| 1 caméra, 7 modèles, 1 img/s | 1 × 7 × 1 × 0,19 | ~1,3 |
+| 7 caméras, 3 modèles ciblés, 1 img/s | 7 × 3 × 1 × 0,19 | ~4 |
+| 7 caméras, 3 modèles, 2 img/s | 7 × 3 × 2 × 0,19 | ~8 |
+| 7 caméras, 7 modèles, 2 img/s | 7 × 7 × 2 × 0,19 | ~19 |
+
+La dernière ligne montre l'intérêt des zones : affecter à chaque caméra
+uniquement les modèles pertinents pour ce qu'elle voit (EPI dans l'atelier,
+véhicules au quai) divise la charge par deux ou trois, sans rien perdre de la
+couverture réelle.
+
+**Recommandation** pour les 7 caméras du site : un CPU **8 cœurs**, 16 Go de RAM,
+et des modèles ciblés par caméra à 1–2 images par seconde. Prévoir le disque
+selon la rétention : clips et snapshots sont purgés à 30 jours par défaut.
 
 ---
 
 ## 7. Limites connues
 
-1. **Pas de ROI (zones d'intérêt).** Chaque modèle analyse l'image entière. Sur
-   site réel, le modèle EPI tournerait aussi sur le parking. C'est le principal
-   manque avant une mise en production.
-2. **Validé sur une seule webcam**, pas sur les caméras IP du site.
+1. **Validé sur une seule webcam**, pas sur les caméras IP du site. Le
+   multi-caméra est implémenté et les zones sont en place, mais aucune caméra IP
+   réelle n'a encore été branchée : authentification caméra, latence réseau et
+   charge à 7 flux restent à éprouver.
+2. **Zones jamais dessinées sur une scène réelle.** Le mécanisme est testé
+   (15 tests unitaires), mais les zones utiles du site restent à tracer.
 3. **Trois modèles à ré-entraîner** : `load_control` (inutilisable),
    `Fall-Detected` (peu fiable), et le rappel EPI (~54 % sur NO-Hardhat, soit un
    ouvrier sans casque sur deux qui passe inaperçu).
-4. **Pas de lecture de plaque** (OCR) sur le modèle véhicules.
-5. **Interface sans authentification**, choix assumé pour la phase de test.
-6. **Un seul flux validé** ; la montée à 7 caméras × 8 modèles demandera un
-   arbitrage (modèles dédiés par caméra, ou fps réduit).
+4. **Modèle `conveyor` jamais éprouvé** : intégré et exporté, mais aucune bande
+   transporteuse n'est passée devant l'objectif.
+5. **Pas de lecture de plaque** (OCR) sur le modèle véhicules.
+6. **Interface sans authentification**, choix assumé et confirmé.
+7. **Pas d'enregistrement vidéo continu** : seuls des clips de 15 s autour des
+   alertes sont conservés.
+8. **Services Windows non éprouvés** : le script est écrit et vérifie ses
+   prérequis, mais NSSM n'est pas installé sur la machine de développement.
 
 ---
 
@@ -529,6 +705,9 @@ pour éviter de les redécouvrir.
 | Flux coupé après ~10 s | RTSP en UDP bloqué par le NAT Docker | forcer TCP |
 | Pipeline figé, CPU à 100 % | sur-souscription de threads OpenVINO | `OMP_NUM_THREADS=1` avant tout import |
 | Pipeline figé, CPU **bas** | lecture RTSP dans la boucle d'inférence, le serveur ferme la connexion | thread de lecture dédié |
+| Pipeline qui ne démarre jamais, CPU moyen | compilation OpenVINO de plusieurs modèles en parallèle au premier cycle | préchauffage séquentiel avant la boucle |
+| Caméra affichée « LIVE » alors que rien ne tourne | état déduit de l'existence du fichier image | état déduit de sa fraîcheur (< 15 s) |
+| Image live parfois tronquée dans l'interface | l'API lit le fichier pendant son écriture | écriture dans un fichier temporaire puis `os.replace` (atomique) |
 | `imgsz: 480` fait planter | taille d'entrée figée à l'export OpenVINO | rester à 640, ou réexporter |
 | Sortie console vide | Python bufferise hors terminal | lancer avec `python -u` |
 | 28 lectures disque par seconde | réglages relus à chaque détection | cache d'une seconde |
@@ -541,19 +720,23 @@ pour éviter de les redécouvrir.
 
 **Bloquant pour une mise en production**
 
-1. **ROI par caméra** — outil de dessin de zones dans l'interface, puis filtrage
-   des détections. Sans cela, l'objectif « moins de 2 fausses alertes par jour
-   et par caméra » ne tiendra pas sur site.
-2. **Brancher les caméras IP du site** et vérifier que le CPU tient la charge.
-3. **Ré-entraîner** `load_control` et `Fall-Detected`, enrichir le dataset EPI
-   avec des images du site réel.
-4. **Services automatiques** — le système doit survivre à un redémarrage du
-   serveur.
+1. **Brancher les caméras IP du site**, tracer leurs zones, et vérifier que le
+   CPU tient la charge (voir le dimensionnement en 6.3).
+2. **Ré-entraîner** `load_control` et `Fall-Detected`, enrichir le dataset EPI
+   avec des images du site réel. C'est le seul point qui ne se règle pas par du
+   code : il faut des données.
+3. **Éprouver les services Windows** sur le serveur cible, avec NSSM installé.
 
 **Niveau professionnel**
 
-5. Groupe Telegram dédié plutôt que des `chat_id` individuels.
-6. Authentification de l'interface.
-7. Statistiques HSE : taux de conformité EPI par zone, délai moyen de prise en
-   charge des alertes.
-8. Rapport PDF hebdomadaire automatique au responsable HSE.
+4. Groupe Telegram dédié plutôt que des `chat_id` individuels.
+5. Statistiques HSE : taux de conformité EPI par zone, délai moyen de prise en
+   charge des alertes. Les données sont déjà en base (zone, acquittement,
+   horodatage) — il ne manque que les requêtes et l'affichage.
+6. Rapport PDF hebdomadaire automatique au responsable HSE.
+7. Enregistrement vidéo continu, en complément des clips d'alerte.
+8. Lecture de plaques (OCR) pour compléter le cas d'usage 9.
+
+**Déjà traité** (rappel, pour ne pas le rouvrir par erreur) : zones d'intérêt,
+multi-caméra, journalisation, tests automatisés, versions épinglées, services
+Windows rejouables, authentification écartée volontairement.

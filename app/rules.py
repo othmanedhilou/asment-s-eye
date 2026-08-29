@@ -62,19 +62,24 @@ class AlertEngine:
         if min_conf is not None and detection.confidence < min_conf:
             return None
 
-        key = (detection.camera, detection.model, detection.label)
+        # La zone fait partie de la cle : un vehicule sur le quai et un autre
+        # devant l'atelier sont deux situations distinctes, chacune doit alerter.
+        key = (detection.camera, detection.zone, detection.model, detection.label)
         now = time.monotonic()
         last = self._last_alert.get(key, 0.0)
         if now - last < self._cooldown_for(detection.model, detection.label):
             return None
 
         self._last_alert[key] = now
+        where = f" dans {detection.zone}" if detection.zone else ""
         alert = Alert(
             camera=detection.camera,
             model=detection.model,
             label=detection.label,
             confidence=detection.confidence,
-            message=f"{detection.label} détecté sur {detection.camera} (confiance {detection.confidence:.2f})",
+            zone=detection.zone,
+            message=f"{detection.label} détecté sur {detection.camera}{where} "
+                    f"(confiance {detection.confidence:.2f})",
         )
         if self.on_alert:
             self.on_alert(alert, frame)

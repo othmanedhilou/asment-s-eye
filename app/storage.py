@@ -51,6 +51,7 @@ class AlertRecord(Base):
     ack_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
     ack_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     clip: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    zone: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
 
 _engine = None
@@ -66,6 +67,7 @@ def _migrate(engine):
             "ack_by": "ALTER TABLE alerts ADD COLUMN ack_by VARCHAR(100)",
             "ack_at": "ALTER TABLE alerts ADD COLUMN ack_at DATETIME",
             "clip": "ALTER TABLE alerts ADD COLUMN clip VARCHAR(500)",
+            "zone": "ALTER TABLE alerts ADD COLUMN zone VARCHAR(100)",
         }
         for col, ddl in migrations.items():
             if col not in cols:
@@ -98,6 +100,7 @@ def _to_dict(r: AlertRecord) -> dict:
         "ack_by": r.ack_by,
         "ack_at": r.ack_at.isoformat() if r.ack_at else None,
         "clip": r.clip,
+        "zone": r.zone or "",
     }
 
 
@@ -113,6 +116,7 @@ def log_alert(alert: Alert, snapshot_path: str | None = None) -> int:
             timestamp=alert.timestamp,
             snapshot=snapshot_path,
             severity=severity_for(alert.model, alert.label),
+            zone=alert.zone or None,
         )
         session.add(record)
         session.commit()
@@ -157,6 +161,7 @@ def read_alerts(
     model: str | None = None,
     camera: str | None = None,
     severity: str | None = None,
+    zone: str | None = None,
     acknowledged: bool | None = None,
     since_hours: int | None = None,
 ) -> list[dict]:
@@ -169,6 +174,8 @@ def read_alerts(
             stmt = stmt.where(AlertRecord.camera == camera)
         if severity:
             stmt = stmt.where(AlertRecord.severity == severity)
+        if zone:
+            stmt = stmt.where(AlertRecord.zone == zone)
         if acknowledged is not None:
             stmt = stmt.where(AlertRecord.acknowledged == acknowledged)
         if since_hours:
@@ -221,6 +228,11 @@ def stats_summary() -> dict:
             .where(AlertRecord.timestamp >= week_ago)
             .group_by(AlertRecord.severity)
         ).all()
+        by_zone = session.execute(
+            select(AlertRecord.zone, func.count())
+            .where(AlertRecord.timestamp >= week_ago)
+            .group_by(AlertRecord.zone)
+        ).all()
     return {
         "total_24h": total_24h or 0,
         "total_7d": total_7d or 0,
@@ -228,6 +240,7 @@ def stats_summary() -> dict:
         "critiques_24h": critique_24h or 0,
         "par_modele_7j": {m: c for m, c in by_model},
         "par_severite_7j": {s: c for s, c in by_severity},
+        "par_zone_7j": {(z or "plein cadre"): c for z, c in by_zone},
     }
 
 
@@ -263,7 +276,8 @@ def export_csv() -> str:
     output = io.StringIO()
     writer = csv.writer(output, delimiter=";")
     writer.writerow(
-        ["ID", "Horodatage", "Caméra", "Modèle", "Détection", "Confiance", "Sévérité", "Acquittée", "Acquittée par", "Acquittée le"]
+        ["ID", "Horodatage", "Caméra", "Zone", "Modèle", "Détection", "Confiance", "Sévérité",
+         "Acquittée", "Acquittée par", "Acquittée le"]
     )
     for a in alerts:
         writer.writerow(
@@ -271,6 +285,7 @@ def export_csv() -> str:
                 a["id"],
                 a["timestamp"],
                 a["camera"],
+                a["zone"],
                 a["model"],
                 a["label"],
                 f"{a['confidence']:.2f}",

@@ -4,7 +4,11 @@ import time
 
 import cv2
 
+from app.logging_setup import setup_logging
+
 os.environ.setdefault("OPENCV_FFMPEG_CAPTURE_OPTIONS", "rtsp_transport;tcp")
+
+log = setup_logging()
 
 
 class RTSPStream:
@@ -81,7 +85,7 @@ class RTSPStream:
             if frame is None:
                 break
             if age > stale_timeout:
-                print(f"Flux muet depuis {age:.0f}s : {self.url}")
+                log.warning(f"flux muet depuis {age:.0f}s : {self.url}")
                 break
 
             yield frame

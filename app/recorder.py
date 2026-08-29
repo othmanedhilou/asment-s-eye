@@ -11,9 +11,12 @@ from pathlib import Path
 
 import cv2
 
+from app.logging_setup import setup_logging
 from app.storage import update_alert_clip
 
 CLIPS_DIR = Path(__file__).resolve().parent.parent / "clips" / "videos"
+
+log = setup_logging()
 
 
 class ClipRecorder:
@@ -59,6 +62,6 @@ class ClipRecorder:
                 writer.write(f)
             writer.release()
             update_alert_clip(active["alert_id"], str(path))
-            print(f"[{self.camera}] clip enregistré : {path.name}")
+            log.info(f"[{self.camera}] clip enregistré : {path.name}")
         except Exception as e:
-            print(f"[{self.camera}] échec enregistrement clip : {e}")
+            log.error(f"[{self.camera}] échec enregistrement clip : {e}")

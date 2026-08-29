@@ -52,6 +52,18 @@ models:
     conf: 0.4
     enabled: true
 
+  # Exemple de deuxième caméra (caméra IP du site). Chaque caméra tourne dans
+  # son propre thread et peut avoir ses propres modèles et sa propre cadence :
+  # sur une machine contrainte, on ralentit une caméra secondaire sans toucher
+  # aux autres.
+  #
+  # quai_chargement:
+  #   rtsp_url: "rtsp://user:motdepasse@192.168.1.42:554/stream1"
+  #   models: [vehicles, person_animal, epi]
+  #   fps: 2        # surcharge inference.fps pour cette caméra
+  #   workers: 2    # threads d'inférence dédiés à cette caméra
+
 inference:
-  fps: 4          # images analysées par seconde et par caméra (OpenVINO permet plus)
+  fps: 4          # images analysées par seconde et par caméra (valeur par défaut)
   imgsz: 640      # doit correspondre à la taille figée à l'export OpenVINO
+  # workers: 4    # threads d'inférence par caméra ; par défaut = nb de cœurs

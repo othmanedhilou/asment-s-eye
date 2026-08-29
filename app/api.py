@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from app.config import load_config
 from app.settings import PIPELINE_MODELS, load_settings, set_model_setting
 from app.usecases import usecases_with_status
+from app.zones import load_zones, save_zones
 from app.storage import (
     acknowledge_alert,
     export_csv,
@@ -43,6 +44,22 @@ class AckBody(BaseModel):
     operator: str = "opérateur"
 
 
+class Zone(BaseModel):
+    name: str
+    polygon: list[list[float]]   # sommets normalisés (0.0 à 1.0)
+    models: list[str] = []       # vide = tous les modèles
+
+
+class ZonesBody(BaseModel):
+    zones: list[Zone]
+
+
+# Une image live plus ancienne que ce délai signifie que le pipeline ne tourne
+# plus, ou que la caméra ne répond pas : la marquer hors ligne évite d'afficher
+# une vignette figée en la faisant passer pour du direct.
+LIVE_MAX_AGE_SECONDS = 15
+
+
 @app.get("/", response_class=HTMLResponse)
 def index():
     html_path = WEB_DIR / "templates" / "index.html"
@@ -58,6 +75,7 @@ def api_alerts(
     model: str | None = None,
     camera: str | None = None,
     severity: str | None = None,
+    zone: str | None = None,
     acknowledged: bool | None = None,
     since_hours: int | None = None,
 ):
@@ -66,6 +84,7 @@ def api_alerts(
         model=model,
         camera=camera,
         severity=severity,
+        zone=zone,
         acknowledged=acknowledged,
         since_hours=since_hours,
     )
@@ -143,12 +162,62 @@ def api_clip(path: str):
 
 @app.get("/api/cameras")
 def api_cameras():
+    import time
+
     config = load_config()
+    all_zones = load_zones()
     cameras = []
     for name, cfg in config.get("cameras", {}).items():
-        live = (LIVE_DIR / f"{name}.jpg").exists()
-        cameras.append({"name": name, "models": cfg.get("models", []), "online": live})
+        frame_path = LIVE_DIR / f"{name}.jpg"
+        online = False
+        age = None
+        if frame_path.exists():
+            age = time.time() - frame_path.stat().st_mtime
+            online = age < LIVE_MAX_AGE_SECONDS
+        cameras.append({
+            "name": name,
+            "models": cfg.get("models", []),
+            "online": online,
+            "age_seconds": round(age, 1) if age is not None else None,
+            "zones": [z.get("name") for z in all_zones.get(name, [])],
+        })
     return {"cameras": cameras}
+
+
+# ── Zones d'intérêt (ROI) ────────────────────────────────────────────
+
+
+@app.get("/api/zones")
+def api_zones():
+    return load_zones()
+
+
+@app.get("/api/zones/{camera}")
+def api_zones_camera(camera: str):
+    return {"camera": camera, "zones": load_zones().get(camera, [])}
+
+
+@app.post("/api/zones/{camera}")
+def api_save_zones(camera: str, body: ZonesBody):
+    """Remplace les zones d'une caméra. Prise en compte au cycle suivant."""
+    config = load_config()
+    if camera not in config.get("cameras", {}):
+        raise HTTPException(status_code=404, detail="Caméra inconnue")
+
+    for zone in body.zones:
+        if len(zone.polygon) < 3:
+            raise HTTPException(status_code=400, detail=f"Zone « {zone.name} » : 3 sommets minimum")
+        for point in zone.polygon:
+            if len(point) != 2 or not all(0.0 <= c <= 1.0 for c in point):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Zone « {zone.name} » : coordonnées attendues normalisées entre 0 et 1",
+                )
+
+    data = load_zones()
+    data[camera] = [z.model_dump() for z in body.zones]
+    save_zones(data)
+    return {"ok": True, "camera": camera, "zones": len(body.zones)}
 
 
 # ── Médias ───────────────────────────────────────────────────────────

@@ -23,6 +23,7 @@ function setupNav() {
       if (btn.dataset.page === "dashboard") loadDashboard();
       if (btn.dataset.page === "reports") loadReports();
       if (btn.dataset.page === "usecases") loadUseCases();
+      if (btn.dataset.page === "zones") loadZonesPage();
     });
   });
 }
@@ -46,11 +47,17 @@ async function loadCameras() {
       <img id="feed-${cam.name}" src="/video/${cam.name}.jpg" alt="${cam.name}"
            onerror="this.style.opacity=0.25" onload="this.style.opacity=1" />
       <div class="camera-models">${models}</div>
+      <div class="camera-zones muted" style="font-size:12px">${
+        cam.zones && cam.zones.length
+          ? `📐 ${cam.zones.join(" · ")}`
+          : "📐 plein cadre (aucune zone)"
+      }</div>
     `;
     grid.appendChild(tile);
   }
   document.getElementById("sys-info").textContent =
-    `${data.cameras.length} caméra${data.cameras.length > 1 ? "s" : ""} · 7 modèles IA`;
+    `${data.cameras.length} caméra${data.cameras.length > 1 ? "s" : ""} · ${
+      Object.keys(MODEL_LABELS).length} modèles IA`;
 }
 
 function refreshVideos() {
@@ -186,7 +193,7 @@ function alertRow(a, withAction) {
     ${thumb}
     <div class="alert-main">
       <div class="l1">${a.label} <span class="muted">(${MODEL_LABELS[a.model] || a.model})</span></div>
-      <div class="l2">${a.camera}${clip}</div>
+      <div class="l2">${a.camera}${a.zone ? ` · <span class="zone-tag">${a.zone}</span>` : ""}${clip}</div>
     </div>
     <div><span class="sev ${a.severity}">${a.severity}</span></div>
     <div>${a.confidence.toFixed(2)}</div>
@@ -325,6 +332,7 @@ function setupFilters() {
 async function init() {
   setupNav();
   setupFilters();
+  setupZoneEditor();
   await loadCameras();
   await loadSettings();
   await loadDashboard();
@@ -333,3 +341,200 @@ async function init() {
 }
 
 init();
+
+/* ── Éditeur de zones d'intérêt ── */
+
+const zoneEditor = {
+  camera: null,
+  zones: [],      // zones enregistrées de la caméra courante
+  draft: [],      // sommets du polygone en cours de tracé
+};
+
+async function loadZonesPage() {
+  const select = document.getElementById("zone-camera");
+  if (!select.options.length) {
+    for (const name of cameraNames) {
+      const opt = document.createElement("option");
+      opt.value = name;
+      opt.textContent = name;
+      select.appendChild(opt);
+    }
+    select.addEventListener("change", () => selectZoneCamera(select.value));
+  }
+  const models = document.getElementById("zone-models");
+  if (!models.children.length) {
+    for (const [key, label] of Object.entries(MODEL_LABELS)) {
+      const item = document.createElement("label");
+      item.className = "zone-model";
+      item.innerHTML = `<input type="checkbox" value="${key}" /> <span>${label}</span>`;
+      models.appendChild(item);
+    }
+  }
+  await selectZoneCamera(select.value || cameraNames[0]);
+}
+
+async function selectZoneCamera(camera) {
+  if (!camera) return;
+  zoneEditor.camera = camera;
+  zoneEditor.draft = [];
+  document.getElementById("zone-frame").src = `/video/${camera}.jpg?t=${Date.now()}`;
+  const res = await fetch(`/api/zones/${camera}`);
+  const data = await res.json();
+  zoneEditor.zones = data.zones || [];
+  renderZoneList();
+  drawZones();
+}
+
+/* Le canvas se superpose exactement à l'image affichée : on le redimensionne
+   sur ses dimensions réelles à l'écran, pas sur celles du flux. */
+function syncCanvasSize() {
+  const img = document.getElementById("zone-frame");
+  const canvas = document.getElementById("zone-canvas");
+  if (!img.clientWidth) return false;
+  canvas.width = img.clientWidth;
+  canvas.height = img.clientHeight;
+  return true;
+}
+
+function drawZones() {
+  const canvas = document.getElementById("zone-canvas");
+  if (!syncCanvasSize()) return;
+  const ctx = canvas.getContext("2d");
+  const { width: w, height: h } = canvas;
+  ctx.clearRect(0, 0, w, h);
+
+  for (const zone of zoneEditor.zones) {
+    drawPolygon(ctx, zone.polygon, w, h, "rgba(255,170,0,0.9)", "rgba(255,170,0,0.15)", zone.name);
+  }
+  if (zoneEditor.draft.length) {
+    drawPolygon(ctx, zoneEditor.draft, w, h, "rgba(0,220,130,0.95)", "rgba(0,220,130,0.15)", null, true);
+  }
+}
+
+function drawPolygon(ctx, polygon, w, h, stroke, fill, label, showPoints) {
+  if (!polygon.length) return;
+  ctx.beginPath();
+  polygon.forEach(([x, y], i) => {
+    const px = x * w, py = y * h;
+    i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+  });
+  if (polygon.length >= 3) {
+    ctx.closePath();
+    ctx.fillStyle = fill;
+    ctx.fill();
+  }
+  ctx.strokeStyle = stroke;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  if (showPoints) {
+    for (const [x, y] of polygon) {
+      ctx.beginPath();
+      ctx.arc(x * w, y * h, 4, 0, Math.PI * 2);
+      ctx.fillStyle = stroke;
+      ctx.fill();
+    }
+  }
+  if (label) {
+    const [x, y] = polygon[0];
+    ctx.fillStyle = stroke;
+    ctx.font = "13px system-ui, sans-serif";
+    ctx.fillText(label, x * w + 4, y * h - 6);
+  }
+}
+
+function renderZoneList() {
+  const list = document.getElementById("zone-list");
+  list.innerHTML = "";
+  if (!zoneEditor.zones.length) {
+    list.innerHTML = '<p class="muted">Aucune zone : la caméra est analysée en entier.</p>';
+    return;
+  }
+  zoneEditor.zones.forEach((zone, index) => {
+    const models = zone.models && zone.models.length
+      ? zone.models.map((m) => MODEL_LABELS[m] || m).join(" · ")
+      : "tous les modèles";
+    const row = document.createElement("div");
+    row.className = "zone-item";
+    row.innerHTML = `
+      <div>
+        <div class="zone-item-name">${zone.name}</div>
+        <div class="muted" style="font-size:12px">${zone.polygon.length} sommets · ${models}</div>
+      </div>
+      <button class="btn small ghost" data-index="${index}">Supprimer</button>
+    `;
+    row.querySelector("button").addEventListener("click", () => {
+      zoneEditor.zones.splice(index, 1);
+      renderZoneList();
+      drawZones();
+    });
+    list.appendChild(row);
+  });
+}
+
+function setupZoneEditor() {
+  const canvas = document.getElementById("zone-canvas");
+
+  canvas.addEventListener("click", (e) => {
+    const rect = canvas.getBoundingClientRect();
+    // Coordonnées normalisées : indépendantes de la taille d'affichage et de
+    // la résolution de la caméra.
+    const x = (e.clientX - rect.left) / rect.width;
+    const y = (e.clientY - rect.top) / rect.height;
+    zoneEditor.draft.push([+x.toFixed(4), +y.toFixed(4)]);
+    document.getElementById("zone-hint").textContent =
+      `${zoneEditor.draft.length} sommet(s) posé(s)` +
+      (zoneEditor.draft.length >= 3 ? " — nommez la zone puis « Ajouter »." : " — 3 minimum.");
+    drawZones();
+  });
+
+  document.getElementById("zone-undo").addEventListener("click", () => {
+    zoneEditor.draft.pop();
+    drawZones();
+  });
+
+  document.getElementById("zone-clear").addEventListener("click", () => {
+    zoneEditor.draft = [];
+    drawZones();
+  });
+
+  document.getElementById("zone-add").addEventListener("click", () => {
+    const status = document.getElementById("zone-status");
+    const name = document.getElementById("zone-name").value.trim();
+    if (zoneEditor.draft.length < 3) {
+      status.textContent = "Tracez au moins 3 sommets sur l'image.";
+      return;
+    }
+    if (!name) {
+      status.textContent = "Donnez un nom à la zone.";
+      return;
+    }
+    const models = [...document.querySelectorAll("#zone-models input:checked")].map((c) => c.value);
+    zoneEditor.zones.push({ name, polygon: zoneEditor.draft, models });
+    zoneEditor.draft = [];
+    document.getElementById("zone-name").value = "";
+    document.querySelectorAll("#zone-models input:checked").forEach((c) => (c.checked = false));
+    status.textContent = "Zone ajoutée — pensez à enregistrer.";
+    renderZoneList();
+    drawZones();
+  });
+
+  document.getElementById("zone-save").addEventListener("click", async () => {
+    const status = document.getElementById("zone-status");
+    const res = await fetch(`/api/zones/${zoneEditor.camera}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ zones: zoneEditor.zones }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      status.textContent = `Enregistré : ${data.zones} zone(s). Appliqué au prochain cycle du pipeline.`;
+    } else {
+      const err = await res.json().catch(() => ({}));
+      status.textContent = `Échec : ${err.detail || res.status}`;
+    }
+  });
+
+  document.getElementById("zone-frame").addEventListener("load", drawZones);
+  window.addEventListener("resize", drawZones);
+}
