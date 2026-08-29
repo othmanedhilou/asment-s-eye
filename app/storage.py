@@ -1,7 +1,17 @@
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from sqlalchemy import Boolean, DateTime, Float, String, create_engine, func, select, text
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Float,
+    Integer,
+    String,
+    create_engine,
+    func,
+    select,
+    text,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 from app.models import Alert
@@ -19,6 +29,10 @@ SEVERITY_BY_MODEL = {
     "load_control": "moyenne",
     "person_animal": "moyenne",
     "vehicles": "moyenne",
+    # Incidents techniques (caméra hors ligne, disque plein). Sévérité distincte
+    # pour ne pas polluer les statistiques HSE : une caméra débranchée n'est pas
+    # un événement de sécurité au travail, mais doit alerter tout autant.
+    "systeme": "technique",
 }
 
 # Fall-Detected est critique même si le modèle est classé "haute"
@@ -52,6 +66,10 @@ class AlertRecord(Base):
     ack_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     clip: Mapped[str | None] = mapped_column(String(500), nullable=True)
     zone: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # Retour de l'opérateur : cette alerte était-elle fausse ? C'est à la fois
+    # l'indicateur de qualité du système et la source d'images d'entraînement
+    # étiquetées — un modèle ne progresse pas sans savoir quand il s'est trompé.
+    false_positive: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
 _engine = None
@@ -68,6 +86,7 @@ def _migrate(engine):
             "ack_at": "ALTER TABLE alerts ADD COLUMN ack_at DATETIME",
             "clip": "ALTER TABLE alerts ADD COLUMN clip VARCHAR(500)",
             "zone": "ALTER TABLE alerts ADD COLUMN zone VARCHAR(100)",
+            "false_positive": "ALTER TABLE alerts ADD COLUMN false_positive BOOLEAN DEFAULT 0",
         }
         for col, ddl in migrations.items():
             if col not in cols:
@@ -101,6 +120,7 @@ def _to_dict(r: AlertRecord) -> dict:
         "ack_at": r.ack_at.isoformat() if r.ack_at else None,
         "clip": r.clip,
         "zone": r.zone or "",
+        "false_positive": bool(r.false_positive),
     }
 
 
@@ -163,7 +183,12 @@ def read_alerts(
     severity: str | None = None,
     zone: str | None = None,
     acknowledged: bool | None = None,
+    false_positive: bool | None = None,
     since_hours: int | None = None,
+    offset: int = 0,
+    label: str | None = None,
+    hour_from: int | None = None,
+    hour_to: int | None = None,
 ) -> list[dict]:
     engine = _get_engine()
     with Session(engine) as session:
@@ -176,13 +201,49 @@ def read_alerts(
             stmt = stmt.where(AlertRecord.severity == severity)
         if zone:
             stmt = stmt.where(AlertRecord.zone == zone)
+        if false_positive is not None:
+            stmt = stmt.where(AlertRecord.false_positive == false_positive)
         if acknowledged is not None:
             stmt = stmt.where(AlertRecord.acknowledged == acknowledged)
         if since_hours:
             cutoff = datetime.now() - timedelta(hours=since_hours)
             stmt = stmt.where(AlertRecord.timestamp >= cutoff)
-        stmt = stmt.order_by(AlertRecord.timestamp.desc()).limit(limit)
+        if label:
+            stmt = stmt.where(AlertRecord.label.like(f"%{label}%"))
+        # Plage horaire : « toutes les alertes EPI entre 22 h et 6 h » est une
+        # question d'exploitation courante, impossible à poser sans cela.
+        if hour_from is not None and hour_to is not None:
+            heure = func.cast(func.strftime("%H", AlertRecord.timestamp), Integer)
+            if hour_from <= hour_to:
+                stmt = stmt.where(heure >= hour_from, heure < hour_to)
+            else:
+                stmt = stmt.where((heure >= hour_from) | (heure < hour_to))
+
+        stmt = stmt.order_by(AlertRecord.timestamp.desc()).offset(offset).limit(limit)
         return [_to_dict(r) for r in session.scalars(stmt).all()]
+
+
+def count_alerts(**filters) -> int:
+    """Nombre total d'alertes correspondant aux filtres, pour la pagination."""
+    engine = _get_engine()
+    with Session(engine) as session:
+        stmt = select(func.count()).select_from(AlertRecord)
+        if filters.get("model"):
+            stmt = stmt.where(AlertRecord.model == filters["model"])
+        if filters.get("camera"):
+            stmt = stmt.where(AlertRecord.camera == filters["camera"])
+        if filters.get("severity"):
+            stmt = stmt.where(AlertRecord.severity == filters["severity"])
+        if filters.get("zone"):
+            stmt = stmt.where(AlertRecord.zone == filters["zone"])
+        if filters.get("acknowledged") is not None:
+            stmt = stmt.where(AlertRecord.acknowledged == filters["acknowledged"])
+        if filters.get("false_positive") is not None:
+            stmt = stmt.where(AlertRecord.false_positive == filters["false_positive"])
+        if filters.get("since_hours"):
+            cutoff = datetime.now() - timedelta(hours=filters["since_hours"])
+            stmt = stmt.where(AlertRecord.timestamp >= cutoff)
+        return session.scalar(stmt) or 0
 
 
 def acknowledge_alert(alert_id: int, operator: str = "opérateur") -> bool:
@@ -196,6 +257,86 @@ def acknowledge_alert(alert_id: int, operator: str = "opérateur") -> bool:
         record.ack_at = datetime.now()
         session.commit()
         return True
+
+
+def mark_false_positive(alert_id: int, is_false: bool = True,
+                        operator: str = "opérateur") -> bool:
+    """Déclare une alerte fausse (ou revient sur ce jugement).
+
+    Marquer une fausse alerte vaut prise en charge : l'opérateur a bien traité
+    l'événement, il a seulement conclu que le système s'était trompé.
+    """
+    engine = _get_engine()
+    with Session(engine) as session:
+        record = session.get(AlertRecord, alert_id)
+        if record is None:
+            return False
+        record.false_positive = is_false
+        if is_false and not record.acknowledged:
+            record.acknowledged = True
+            record.ack_by = operator
+            record.ack_at = datetime.now()
+        session.commit()
+        return True
+
+
+def quality_stats(days: int = 30) -> dict:
+    """Qualité de détection telle que les opérateurs la constatent.
+
+    C'est ce qui permet de répondre à l'objectif du cahier des charges — moins
+    de 2 fausses alertes par jour et par caméra — avec un chiffre plutôt qu'une
+    impression.
+    """
+    engine = _get_engine()
+    cutoff = datetime.now() - timedelta(days=days)
+    with Session(engine) as session:
+        rows = session.execute(
+            select(AlertRecord.model,
+                   func.count(),
+                   func.sum(func.cast(AlertRecord.false_positive, Integer)))
+            .where(AlertRecord.timestamp >= cutoff)
+            .group_by(AlertRecord.model)
+        ).all()
+
+        par_camera = session.execute(
+            select(AlertRecord.camera,
+                   func.count(),
+                   func.sum(func.cast(AlertRecord.false_positive, Integer)))
+            .where(AlertRecord.timestamp >= cutoff)
+            .group_by(AlertRecord.camera)
+        ).all()
+
+        # Délai moyen de prise en charge : indicateur HSE classique, il dit si
+        # les alertes atteignent réellement quelqu'un.
+        ack_rows = session.execute(
+            select(AlertRecord.timestamp, AlertRecord.ack_at)
+            .where(AlertRecord.timestamp >= cutoff, AlertRecord.acknowledged == True)  # noqa: E712
+        ).all()
+
+    delais = [(ack - ts).total_seconds() for ts, ack in ack_rows if ack and ack > ts]
+    jours = max(days, 1)
+
+    return {
+        "periode_jours": days,
+        "par_modele": {
+            model: {
+                "alertes": total,
+                "fausses": int(fausses or 0),
+                "taux_faux": round((fausses or 0) / total, 3) if total else 0.0,
+            }
+            for model, total, fausses in rows
+        },
+        "par_camera": {
+            camera: {
+                "alertes": total,
+                "fausses": int(fausses or 0),
+                "fausses_par_jour": round((fausses or 0) / jours, 2),
+            }
+            for camera, total, fausses in par_camera
+        },
+        "delai_prise_en_charge_s": round(sum(delais) / len(delais)) if delais else None,
+        "alertes_traitees": len(delais),
+    }
 
 
 def stats_summary() -> dict:
@@ -277,7 +418,7 @@ def export_csv() -> str:
     writer = csv.writer(output, delimiter=";")
     writer.writerow(
         ["ID", "Horodatage", "Caméra", "Zone", "Modèle", "Détection", "Confiance", "Sévérité",
-         "Acquittée", "Acquittée par", "Acquittée le"]
+         "Acquittée", "Acquittée par", "Acquittée le", "Fausse alerte"]
     )
     for a in alerts:
         writer.writerow(
@@ -293,6 +434,7 @@ def export_csv() -> str:
                 "oui" if a["acknowledged"] else "non",
                 a["ack_by"] or "",
                 a["ack_at"] or "",
+                "oui" if a["false_positive"] else "non",
             ]
         )
     return output.getvalue()

@@ -33,6 +33,7 @@ COOLDOWN_BY_SEVERITY = {
     "critique": 60,      # 1 min
     "haute": 300,        # 5 min
     "moyenne": 900,      # 15 min
+    "technique": 600,    # 10 min — une panne persiste, inutile de la répéter
 }
 
 
@@ -45,9 +46,13 @@ class AlertEngine:
         self.on_alert = on_alert
         self._last_alert: dict[tuple[str, str, str], float] = {}
 
-    def _cooldown_for(self, model: str, label: str) -> float:
+    def _cooldown_for(self, model: str, label: str, zone_cooldown: float | None = None) -> float:
         if self.cooldown_seconds is not None:
             return self.cooldown_seconds
+        # Un délai propre à la zone prime : une zone de passage n'a pas le même
+        # rythme acceptable qu'un local technique désert.
+        if zone_cooldown is not None:
+            return zone_cooldown
         return COOLDOWN_BY_SEVERITY.get(severity_for(model, label), 300)
 
     def process(self, detection: Detection, frame=None):
@@ -62,12 +67,18 @@ class AlertEngine:
         if min_conf is not None and detection.confidence < min_conf:
             return None
 
+        # Seuil propre à la zone : on peut exiger plus de certitude là où le
+        # modèle se trompe souvent, sans durcir toute la caméra.
+        if detection.zone_conf is not None and detection.confidence < detection.zone_conf:
+            return None
+
         # La zone fait partie de la cle : un vehicule sur le quai et un autre
         # devant l'atelier sont deux situations distinctes, chacune doit alerter.
         key = (detection.camera, detection.zone, detection.model, detection.label)
         now = time.monotonic()
         last = self._last_alert.get(key, 0.0)
-        if now - last < self._cooldown_for(detection.model, detection.label):
+        if now - last < self._cooldown_for(detection.model, detection.label,
+                                           detection.zone_cooldown):
             return None
 
         self._last_alert[key] = now

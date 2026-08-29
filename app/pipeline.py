@@ -6,14 +6,15 @@ os.environ.setdefault("OMP_NUM_THREADS", "1")
 
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import cv2
 
-from app.capture import RTSPStream
+from app.cameras import active_cameras, camera_source
+from app.capture import FrameSource
 from app.config import load_config
 from app.detectors import ModelRegistry
+from app.health import forget_camera, update_camera
 from app.logging_setup import setup_logging
 from app.models import Detection
 from app.recorder import ClipRecorder
@@ -23,6 +24,9 @@ from app.zones import ZoneFilter
 LIVE_DIR = Path(__file__).resolve().parent.parent / "data" / "live"
 
 log = setup_logging("pipeline")
+
+# Délai sans image au-delà duquel une caméra est déclarée hors ligne et signalée.
+OFFLINE_ALERT_AFTER = 30.0
 
 
 def _run_one_model(registry: ModelRegistry, model_name: str, frame, imgsz: int) -> list[Detection]:
@@ -69,11 +73,14 @@ def _draw_zones(frame, zone_filter: ZoneFilter):
 
     h, w = frame.shape[:2]
     for zone in zone_filter.polygons_in_pixels(w, h):
+        # Les zones d'exclusion en rouge, les zones de surveillance en orange :
+        # la couleur dit immédiatement si l'on regarde ou si l'on ignore.
+        color = (60, 60, 220) if zone.get("type") == "exclusion" else (0, 200, 255)
         pts = np.array(zone["points"], dtype=np.int32)
-        cv2.polylines(frame, [pts], isClosed=True, color=(0, 200, 255), thickness=2)
+        cv2.polylines(frame, [pts], isClosed=True, color=color, thickness=2)
         x, y = zone["points"][0]
         cv2.putText(frame, zone["name"], (x, max(y - 6, 12)),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 200, 255), 1)
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
 
 
 def _save_live_frame(camera_name: str, frame, attempts: int = 5, delay: float = 0.02):
@@ -112,16 +119,17 @@ def _save_live_frame(camera_name: str, frame, attempts: int = 5, delay: float = 
         log.warning(f"[{camera_name}] échec sauvegarde frame live : {e}")
 
 
-def run_camera(camera_name: str, config: dict, registry: ModelRegistry, on_detection=None,
-               stop_event: threading.Event | None = None):
+def run_camera(camera_name: str, cam_cfg: dict, config: dict, registry: ModelRegistry,
+               on_detection=None, stop_event: threading.Event | None = None,
+               on_incident=None):
     """Boucle de traitement d'une caméra. Bloquante : à lancer dans un thread.
 
     on_detection(detection, frame) est appelé pour chaque détection retenue.
+    on_incident(camera, label, message) signale une panne (source injoignable).
     """
-    cam_cfg = config["cameras"][camera_name]
     models_cfg = config["models"]
     inference_cfg = config.get("inference", {})
-    all_models = cam_cfg["models"]
+    all_models = cam_cfg.get("models", [])
 
     # Modèles désactivés en dur dans config.yaml (ex: modèle pas fiable) : jamais chargés.
     available_models = [m for m in all_models if models_cfg.get(m, {}).get("enabled", True)]
@@ -132,27 +140,38 @@ def run_camera(camera_name: str, config: dict, registry: ModelRegistry, on_detec
     imgsz = cam_cfg.get("imgsz", inference_cfg.get("imgsz", 640))
     max_workers = cam_cfg.get("workers", inference_cfg.get("workers"))
     if not max_workers:
-        max_workers = max(1, min(len(available_models), (os.cpu_count() or 4)))
+        max_workers = max(1, min(len(available_models) or 1, (os.cpu_count() or 4)))
 
     zone_filter = ZoneFilter(camera_name)
     recorder = ClipRecorder(camera_name, fps=fps)
 
     log.info(f"[{camera_name}] modèles : {available_models} | fps={fps} imgsz={imgsz} workers={max_workers}")
+    update_camera(camera_name, state="demarrage", models=available_models, fps_cible=fps)
+
     log.info(f"[{camera_name}] préchauffage des modèles (compilation OpenVINO)...")
     warm_start = time.monotonic()
     registry.warmup(available_models, imgsz)
     log.info(f"[{camera_name}] modèles prêts en {time.monotonic() - warm_start:.1f} s")
+
     if zone_filter.zones():
-        log.info(f"[{camera_name}] zones actives : {[z.get('name') for z in zone_filter.zones()]}")
+        log.info(f"[{camera_name}] zones : {[z.get('name') for z in zone_filter.zones()]}")
     else:
         log.info(f"[{camera_name}] aucune zone définie : analyse plein cadre")
+
+    from concurrent.futures import ThreadPoolExecutor
+
+    offline_since = None
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         while stop_event is None or not stop_event.is_set():
             try:
-                source = cam_cfg.get("source", cam_cfg.get("rtsp_url"))
-                stream = RTSPStream(source)
-                log.info(f"[{camera_name}] flux ouvert : {source}")
+                source = camera_source(cam_cfg)
+                stream = FrameSource(source)
+                log.info(f"[{camera_name}] source ouverte : {source} ({stream.kind})")
+                update_camera(camera_name, state="en ligne", source=str(source),
+                              kind=stream.kind, error=None)
+                offline_since = None
+
                 try:
                     frame_count = 0
                     for frame in stream.frames_at_fps(fps):
@@ -173,12 +192,14 @@ def run_camera(camera_name: str, config: dict, registry: ModelRegistry, on_detec
 
                         for future in futures:
                             for detection in future.result():
-                                zone = zone_filter.zone_for(detection.model, detection.bbox, w, h)
-                                if zone is None:
-                                    continue  # hors des zones surveillées : ignoré
+                                matched = zone_filter.match(detection.model, detection.bbox, w, h)
+                                if matched is None:
+                                    continue  # hors zone, masqué, ou hors horaire
                                 detection.camera = camera_name
-                                detection.zone = zone
-                                where = f" dans {zone}" if zone else ""
+                                detection.zone = matched["name"]
+                                detection.zone_conf = matched.get("conf")
+                                detection.zone_cooldown = matched.get("cooldown")
+                                where = f" dans {detection.zone}" if detection.zone else ""
                                 log.debug(f"[{camera_name}] {detection.model} -> {detection.label} "
                                           f"({detection.confidence:.2f}){where}")
                                 _draw_detection(annotated, detection)
@@ -190,68 +211,160 @@ def run_camera(camera_name: str, config: dict, registry: ModelRegistry, on_detec
                         recorder.add_frame(annotated)
                         _save_live_frame(camera_name, annotated)
 
+                        cycle_ms = (time.monotonic() - cycle_start) * 1000
+                        update_camera(camera_name, state="en ligne", cycle_ms=round(cycle_ms),
+                                      fps_reel=round(1000 / cycle_ms, 2) if cycle_ms else None,
+                                      modeles_actifs=len(active_models))
                         if frame_count % 10 == 0:
-                            cycle_ms = (time.monotonic() - cycle_start) * 1000
                             log.info(f"[{camera_name}] cycle {len(active_models)} modèles = {cycle_ms:.0f} ms")
                 finally:
                     stream.release()
             except ConnectionError as e:
                 log.warning(f"[{camera_name}] {e}")
+                update_camera(camera_name, state="hors ligne", error=str(e))
+                if offline_since is None:
+                    offline_since = time.monotonic()
             except Exception as e:
                 log.exception(f"[{camera_name}] erreur inattendue : {e}")
+                update_camera(camera_name, state="erreur", error=str(e))
+                if offline_since is None:
+                    offline_since = time.monotonic()
 
             if stop_event is not None and stop_event.is_set():
                 break
-            log.warning(f"[{camera_name}] flux perdu, reconnexion dans 2 s...")
+
+            # Une coupure brève est normale (reconnexion réseau). On n'alerte que
+            # si la caméra reste injoignable : sinon le moindre hoquet réveille
+            # l'équipe de nuit pour rien.
+            if offline_since is not None and on_incident \
+                    and time.monotonic() - offline_since > OFFLINE_ALERT_AFTER:
+                on_incident(camera_name, "camera_hors_ligne",
+                            f"Caméra {camera_name} injoignable depuis "
+                            f"{int(time.monotonic() - offline_since)} s")
+                offline_since = time.monotonic()  # réarme le délai
+
+            log.warning(f"[{camera_name}] source perdue, nouvelle tentative dans 2 s...")
+            update_camera(camera_name, state="reconnexion")
             time.sleep(2)
 
     log.info(f"[{camera_name}] arrêté")
+    update_camera(camera_name, state="arrêté")
+
+
+class CameraSupervisor:
+    """Garde les threads de caméras alignés sur la configuration.
+
+    Ajouter une caméra depuis l'interface ne servirait à rien s'il fallait
+    redémarrer le pipeline pour qu'elle soit prise en compte. Le superviseur
+    compare régulièrement les caméras actives à celles qui tournent, et démarre
+    ou arrête ce qu'il faut.
+    """
+
+    def __init__(self, config: dict, registry: ModelRegistry, on_detection, on_incident,
+                 interval: float = 5.0):
+        self.config = config
+        self.registry = registry
+        self.on_detection = on_detection
+        self.on_incident = on_incident
+        self.interval = interval
+        self._threads: dict[str, tuple[threading.Thread, threading.Event]] = {}
+        self._configs: dict[str, dict] = {}
+        self._shutdown = threading.Event()
+
+    def _start(self, name: str, cfg: dict):
+        stop_event = threading.Event()
+        thread = threading.Thread(
+            target=run_camera,
+            args=(name, cfg, self.config, self.registry, self.on_detection, stop_event,
+                  self.on_incident),
+            name=f"cam-{name}",
+            daemon=True,
+        )
+        thread.start()
+        self._threads[name] = (thread, stop_event)
+        self._configs[name] = cfg
+        log.info(f"caméra démarrée : {name}")
+
+    def _stop(self, name: str, forget: bool = True):
+        thread, stop_event = self._threads.pop(name, (None, None))
+        self._configs.pop(name, None)
+        if stop_event is not None:
+            stop_event.set()
+        if thread is not None:
+            thread.join(timeout=10)
+        if forget:
+            forget_camera(name)
+        log.info(f"caméra arrêtée : {name}")
+
+    def reconcile(self):
+        wanted = active_cameras()
+
+        for name in list(self._threads):
+            if name not in wanted:
+                self._stop(name)
+            elif wanted[name] != self._configs.get(name):
+                # Changement de source, de modèles ou de cadence : redémarrage
+                # du thread, seul moyen sûr de repartir sur la bonne source.
+                log.info(f"caméra modifiée, redémarrage : {name}")
+                self._stop(name, forget=False)
+                self._start(name, wanted[name])
+            elif not self._threads[name][0].is_alive():
+                log.error(f"thread de la caméra {name} mort, relance")
+                self._stop(name, forget=False)
+                self._start(name, wanted[name])
+
+        for name, cfg in wanted.items():
+            if name not in self._threads:
+                self._start(name, cfg)
+
+    def run(self):
+        try:
+            while not self._shutdown.is_set():
+                self.reconcile()
+                self._shutdown.wait(self.interval)
+        except KeyboardInterrupt:
+            pass
+        finally:
+            self.shutdown()
+
+    def shutdown(self):
+        self._shutdown.set()
+        for name in list(self._threads):
+            self._stop(name)
 
 
 def main():
-    """Démarre toutes les caméras déclarées, une par thread.
+    """Démarre la supervision : une caméra, un thread, ajustés en continu.
 
     Un thread par caméra plutôt qu'un processus : les modèles OpenVINO sont
     chargés une seule fois et partagés par toutes les caméras (un jeu de modèles
-    par processus coûterait plusieurs Go de RAM), et la libération du GIL pendant
-    l'inférence permet un vrai parallélisme.
+    par processus coûterait plusieurs centaines de Mo chacun), et l'inférence
+    libère le GIL, donc le parallélisme est réel.
     """
-    from app.notifier import local_alert
+    from app.notifier import local_alert, system_alert
     from app.rules import AlertEngine
     from app.storage import cleanup_old_data
 
     cleanup_old_data()  # purge : médias > 30 j, alertes > 1 an
 
     config = load_config()
-    cameras = list(config.get("cameras", {}).keys())
-    if not cameras:
-        log.error("aucune caméra déclarée dans config.yaml")
-        return
-
     registry = ModelRegistry(config["models"])
     engine = AlertEngine(on_alert=local_alert)  # délais anti-répétition selon la sévérité
 
-    log.info(f"démarrage sur {len(cameras)} caméra(s) : {cameras}")
-    stop_event = threading.Event()
-    threads = []
-    for camera_name in cameras:
-        t = threading.Thread(
-            target=run_camera,
-            args=(camera_name, config, registry, engine.process, stop_event),
-            name=f"cam-{camera_name}",
-            daemon=True,
-        )
-        t.start()
-        threads.append(t)
+    def on_incident(camera, label, message):
+        log.error(message)
+        try:
+            system_alert(camera, label, message)
+        except Exception as e:
+            log.error(f"échec de la notification d'incident : {e}")
 
-    try:
-        while any(t.is_alive() for t in threads):
-            time.sleep(0.5)
-    except KeyboardInterrupt:
-        log.info("arrêt demandé, fermeture des caméras...")
-        stop_event.set()
-        for t in threads:
-            t.join(timeout=10)
+    cameras = active_cameras()
+    if not cameras:
+        log.warning("aucune caméra active — ajoutez-en une depuis l'interface")
+    else:
+        log.info(f"caméras actives : {list(cameras)}")
+
+    CameraSupervisor(config, registry, engine.process, on_incident).run()
 
 
 if __name__ == "__main__":

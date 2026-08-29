@@ -73,6 +73,23 @@ def _telegram_alert(alert: Alert, snapshot_path: str | None, severity: str):
             log.error(f"échec envoi Telegram ({chat_id}) : {e}")
 
 
+def system_alert(camera: str, label: str, message: str) -> Alert:
+    """Incident technique : caméra hors ligne, disque plein, pipeline en échec.
+
+    Passe par le même circuit que les alertes métier — journal, base, Telegram —
+    parce qu'une caméra qui ne filme plus doit réveiller quelqu'un au même titre
+    qu'un départ de feu.
+    """
+    alert = Alert(
+        camera=camera,
+        model="systeme",
+        label=label,
+        confidence=1.0,
+        message=message,
+    )
+    return local_alert(alert, frame=None)
+
+
 def local_alert(alert: Alert, frame=None) -> Alert:
     severity = severity_for(alert.model, alert.label)
     log.warning(f"ALERTE [{severity}] — {alert.message}")

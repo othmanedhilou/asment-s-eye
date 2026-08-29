@@ -6,13 +6,26 @@ from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from app.cameras import (
+    active_cameras,
+    camera_source,
+    delete_camera,
+    load_cameras,
+    rename_camera,
+    upsert_camera,
+)
+from app.capture import probe_source
 from app.config import load_config
+from app.health import read_health, system_metrics
 from app.settings import PIPELINE_MODELS, load_settings, set_model_setting
 from app.usecases import usecases_with_status
 from app.zones import load_zones, save_zones
 from app.storage import (
     acknowledge_alert,
+    count_alerts,
     export_csv,
+    mark_false_positive,
+    quality_stats,
     read_alerts,
     stats_summary,
     stats_timeline,
@@ -44,10 +57,36 @@ class AckBody(BaseModel):
     operator: str = "opérateur"
 
 
+class CameraBody(BaseModel):
+    source: str | int
+    models: list[str] = []
+    fps: float | None = None
+    imgsz: int | None = None
+    workers: int | None = None
+    enabled: bool = True
+
+
+class SourceBody(BaseModel):
+    source: str | int
+
+
+class RenameBody(BaseModel):
+    nouveau_nom: str
+
+
+class FalsePositiveBody(BaseModel):
+    is_false: bool = True
+    operator: str = "opérateur"
+
+
 class Zone(BaseModel):
     name: str
     polygon: list[list[float]]   # sommets normalisés (0.0 à 1.0)
     models: list[str] = []       # vide = tous les modèles
+    type: str = "surveillance"   # ou "exclusion" : masquer plutôt que surveiller
+    schedule: dict | None = None  # {"start": "06:00", "end": "22:00", "days": [0-6]}
+    conf: float | None = None     # seuil de confiance propre à la zone
+    cooldown: float | None = None  # délai anti-répétition propre à la zone
 
 
 class ZonesBody(BaseModel):
@@ -72,22 +111,44 @@ def index():
 @app.get("/api/alerts")
 def api_alerts(
     limit: int = 50,
+    offset: int = 0,
     model: str | None = None,
     camera: str | None = None,
     severity: str | None = None,
     zone: str | None = None,
+    label: str | None = None,
     acknowledged: bool | None = None,
+    false_positive: bool | None = None,
     since_hours: int | None = None,
+    hour_from: int | None = None,
+    hour_to: int | None = None,
 ):
-    return read_alerts(
-        limit=limit,
-        model=model,
-        camera=camera,
-        severity=severity,
-        zone=zone,
-        acknowledged=acknowledged,
-        since_hours=since_hours,
-    )
+    """Historique filtrable et paginé.
+
+    Le total accompagne la page : après quelques mois d'exploitation, savoir
+    qu'il existe 1 240 résultats change la façon de chercher.
+    """
+    filtres = {
+        "model": model, "camera": camera, "severity": severity, "zone": zone,
+        "acknowledged": acknowledged, "false_positive": false_positive,
+        "since_hours": since_hours,
+    }
+    items = read_alerts(limit=limit, offset=offset, label=label,
+                        hour_from=hour_from, hour_to=hour_to, **filtres)
+    return {"items": items, "total": count_alerts(**filtres),
+            "limit": limit, "offset": offset}
+
+
+@app.post("/api/alerts/{alert_id}/false")
+def api_false_positive(alert_id: int, body: FalsePositiveBody):
+    """Retour de l'opérateur : le système s'est trompé.
+
+    Ce clic sert deux fois — il alimente les indicateurs de qualité, et il
+    étiquette une image que le ré-entraînement pourra utiliser.
+    """
+    if not mark_false_positive(alert_id, body.is_false, body.operator):
+        raise HTTPException(status_code=404, detail="Alerte introuvable")
+    return {"ok": True, "id": alert_id, "false_positive": body.is_false}
 
 
 @app.post("/api/alerts/{alert_id}/ack")
@@ -103,6 +164,14 @@ def api_ack_alert(alert_id: int, body: AckBody):
 @app.get("/api/stats/summary")
 def api_stats_summary():
     return stats_summary()
+
+
+@app.get("/api/stats/quality")
+def api_stats_quality(days: int = 30):
+    """Qualité vue par les opérateurs : taux de fausses alertes, délai de prise
+    en charge. C'est ce qui permet de répondre par un chiffre à l'objectif du
+    cahier des charges."""
+    return quality_stats(days)
 
 
 @app.get("/api/stats/timeline")
@@ -164,24 +233,94 @@ def api_clip(path: str):
 def api_cameras():
     import time
 
-    config = load_config()
     all_zones = load_zones()
+    health = read_health().get("cameras", {})
     cameras = []
-    for name, cfg in config.get("cameras", {}).items():
+    for name, cfg in load_cameras().items():
         frame_path = LIVE_DIR / f"{name}.jpg"
         online = False
         age = None
         if frame_path.exists():
             age = time.time() - frame_path.stat().st_mtime
             online = age < LIVE_MAX_AGE_SECONDS
+        etat = health.get(name, {})
         cameras.append({
             "name": name,
+            "source": str(camera_source(cfg)),
             "models": cfg.get("models", []),
+            "enabled": cfg.get("enabled", True),
+            "fps": cfg.get("fps"),
             "online": online,
             "age_seconds": round(age, 1) if age is not None else None,
             "zones": [z.get("name") for z in all_zones.get(name, [])],
+            "state": etat.get("state"),
+            "cycle_ms": etat.get("cycle_ms"),
+            "error": etat.get("error"),
         })
     return {"cameras": cameras}
+
+
+@app.post("/api/cameras/test")
+def api_test_camera(body: SourceBody):
+    """Teste une source avant de l'enregistrer.
+
+    Le jour du raccordement des caméras du site, la fenêtre d'intervention est
+    courte : il faut savoir en deux secondes si l'adresse et les identifiants
+    sont bons, pas chercher dans les journaux dix minutes plus tard.
+    """
+    return probe_source(body.source)
+
+
+@app.post("/api/cameras/{name}")
+def api_upsert_camera(name: str, body: CameraBody):
+    if not name or "/" in name or "\\" in name:
+        raise HTTPException(status_code=400, detail="Nom de caméra invalide")
+
+    known = set(load_config().get("models", {}))
+    inconnus = [m for m in body.models if m not in known]
+    if inconnus:
+        raise HTTPException(status_code=400, detail=f"Modèles inconnus : {', '.join(inconnus)}")
+
+    cfg = {k: v for k, v in body.model_dump().items() if v is not None}
+    return {"ok": True, "name": name, "camera": upsert_camera(name, cfg)}
+
+
+@app.post("/api/cameras/{name}/rename")
+def api_rename_camera(name: str, body: RenameBody):
+    if not rename_camera(name, body.nouveau_nom):
+        raise HTTPException(status_code=400, detail="Renommage impossible (nom inconnu ou déjà pris)")
+    return {"ok": True, "name": body.nouveau_nom}
+
+
+@app.delete("/api/cameras/{name}")
+def api_delete_camera(name: str):
+    if not delete_camera(name):
+        raise HTTPException(status_code=404, detail="Caméra inconnue")
+    return {"ok": True, "name": name}
+
+
+# ── Santé du système ─────────────────────────────────────────────────
+
+
+@app.get("/api/health")
+def api_health():
+    """État du pipeline, des caméras et de la machine.
+
+    Un système de surveillance qui s'arrête devient silencieux, et le silence
+    ressemble au calme : cette page est là pour que l'arrêt se voie.
+    """
+    health = read_health()
+    return {
+        "pipeline": {
+            "running": health.get("running", False),
+            "updated_at": health.get("updated_at"),
+            "age_seconds": health.get("age_seconds"),
+        },
+        "cameras": health.get("cameras", {}),
+        "cameras_configurees": len(load_cameras()),
+        "cameras_actives": len(active_cameras()),
+        "machine": system_metrics(),
+    }
 
 
 # ── Zones d'intérêt (ROI) ────────────────────────────────────────────
@@ -200,8 +339,7 @@ def api_zones_camera(camera: str):
 @app.post("/api/zones/{camera}")
 def api_save_zones(camera: str, body: ZonesBody):
     """Remplace les zones d'une caméra. Prise en compte au cycle suivant."""
-    config = load_config()
-    if camera not in config.get("cameras", {}):
+    if camera not in load_cameras():
         raise HTTPException(status_code=404, detail="Caméra inconnue")
 
     for zone in body.zones:

@@ -4,21 +4,30 @@ Sans zones, un modèle analyse toute l'image : le détecteur d'EPI se déclenche
 sur le parking, celui de véhicules sur la route derrière la clôture. C'est la
 première cause de fausses alertes sur site réel.
 
-Une zone est un polygone dessiné sur l'image, associé aux modèles qui ont un
-sens dedans (EPI dans l'atelier, véhicules sur le quai de chargement). Une
-détection n'est retenue que si son point d'ancrage tombe dans au moins une zone
-acceptant son modèle.
+Une zone est un polygone dessiné sur l'image. Elle porte trois choses en plus de
+sa géométrie, et chacune répond à un cas concret :
+
+- **son type** — surveiller, ou au contraire ignorer. Masquer la route au fond du
+  champ prend dix secondes ; contourner finement l'atelier pour l'éviter prend
+  dix minutes et casse au premier déplacement de caméra.
+- **son horaire** — la même détection ne veut pas dire la même chose selon
+  l'heure. Le port du casque se contrôle pendant les postes ; une présence près
+  des fours à 3 h du matin est justement l'anomalie recherchée.
+- **ses seuils** — une zone de passage très fréquentée n'a pas besoin des mêmes
+  réglages qu'un local technique désert.
 
 Les coordonnées sont **normalisées** (0.0 à 1.0) : les zones restent valides si
 la résolution de la caméra change, et se dessinent dans l'interface sans
 connaître les dimensions réelles du flux.
 
-Une caméra sans zone déclarée analyse toute l'image — le comportement d'avant,
-pour ne rien casser tant que les zones ne sont pas dessinées.
+Une caméra sans zone de surveillance analyse toute l'image — le comportement
+d'avant, pour ne rien casser tant que les zones ne sont pas dessinées.
 """
 
 import json
+import threading
 import time
+from datetime import datetime, time as dtime
 from pathlib import Path
 
 ZONES_PATH = Path(__file__).resolve().parent.parent / "config" / "zones.json"
@@ -29,10 +38,14 @@ ZONES_PATH = Path(__file__).resolve().parent.parent / "config" / "zones.json"
 _CACHE_TTL = 1.0
 _cache: dict | None = None
 _cache_time = 0.0
+_lock = threading.Lock()
+
+# Zone implicite d'une caméra sans zone de surveillance : tout est analysé.
+PLEIN_CADRE = {"name": "", "conf": None, "cooldown": None}
 
 
 def load_zones() -> dict:
-    """{"camera": [{"name": ..., "polygon": [[x, y], ...], "models": [...]}]}"""
+    """{"camera": [{"name", "polygon", "models", "type", "schedule", ...}]}"""
     global _cache, _cache_time
     now = time.monotonic()
     if _cache is not None and now - _cache_time < _CACHE_TTL:
@@ -53,11 +66,15 @@ def load_zones() -> dict:
 
 def save_zones(data: dict):
     global _cache, _cache_time
-    ZONES_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with open(ZONES_PATH, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
-    _cache = data
-    _cache_time = time.monotonic()
+    with _lock:
+        ZONES_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with open(ZONES_PATH, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        _cache = data
+        _cache_time = time.monotonic()
+
+
+# ── Géométrie ────────────────────────────────────────────────────────
 
 
 def anchor_point(bbox: tuple[float, float, float, float]) -> tuple[float, float]:
@@ -96,6 +113,50 @@ def point_in_polygon(x: float, y: float, polygon: list) -> bool:
     return inside
 
 
+# ── Horaires ─────────────────────────────────────────────────────────
+
+
+def _parse_hhmm(value: str) -> dtime | None:
+    try:
+        hour, minute = value.split(":")
+        return dtime(int(hour), int(minute))
+    except (ValueError, AttributeError):
+        return None
+
+
+def schedule_active(schedule: dict | None, now: datetime | None = None) -> bool:
+    """La zone est-elle surveillée en ce moment ?
+
+    Un horaire absent ou incomplet signifie « tout le temps » : une erreur de
+    saisie ne doit jamais éteindre silencieusement une surveillance.
+    """
+    if not schedule:
+        return True
+
+    now = now or datetime.now()
+
+    days = schedule.get("days")
+    if days:
+        # 0 = lundi, conformément à datetime.weekday()
+        if now.weekday() not in days:
+            return False
+
+    start = _parse_hhmm(schedule.get("start", ""))
+    end = _parse_hhmm(schedule.get("end", ""))
+    if start is None or end is None:
+        return True
+
+    current = now.time()
+    if start <= end:
+        return start <= current < end
+    # Plage à cheval sur minuit (22:00 → 06:00) : la surveillance de nuit est le
+    # cas d'usage le plus fréquent, elle ne doit pas être le cas non géré.
+    return current >= start or current < end
+
+
+# ── Filtrage ─────────────────────────────────────────────────────────
+
+
 class ZoneFilter:
     """Filtre les détections d'une caméra selon ses zones.
 
@@ -109,30 +170,58 @@ class ZoneFilter:
     def zones(self) -> list:
         return load_zones().get(self.camera, [])
 
-    def zone_for(self, model: str, bbox, frame_width: int, frame_height: int) -> str | None:
-        """Nom de la première zone qui accepte cette détection.
+    def _applies(self, zone: dict, model: str, now: datetime | None) -> bool:
+        models = zone.get("models") or []
+        # Une zone sans liste de modèles s'applique à tous.
+        if models and model not in models:
+            return False
+        return schedule_active(zone.get("schedule"), now)
 
-        Retourne "" si la caméra n'a aucune zone (tout est accepté, sans nom de
-        zone), None si les zones existent mais qu'aucune ne correspond.
+    def match(self, model: str, bbox, frame_width: int, frame_height: int,
+              now: datetime | None = None) -> dict | None:
+        """Zone retenue pour cette détection, ou None si elle doit être ignorée.
+
+        Renvoie un dictionnaire portant le nom de la zone et ses éventuels
+        seuils propres. `name` vide signifie « plein cadre ».
         """
         zones = self.zones()
-        if not zones:
-            return ""  # aucune zone définie : analyse plein cadre
-
-        if not frame_width or not frame_height:
-            return ""
+        if not zones or not frame_width or not frame_height:
+            return dict(PLEIN_CADRE)
 
         px, py = anchor_point(bbox)
         nx, ny = px / frame_width, py / frame_height
 
+        inclusions = [z for z in zones if z.get("type") != "exclusion"]
+
+        # Les exclusions priment : un objet dans une zone masquée est ignoré,
+        # même s'il tombe aussi dans une zone surveillée qui la chevauche.
         for zone in zones:
-            models = zone.get("models") or []
-            # Une zone sans liste de modèles s'applique à tous.
-            if models and model not in models:
+            if zone.get("type") != "exclusion":
+                continue
+            if not self._applies(zone, model, now):
                 continue
             if point_in_polygon(nx, ny, zone.get("polygon", [])):
-                return zone.get("name", "zone")
+                return None
+
+        if not inclusions:
+            return dict(PLEIN_CADRE)
+
+        for zone in inclusions:
+            if not self._applies(zone, model, now):
+                continue
+            if point_in_polygon(nx, ny, zone.get("polygon", [])):
+                return {
+                    "name": zone.get("name", "zone"),
+                    "conf": zone.get("conf"),
+                    "cooldown": zone.get("cooldown"),
+                }
         return None
+
+    def zone_for(self, model: str, bbox, frame_width: int, frame_height: int,
+                 now: datetime | None = None) -> str | None:
+        """Nom de la zone retenue, "" pour le plein cadre, None si ignorée."""
+        matched = self.match(model, bbox, frame_width, frame_height, now)
+        return None if matched is None else matched["name"]
 
     def polygons_in_pixels(self, frame_width: int, frame_height: int) -> list:
         """Zones converties en pixels, pour les dessiner sur l'image."""
@@ -140,5 +229,9 @@ class ZoneFilter:
         for zone in self.zones():
             pts = [(int(x * frame_width), int(y * frame_height)) for x, y in zone.get("polygon", [])]
             if len(pts) >= 3:
-                out.append({"name": zone.get("name", "zone"), "points": pts})
+                out.append({
+                    "name": zone.get("name", "zone"),
+                    "points": pts,
+                    "type": zone.get("type", "surveillance"),
+                })
         return out
