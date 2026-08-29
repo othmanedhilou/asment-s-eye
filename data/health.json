@@ -1,0 +1,1 @@
+{"pid": 6464, "updated_at": "2026-08-30T00:04:39.095772", "cameras": {"webcam_test": {"state": "en ligne", "models": ["fire_smoke", "epi"], "fps_cible": 2.0, "updated_at": "2026-08-30T00:04:39.095740", "source": "0", "kind": "webcam", "error": null, "cycle_ms": 975, "fps_reel": 1.03, "modeles_actifs": 2}}}

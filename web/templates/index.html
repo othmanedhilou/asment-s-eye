@@ -25,11 +25,12 @@
         <button class="nav-link" data-page="zones">📐 Zones</button>
         <button class="nav-link" data-page="usecases">🧠 Cas d'usage</button>
         <button class="nav-link" data-page="reports">📈 Rapports</button>
+        <button class="nav-link" data-page="system">🩺 Système <span class="nav-badge warn" id="system-badge"></span></button>
         <button class="nav-link" data-page="settings">⚙️ Paramètres</button>
       </div>
 
       <div class="nav-footer">
-        <div class="sys-status"><span class="status-dot"></span> Système actif</div>
+        <div class="sys-status"><span class="status-dot" id="pipeline-dot"></span> <span id="pipeline-state">Vérification…</span></div>
         <div class="sys-info" id="sys-info"></div>
       </div>
     </nav>
@@ -41,20 +42,30 @@
       <section class="page active" id="page-dashboard">
         <h1>Tableau de bord</h1>
         <div class="kpi-row">
-          <div class="kpi"><div class="kpi-value" id="kpi-24h">–</div><div class="kpi-label">Alertes 24h</div></div>
-          <div class="kpi kpi-crit"><div class="kpi-value" id="kpi-crit">–</div><div class="kpi-label">Critiques 24h</div></div>
-          <div class="kpi kpi-warn"><div class="kpi-value" id="kpi-unack">–</div><div class="kpi-label">Non acquittées</div></div>
-          <div class="kpi"><div class="kpi-value" id="kpi-7d">–</div><div class="kpi-label">Alertes 7 jours</div></div>
+          <div class="kpi"><div class="kpi-value" id="kpi-24h">–</div><div class="kpi-label">Alertes 24 h</div></div>
+          <div class="kpi kpi-crit"><div class="kpi-value" id="kpi-crit">–</div><div class="kpi-label">Critiques 24 h</div></div>
+          <div class="kpi kpi-warn"><div class="kpi-value" id="kpi-unack">–</div><div class="kpi-label">À traiter</div></div>
+          <div class="kpi"><div class="kpi-value" id="kpi-mtta">–</div><div class="kpi-label">Délai moyen de prise en charge</div></div>
+          <div class="kpi"><div class="kpi-value" id="kpi-false">–</div><div class="kpi-label">Fausses alertes / jour / caméra</div></div>
         </div>
 
         <div class="dash-grid">
           <div class="card">
-            <h2>Activité — dernières 24h</h2>
+            <h2>Activité — dernières 24 h</h2>
             <div class="chart" id="timeline-chart"></div>
           </div>
           <div class="card">
             <h2>Répartition par modèle (7 j)</h2>
             <div id="model-bars"></div>
+          </div>
+          <div class="card">
+            <h2>Répartition par zone (7 j)</h2>
+            <div id="zone-bars"></div>
+          </div>
+          <div class="card">
+            <h2>Fiabilité par modèle (30 j)</h2>
+            <p class="muted" style="margin-top:-8px">Part des alertes déclarées fausses par les opérateurs.</p>
+            <div id="quality-bars"></div>
           </div>
           <div class="card wide">
             <h2>Dernières alertes</h2>
@@ -65,45 +76,114 @@
 
       <!-- Caméras -->
       <section class="page" id="page-cameras">
-        <h1>Caméras</h1>
-        <div class="camera-grid" id="camera-grid"></div>
+        <div class="page-head">
+          <h1>Caméras</h1>
+          <div class="page-actions">
+            <div class="layout-switch" id="layout-switch">
+              <button data-layout="1" title="Une caméra">◻</button>
+              <button data-layout="2" class="active" title="2 colonnes">▥</button>
+              <button data-layout="3" title="3 colonnes">▦</button>
+            </div>
+            <label class="toggle-inline" title="Met en avant la caméra concernée dès qu'une alerte critique arrive">
+              <input type="checkbox" id="auto-focus" checked /> <span>Suivi des alertes</span>
+            </label>
+            <button class="btn small" id="btn-fullscreen">⛶ Plein écran</button>
+            <button class="btn small" id="btn-add-camera">＋ Ajouter une caméra</button>
+          </div>
+        </div>
+
+        <!-- Formulaire d'ajout / modification -->
+        <div class="card" id="camera-form" hidden>
+          <h2 id="camera-form-title">Nouvelle caméra</h2>
+          <div class="form-grid">
+            <label class="field">
+              <span>Nom</span>
+              <input type="text" id="cam-name" placeholder="quai_chargement" />
+            </label>
+            <label class="field wide">
+              <span>Source</span>
+              <input type="text" id="cam-source" placeholder="0, rtsp://user:mdp@192.168.1.42:554/stream, ou videos/test.mp4" />
+              <small class="muted">Webcam (numéro), caméra IP (adresse RTSP), fichier vidéo ou dossier d'images.</small>
+            </label>
+            <label class="field">
+              <span>Images analysées par seconde</span>
+              <input type="number" id="cam-fps" step="0.5" min="0.5" placeholder="4" />
+            </label>
+            <div class="field wide">
+              <span>Modèles actifs sur cette caméra</span>
+              <div id="cam-models" class="zone-models"></div>
+            </div>
+            <label class="field">
+              <span>État</span>
+              <select id="cam-enabled">
+                <option value="true">Active</option>
+                <option value="false">En pause (conservée, non traitée)</option>
+              </select>
+            </label>
+          </div>
+          <div class="form-actions">
+            <button class="btn small ghost" id="cam-test">Tester la connexion</button>
+            <button class="btn" id="cam-save">Enregistrer</button>
+            <button class="btn small ghost" id="cam-cancel">Annuler</button>
+            <span class="form-status" id="cam-status"></span>
+          </div>
+          <div id="cam-preview"></div>
+        </div>
+
+        <div class="camera-grid cols-2" id="camera-grid"></div>
       </section>
 
       <!-- Alertes -->
       <section class="page" id="page-alerts">
         <h1>Alertes</h1>
         <div class="filters">
-          <select id="filter-model">
-            <option value="">Tous les modèles</option>
-          </select>
+          <select id="filter-model"><option value="">Tous les modèles</option></select>
+          <select id="filter-camera"><option value="">Toutes les caméras</option></select>
+          <select id="filter-zone"><option value="">Toutes les zones</option></select>
           <select id="filter-severity">
             <option value="">Toutes sévérités</option>
             <option value="critique">Critique</option>
             <option value="haute">Haute</option>
             <option value="moyenne">Moyenne</option>
+            <option value="technique">Technique</option>
           </select>
           <select id="filter-ack">
             <option value="">Toutes</option>
             <option value="false">À traiter</option>
-            <option value="true">Acquittées</option>
+            <option value="true">Traitées</option>
+          </select>
+          <select id="filter-false">
+            <option value="">Vraies et fausses</option>
+            <option value="false">Vraies alertes</option>
+            <option value="true">Fausses alertes</option>
           </select>
           <select id="filter-period">
             <option value="">Tout l'historique</option>
             <option value="1">Dernière heure</option>
-            <option value="24" selected>Dernières 24h</option>
+            <option value="24" selected>Dernières 24 h</option>
             <option value="168">7 jours</option>
+            <option value="720">30 jours</option>
           </select>
+          <select id="filter-hours">
+            <option value="">Toute la journée</option>
+            <option value="6-14">Poste du matin (6 h – 14 h)</option>
+            <option value="14-22">Poste d'après-midi (14 h – 22 h)</option>
+            <option value="22-6">Poste de nuit (22 h – 6 h)</option>
+          </select>
+          <input type="search" id="filter-label" placeholder="Rechercher une classe…" />
         </div>
         <div class="alerts-table" id="alerts-table"></div>
+        <div class="pager" id="alerts-pager"></div>
       </section>
 
       <!-- Zones d'intérêt -->
       <section class="page" id="page-zones">
         <h1>Zones d'intérêt</h1>
         <p class="muted" style="margin-bottom:18px">
-          Délimitez les secteurs à surveiller et les modèles qui s'y appliquent : le contrôle des EPI
-          dans l'atelier, les véhicules sur le quai. Hors zone, les détections sont ignorées — c'est le
-          principal levier contre les fausses alertes. Sans aucune zone, la caméra est analysée en entier.
+          Délimitez les secteurs à surveiller et les modèles qui s'y appliquent. Hors zone, les
+          détections sont ignorées — c'est le principal levier contre les fausses alertes.
+          Une zone d'exclusion fait l'inverse : elle masque ce qui gêne (route au fond du champ,
+          écran de contrôle). Sans aucune zone, la caméra est analysée en entier.
         </p>
 
         <div class="zone-layout">
@@ -123,14 +203,36 @@
 
           <div class="card">
             <h2>Nouvelle zone</h2>
-            <label class="zone-field">
+            <label class="field">
               <span>Nom</span>
-              <input type="text" id="zone-name" placeholder="ex : atelier, quai de chargement" />
+              <input type="text" id="zone-name" placeholder="atelier, quai de chargement…" />
             </label>
-            <div class="zone-field">
-              <span>Modèles surveillés dans cette zone</span>
+            <label class="field">
+              <span>Rôle</span>
+              <select id="zone-type">
+                <option value="surveillance">Surveiller cette zone</option>
+                <option value="exclusion">Ignorer cette zone (masque)</option>
+              </select>
+            </label>
+            <div class="field">
+              <span>Modèles concernés</span>
               <div id="zone-models" class="zone-models"></div>
-              <p class="muted" style="font-size:12px">Aucun coché = tous les modèles s'appliquent.</p>
+              <small class="muted">Aucun coché = tous les modèles.</small>
+            </div>
+            <div class="field">
+              <span>Horaire de surveillance</span>
+              <div class="row-inline">
+                <input type="time" id="zone-start" /> <span class="muted">→</span> <input type="time" id="zone-end" />
+              </div>
+              <small class="muted">Vide = 24 h/24. Une plage peut passer minuit (22:00 → 06:00).</small>
+            </div>
+            <div class="field">
+              <span>Réglages propres à la zone</span>
+              <div class="row-inline">
+                <input type="number" id="zone-conf" step="0.05" min="0" max="1" placeholder="seuil" />
+                <input type="number" id="zone-cooldown" step="30" min="0" placeholder="délai (s)" />
+              </div>
+              <small class="muted">Vides = valeurs par défaut du modèle et de la sévérité.</small>
             </div>
             <button class="btn" id="zone-add">+ Ajouter la zone</button>
 
@@ -146,7 +248,7 @@
       <section class="page" id="page-usecases">
         <h1>Cas d'usage — cahier des charges</h1>
         <p class="muted" style="margin-bottom:18px">
-          Les 12 cas d'usage définis en section 3.2 du cahier des charges, et leur état d'implémentation réel.
+          Les 12 cas d'usage définis en section 3.2 du cahier des charges, et leur état réel.
         </p>
         <div class="uc-legend">
           <span><span class="uc-dot operationnel"></span> Opérationnel</span>
@@ -165,10 +267,29 @@
             <div id="severity-bars"></div>
           </div>
           <div class="card">
+            <h2>Fausses alertes par caméra (30 j)</h2>
+            <p class="muted" style="margin-top:-8px">Objectif du cahier des charges : moins de 2 par jour et par caméra.</p>
+            <div id="false-by-camera"></div>
+          </div>
+          <div class="card wide">
             <h2>Export</h2>
-            <p class="muted">Exporte l'historique complet des alertes pour le service HSE (format CSV, compatible Excel).</p>
+            <p class="muted">Historique complet des alertes pour le service HSE (CSV, compatible Excel).</p>
             <a class="btn" href="/api/export/csv">⬇ Télécharger le rapport CSV</a>
           </div>
+        </div>
+      </section>
+
+      <!-- Système -->
+      <section class="page" id="page-system">
+        <h1>Système</h1>
+        <p class="muted" style="margin-bottom:18px">
+          Un système de surveillance qui s'arrête devient silencieux — et le silence ressemble
+          au calme. Cette page est là pour que l'arrêt se voie.
+        </p>
+        <div class="kpi-row" id="system-kpis"></div>
+        <div class="card">
+          <h2>État des caméras</h2>
+          <div id="system-cameras"></div>
         </div>
       </section>
 
@@ -184,6 +305,9 @@
 
     </div>
   </div>
+
+  <!-- Bandeau d'alerte critique : visible sans quitter le mur des yeux -->
+  <div class="toast" id="toast" hidden></div>
 
   <script src="/static/js/dashboard.js"></script>
 </body>

@@ -1,0 +1,12 @@
+{
+  "webcam_test": {
+    "source": "0",
+    "rtsp_url": "rtsp://localhost:8554/webcam",
+    "models": [
+      "fire_smoke",
+      "epi"
+    ],
+    "fps": 2.0,
+    "enabled": true
+  }
+}
