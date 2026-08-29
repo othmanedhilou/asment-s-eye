@@ -1,0 +1,21 @@
+{
+  "date": "2026-08-30T00:06:37",
+  "stride": 10,
+  "modeles": [
+    "person_animal",
+    "fire_smoke"
+  ],
+  "clips": [
+    {
+      "file": "videos/mire_test.mp4",
+      "images_analysees": 6,
+      "duree_minutes": 0.1,
+      "detections": {},
+      "fausses": {}
+    }
+  ],
+  "synthese": {
+    "taux_detection": {},
+    "fausses_par_minute": {}
+  }
+}

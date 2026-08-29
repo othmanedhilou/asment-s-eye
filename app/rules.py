@@ -74,7 +74,12 @@ class AlertEngine:
 
         # La zone fait partie de la cle : un vehicule sur le quai et un autre
         # devant l'atelier sont deux situations distinctes, chacune doit alerter.
-        key = (detection.camera, detection.zone, detection.model, detection.label)
+        #
+        # L'identifiant de suivi aussi, quand la camera l'active : sans lui, un
+        # deuxieme ouvrier sans casque reste masque pendant cinq minutes par
+        # l'alerte du premier. Avec lui, chaque personne alerte une fois.
+        key = (detection.camera, detection.zone, detection.model, detection.label,
+               detection.track_id)
         now = time.monotonic()
         last = self._last_alert.get(key, 0.0)
         if now - last < self._cooldown_for(detection.model, detection.label,
@@ -89,6 +94,8 @@ class AlertEngine:
             label=detection.label,
             confidence=detection.confidence,
             zone=detection.zone,
+            bbox=detection.bbox,
+            frame_size=detection.frame_size,
             message=f"{detection.label} détecté sur {detection.camera}{where} "
                     f"(confiance {detection.confidence:.2f})",
         )

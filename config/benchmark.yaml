@@ -1,0 +1,8 @@
+# Jeu de test local (mire de synthese : valide la chaine, pas la detection).
+# A remplacer par de vraies videos de chantier, incendie, quai de chargement.
+stride: 10
+
+clips:
+  - file: videos/mire_test.mp4
+    attendu: {}
+    toleres: []

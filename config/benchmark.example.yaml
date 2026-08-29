@@ -1,0 +1,39 @@
+# Jeu de test — vidéos de référence dont on sait ce qu'elles contiennent.
+#
+# Copiez ce fichier en config/benchmark.yaml, déposez vos vidéos dans videos/,
+# puis lancez :
+#     .\venv\Scripts\python.exe scripts\benchmark.py run
+#
+# Le principe : chaque clip déclare ce qui DOIT y être détecté. Tout le reste
+# compte comme fausse détection. Les clips « rien à signaler » sont les plus
+# précieux : ce sont eux qui mesurent le bruit, et le bruit est ce qui fait
+# abandonner un système de surveillance.
+
+# Une image sur combien est analysée. Deux images consécutives d'une vidéo à
+# 25 img/s sont quasi identiques : les analyser toutes ne change pas le
+# résultat et multiplie le temps de calcul par cinq.
+stride: 5
+
+clips:
+  - file: videos/feu_entrepot.mp4
+    attendu:
+      fire_smoke: [Fire, Smoke]
+
+  - file: videos/chantier_sans_casque.mp4
+    attendu:
+      epi: [NO-Hardhat]
+    # Classes normalement présentes dans la scène, qui ne doivent pas être
+    # comptées comme des erreurs.
+    toleres: [Person, person, Hardhat, Safety Vest]
+
+  - file: videos/quai_chargement.mp4
+    attendu:
+      vehicles: [truck]
+    toleres: [person, car]
+
+  # Le clip le plus important du jeu : une scène banale, sans aucun risque.
+  # Tout ce qui est détecté ici est une fausse alerte, et c'est exactement ce
+  # que l'objectif « moins de 2 fausses alertes par jour et par caméra » vise.
+  - file: videos/scene_calme.mp4
+    attendu: {}
+    toleres: [person, Person]

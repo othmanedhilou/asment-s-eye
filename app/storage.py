@@ -70,6 +70,9 @@ class AlertRecord(Base):
     # l'indicateur de qualité du système et la source d'images d'entraînement
     # étiquetées — un modèle ne progresse pas sans savoir quand il s'est trompé.
     false_positive: Mapped[bool] = mapped_column(Boolean, default=False)
+    # "x1,y1,x2,y2,largeur,hauteur" en pixels : sert de pre-annotation lors de
+    # l'export du jeu de donnees pour le re-entrainement.
+    bbox: Mapped[str | None] = mapped_column(String(120), nullable=True)
 
 
 _engine = None
@@ -87,6 +90,7 @@ def _migrate(engine):
             "clip": "ALTER TABLE alerts ADD COLUMN clip VARCHAR(500)",
             "zone": "ALTER TABLE alerts ADD COLUMN zone VARCHAR(100)",
             "false_positive": "ALTER TABLE alerts ADD COLUMN false_positive BOOLEAN DEFAULT 0",
+            "bbox": "ALTER TABLE alerts ADD COLUMN bbox VARCHAR(120)",
         }
         for col, ddl in migrations.items():
             if col not in cols:
@@ -121,7 +125,14 @@ def _to_dict(r: AlertRecord) -> dict:
         "clip": r.clip,
         "zone": r.zone or "",
         "false_positive": bool(r.false_positive),
+        "bbox": [float(v) for v in r.bbox.split(",")] if r.bbox else None,
     }
+
+
+def _bbox_to_text(alert: Alert) -> str | None:
+    if not alert.bbox or not alert.frame_size:
+        return None
+    return ",".join(f"{v:.1f}" for v in (*alert.bbox, *alert.frame_size))
 
 
 def log_alert(alert: Alert, snapshot_path: str | None = None) -> int:
@@ -137,6 +148,7 @@ def log_alert(alert: Alert, snapshot_path: str | None = None) -> int:
             snapshot=snapshot_path,
             severity=severity_for(alert.model, alert.label),
             zone=alert.zone or None,
+            bbox=_bbox_to_text(alert),
         )
         session.add(record)
         session.commit()

@@ -19,6 +19,7 @@ from app.logging_setup import setup_logging
 from app.models import Detection
 from app.recorder import ClipRecorder
 from app.settings import is_detect_enabled
+from app.tracking import SimpleTracker, build_counters, occupation
 from app.zones import ZoneFilter
 
 LIVE_DIR = Path(__file__).resolve().parent.parent / "data" / "live"
@@ -145,6 +146,16 @@ def run_camera(camera_name: str, cam_cfg: dict, config: dict, registry: ModelReg
     zone_filter = ZoneFilter(camera_name)
     recorder = ClipRecorder(camera_name, fps=fps)
 
+    # Suivi des objets : desactive par defaut car il coute du temps de calcul.
+    # A activer sur les cameras ou l'on veut compter, connaitre un sens de
+    # passage, ou n'alerter qu'une fois par personne plutot qu'une fois par image.
+    suivi_actif = bool(cam_cfg.get("tracking", False))
+    trackers: dict[str, SimpleTracker] = {}
+    compteurs = build_counters(zone_filter.zones()) if suivi_actif else []
+    if suivi_actif:
+        log.info(f"[{camera_name}] suivi d'objets actif"
+                 + (f", {len(compteurs)} ligne(s) de comptage" if compteurs else ""))
+
     log.info(f"[{camera_name}] modèles : {available_models} | fps={fps} imgsz={imgsz} workers={max_workers}")
     update_camera(camera_name, state="demarrage", models=available_models, fps_cible=fps)
 
@@ -189,9 +200,23 @@ def run_camera(camera_name: str, cam_cfg: dict, config: dict, registry: ModelReg
 
                         annotated = frame.copy()
                         _draw_zones(annotated, zone_filter)
+                        retenues = []
 
-                        for future in futures:
-                            for detection in future.result():
+                        for model_name, future in zip(active_models, futures):
+                            detections = future.result()
+
+                            if suivi_actif:
+                                tracker = trackers.setdefault(model_name, SimpleTracker())
+                                detections = tracker.update(detections)
+                                for detection in detections:
+                                    detection.model = model_name
+                                for compteur in compteurs:
+                                    for passage in compteur.update(model_name, detections, w, h):
+                                        log.info(f"[{camera_name}] franchissement "
+                                                 f"{passage['ligne']} ({passage['sens']}) "
+                                                 f"— {passage['classe']}")
+
+                            for detection in detections:
                                 matched = zone_filter.match(detection.model, detection.bbox, w, h)
                                 if matched is None:
                                     continue  # hors zone, masqué, ou hors horaire
@@ -199,10 +224,12 @@ def run_camera(camera_name: str, cam_cfg: dict, config: dict, registry: ModelReg
                                 detection.zone = matched["name"]
                                 detection.zone_conf = matched.get("conf")
                                 detection.zone_cooldown = matched.get("cooldown")
+                                detection.frame_size = (w, h)
                                 where = f" dans {detection.zone}" if detection.zone else ""
                                 log.debug(f"[{camera_name}] {detection.model} -> {detection.label} "
                                           f"({detection.confidence:.2f}){where}")
                                 _draw_detection(annotated, detection)
+                                retenues.append(detection)
                                 if on_detection:
                                     alert = on_detection(detection, frame)
                                     if alert is not None and alert.db_id is not None:
@@ -212,9 +239,22 @@ def run_camera(camera_name: str, cam_cfg: dict, config: dict, registry: ModelReg
                         _save_live_frame(camera_name, annotated)
 
                         cycle_ms = (time.monotonic() - cycle_start) * 1000
-                        update_camera(camera_name, state="en ligne", cycle_ms=round(cycle_ms),
-                                      fps_reel=round(1000 / cycle_ms, 2) if cycle_ms else None,
-                                      modeles_actifs=len(active_models))
+                        etat = {
+                            "state": "en ligne",
+                            "cycle_ms": round(cycle_ms),
+                            "fps_reel": round(1000 / cycle_ms, 2) if cycle_ms else None,
+                            "modeles_actifs": len(active_models),
+                        }
+                        if suivi_actif:
+                            etat["objets_suivis"] = sum(t.actifs for t in trackers.values())
+                            if compteurs:
+                                etat["franchissements"] = [c.counts() for c in compteurs]
+                            # Objets distincts presents par zone : un ouvrier
+                            # immobile compte pour un, pas pour une image.
+                            presents = occupation(zone_filter.zones(), retenues, w, h)
+                            if presents:
+                                etat["occupation"] = presents
+                        update_camera(camera_name, **etat)
                         if frame_count % 10 == 0:
                             log.info(f"[{camera_name}] cycle {len(active_models)} modèles = {cycle_ms:.0f} ms")
                 finally:

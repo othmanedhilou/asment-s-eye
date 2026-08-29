@@ -3,10 +3,11 @@
     "source": "0",
     "rtsp_url": "rtsp://localhost:8554/webcam",
     "models": [
-      "fire_smoke",
+      "person_animal",
       "epi"
     ],
     "fps": 2.0,
-    "enabled": true
+    "enabled": true,
+    "tracking": true
   }
 }
