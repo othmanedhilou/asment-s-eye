@@ -43,17 +43,20 @@ détection, une seule interface web, un seul lien.
 ### 1.3 Architecture retenue
 
 ```
-Caméra
-  |  webcam locale (indice 0)  ou  caméra IP (RTSP)
+Source : webcam (0) · caméra IP (rtsp://) · fichier vidéo · dossier d'images
   v
-app/capture.py ........ RTSPStream : thread de lecture dédié
-  |                     ne garde que l'image la plus récente
+app/capture.py ........ FrameSource : direct dans un thread dédié,
+  |                     fichier lu séquentiellement sans perte
+  v
+app/cameras.py ........ registre des caméras, modifiable depuis l'interface
   v
 app/pipeline.py ....... un thread par caméra ; N modèles en parallèle par image
   |                     (ThreadPoolExecutor + OpenVINO)
   v
+app/tracking.py ....... suivi des objets, comptage, franchissement de ligne
+  v
 app/zones.py .......... filtrage géographique : la détection est-elle dans une
-  |                     zone surveillée pour ce modèle ?
+  |                     zone surveillée pour ce modèle, à cette heure ?
   v
 app/rules.py .......... filtrage métier : classes surveillées, seuils renforcés,
   |                     anti-répétition calé sur la sévérité
@@ -61,6 +64,7 @@ app/rules.py .......... filtrage métier : classes surveillées, seuils renforc�
 app/notifier.py ....... snapshot + bip + Telegram (routage par sévérité)
 app/recorder.py ....... clip MP4 : 5 s avant / 10 s après l'alerte
 app/storage.py ........ SQLite : historique, sévérité, acquittement, purge
+app/health.py ......... état du pipeline et des caméras, publié en continu
 app/logging_setup.py .. journal console + fichier tournant (logs/)
   v
 app/api.py ............ API REST + interface web (port 8000)
@@ -74,6 +78,9 @@ Les deux processus à lancer sont `app.pipeline` (détection) et `app.api`
 | Image live | `data/live/<caméra>.jpg` | pipeline → API |
 | Alertes | `data/smokewatch.db` (SQLite) | pipeline → API |
 | Réglages | `data/settings.json` | API → pipeline |
+| Caméras | `config/cameras.json` | API → pipeline |
+| Zones | `config/zones.json` | API → pipeline |
+| Santé | `data/health.json` | pipeline → API |
 
 Ce découplage a un avantage concret : **redémarrer l'interface n'interrompt pas
 la détection**, et inversement.
@@ -89,9 +96,30 @@ class RTSPStream:
     def __init__(self, url, open_timeout=10.0)
 ```
 
-`url` accepte deux formes :
-- un **indice de webcam locale** (`0`) → ouvert via `cv2.CAP_DSHOW` sous Windows
-- une **URL RTSP** (`rtsp://...`) pour les caméras IP du site
+`FrameSource` accepte quatre formes de source :
+
+| Forme | Exemple | Lecture |
+|---|---|---|
+| Webcam | `0` | direct, thread dédié |
+| Caméra IP | `rtsp://192.168.1.42/...` | direct, thread dédié |
+| Fichier vidéo | `videos/incendie.mp4` | séquentielle, en boucle |
+| Dossier d'images | `videos/sequence/` | séquentielle, en boucle |
+
+**Les deux dernières formes ne sont pas un accessoire.** Sans accès aux caméras
+du site, la seule scène disponible est la webcam de la machine de développement,
+où il ne se passe jamais rien : impossible d'y régler un seuil, de mesurer un
+modèle ou de produire des statistiques crédibles. Une vidéo rejouée traverse
+exactement le même pipeline qu'une caméra — mêmes zones, mêmes modèles, mêmes
+alertes.
+
+Les deux natures de source imposent deux modes de lecture opposés :
+
+- **Direct** — un thread vide le flux en continu et ne garde que l'image la plus
+  récente. L'inférence saute des images plutôt que d'accumuler du retard.
+- **Fichier** — lecture séquentielle, sans thread et **sans perte** : chaque
+  image demandée est la suivante du fichier. Une vidéo rejouée doit donner le
+  même résultat à chaque exécution, sinon elle ne peut servir ni à régler des
+  seuils ni à comparer deux versions d'un modèle.
 
 **Le point critique : le thread de lecture dédié.** L'inférence prend environ 1 s
 par cycle, la caméra émet 25 à 30 images par seconde. Si on lisait le flux dans
@@ -190,7 +218,114 @@ englobantes.
 
 En cas de perte de flux, la boucle extérieure reconnecte toutes les 2 s.
 
-### 2.4 `app/zones.py` — zones d'intérêt (ROI)
+### 2.4 `app/cameras.py` — registre des caméras
+
+Tant qu'ajouter une caméra oblige à éditer `config.yaml` sur le serveur, le
+système dépend de la personne qui sait le faire. Et le jour du branchement sur
+site, la fenêtre d'intervention est courte : il faut un formulaire et un bouton
+« tester », pas une séance de débogage devant le responsable.
+
+Les caméras vivent donc dans `config/cameras.json`, écrit par l'application et
+**amorcé depuis `config.yaml` au premier démarrage** — rien de l'existant n'est
+perdu. `config.yaml` reste la référence pour les modèles et les réglages
+d'inférence.
+
+Le `CameraSupervisor` du pipeline compare toutes les cinq secondes les caméras
+configurées à celles qui tournent, et démarre, arrête ou redémarre les threads en
+conséquence. Ajouter une caméra depuis l'interface serait sans effet s'il fallait
+redémarrer le pipeline pour la voir apparaître.
+
+Une caméra peut être **mise en pause** (`enabled: false`) : elle reste
+configurée, avec ses zones, mais n'est plus traitée. C'est ce qu'il faut pendant
+une maintenance, plutôt que la supprimer et tout ressaisir ensuite.
+
+### 2.5 `app/health.py` — état du système
+
+Un système de surveillance qui s'arrête devient **silencieux**, et le silence
+ressemble exactement au calme. C'est le pire mode de défaillance possible :
+personne ne remarque rien, jusqu'au jour où l'on cherche l'enregistrement d'un
+incident qui n'a jamais été capté.
+
+Le pipeline publie donc son état — état de chaque caméra, temps de cycle, images
+par seconde réelles, erreurs, objets suivis — dans `data/health.json`, que
+l'interface lit. Au-delà de 20 secondes sans mise à jour, le pipeline est déclaré
+arrêté et l'interface l'affiche en rouge.
+
+Une caméra injoignable plus de 30 secondes déclenche une **alerte technique**,
+qui suit le même circuit que les alertes métier — journal, base, Telegram. Une
+caméra débranchée n'est pas un événement de sécurité au travail, mais elle doit
+réveiller quelqu'un au même titre.
+
+La sévérité `technique` est distincte pour ne pas polluer les statistiques HSE.
+
+### 2.6 `app/tracking.py` — suivi des objets
+
+Chaque image était analysée isolément : le système voyait « une personne », puis
+« une personne », sans jamais comprendre que c'était **la même**. Trois
+conséquences — impossible de compter (trois images d'un camion font trois
+camions), impossible de connaître un sens de passage, et le seul rempart contre
+le flot d'alertes restait le délai anti-répétition, qui est un pansement plutôt
+qu'une compréhension.
+
+**Pourquoi ne pas utiliser le suivi d'Ultralytics.** `model.track(persist=True)`
+existe, mais son état est attaché à **l'objet modèle**. Or les modèles sont
+chargés une seule fois et partagés par toutes les caméras — c'est précisément ce
+qui permet d'en faire tourner huit sur une machine modeste. Deux caméras
+partageant un modèle mélangeraient donc leurs pistes, et personne ne le verrait
+avant d'obtenir des comptages absurdes.
+
+Le suiveur écrit ici est instancié **par caméra et par modèle**. Il associe les
+détections en deux temps, et le second n'est pas un raffinement optionnel :
+
+1. **par recouvrement de boîtes** — le critère le plus sûr, mais il suppose que
+   l'objet a peu bougé entre deux images ;
+2. **par proximité des centres** — indispensable ici. L'inférence tourne à une ou
+   deux images par seconde ; un piéton parcourt alors plus que sa propre largeur
+   et les boîtes ne se recouvrent plus du tout. Sans ce rattrapage, chaque image
+   créerait un nouvel objet.
+
+La tolérance reste bornée à une fois et demie la taille de l'objet : confondre
+deux personnes distinctes est plus grave que manquer un franchissement.
+
+Ce que le suivi apporte concrètement :
+
+- **une alerte par personne** au lieu d'une par image — l'identifiant de suivi
+  entre dans la clé anti-répétition, si bien qu'un deuxième ouvrier sans casque
+  n'est plus masqué cinq minutes par l'alerte du premier ;
+- le **comptage de franchissements** avec le sens, via des zones de type `ligne` ;
+- l'**occupation** d'une zone : des objets distincts, pas des détections.
+
+Le suivi coûte du temps de calcul : il s'active par caméra (`tracking: true`).
+
+### 2.7 `app/benchmark.py` — banc de test
+
+Sans mesure, tout changement — relever un seuil, ré-entraîner un modèle — se
+juge à l'impression. Le vrai danger n'est pas de stagner : c'est de **reculer
+sans le voir**. On relève un seuil, les fausses alertes chutent, on est satisfait
+— et le modèle rate désormais un ouvrier sans casque sur trois au lieu d'un sur
+deux. Personne ne le remarque, parce qu'un manque ne s'affiche nulle part.
+
+Le principe tient en deux chiffres par classe :
+
+| Mesure | Sur quels clips | Ce qu'elle dit |
+|---|---|---|
+| Taux de détection | ceux où la classe **doit** apparaître | part des images où le modèle la voit |
+| Fausses détections/min | ceux où elle ne doit **pas** apparaître | volume de bruit produit |
+
+Le clip le plus précieux du jeu est celui où il ne se passe **rien** : c'est lui
+qui mesure le bruit, et le bruit est ce qui fait abandonner un système.
+
+**Ce que la mesure ne vaut pas.** Les clips sont annotés au niveau du clip, pas
+image par image : ce n'est donc pas une mAP, et les chiffres ne sont pas
+comparables à ceux d'une publication. C'est suffisant pour comparer un avant et
+un après sur le même jeu — l'usage visé — et il vaut mieux le dire que le
+laisser croire.
+
+La comparaison s'interprète dans les deux sens : sur le taux de détection, plus
+haut vaut mieux ; sur le bruit, c'est l'inverse. `compare()` porte cette logique
+plutôt que de la laisser au lecteur.
+
+### 2.8 `app/zones.py` — zones d'intérêt (ROI)
 
 Sans zones, un modèle analyse toute l'image : le détecteur d'EPI se déclenche sur
 le parking, celui de véhicules sur la route derrière la clôture. **C'est la
@@ -233,7 +368,7 @@ enregistrées dans `config/zones.json` et **prises en compte au cycle suivant**,
 sans redémarrage. Elles sont aussi tracées sur l'image live, pour que l'opérateur
 voie ce qui est réellement surveillé.
 
-### 2.5 `app/rules.py` — du bruit brut aux alertes exploitables
+### 2.9 `app/rules.py` — du bruit brut aux alertes exploitables
 
 C'est la couche qui rend le système utilisable. Trois filtres successifs.
 
@@ -286,7 +421,7 @@ Avec l'ancien délai unique de 15 s, une personne assise devant la caméra
 produisait **448 alertes en 24 h** ; après ce changement, la même scène en
 produit une poignée.
 
-### 2.6 `app/storage.py` — base de données et sévérité
+### 2.10 `app/storage.py` — base de données et sévérité
 
 **La sévérité métier** est calculée à l'enregistrement, pas saisie :
 
@@ -321,7 +456,7 @@ fonctionner sans manipulation.
 `cleanup_old_data()` purge au démarrage les médias de plus de 30 jours et les
 alertes de plus d'un an — sans quoi le disque se remplit silencieusement.
 
-### 2.7 `app/notifier.py` — notification
+### 2.11 `app/notifier.py` — notification
 
 Pour chaque alerte : log console, bip sonore (`winsound`), snapshot JPEG dans
 `clips/snapshots/`, insertion en base, puis envoi Telegram.
@@ -339,7 +474,7 @@ Les destinataires viennent de `.env` (`TELEGRAM_CHAT_IDS=111,222,333`).
 Telegram a été retenu plutôt que SMS ou WhatsApp : gratuit, illimité, aucun
 compte tiers payant, et l'application est déjà installée sur les téléphones.
 
-### 2.8 `app/recorder.py` — clips vidéo
+### 2.12 `app/recorder.py` — clips vidéo
 
 Un snapshot ne dit pas ce qui s'est passé **avant** l'alerte. Le `ClipRecorder`
 garde en mémoire un tampon glissant des 5 dernières secondes :
@@ -354,7 +489,7 @@ un MP4 (codec `mp4v`), puis lie le fichier à l'alerte en base.
 Un seul clip à la fois : `trigger()` sort immédiatement si un enregistrement est
 en cours, sinon des dizaines de vidéos se chevaucheraient.
 
-### 2.9 `app/settings.py` — réglages en direct
+### 2.13 `app/settings.py` — réglages en direct
 
 `data/settings.json` porte, pour chaque modèle, deux booléens : `detect`
 (exécuter le modèle) et `alert` (déclencher une alerte). Modifiables depuis
@@ -365,14 +500,14 @@ Une première version relisait le fichier à chaque appel — 28 lectures disque
 seconde. D'où le cache d'une seconde : assez court pour rester réactif à l'UI,
 assez long pour supprimer le martèlement disque.
 
-### 2.10 `app/usecases.py` — traçabilité du cahier des charges
+### 2.14 `app/usecases.py` — traçabilité du cahier des charges
 
 Registre des **12 cas d'usage** du cahier des charges, mappés sur les modèles
 réellement entraînés, avec un état honnête par cas : `operationnel`, `partiel`,
 `a_entrainer`. Un modèle peut couvrir plusieurs cas (`fire_smoke` couvre fumée
 *et* feu ; `epi` couvre casque, gilet et masque).
 
-### 2.11 `app/api.py` — API REST et interface
+### 2.15 `app/api.py` — API REST et interface
 
 FastAPI. Endpoints :
 
@@ -399,7 +534,7 @@ du fichier : une vignette figée laissée par un pipeline mort passerait sinon p
 du direct indéfiniment. Au-delà de 15 s sans nouvelle image, la caméra est
 déclarée hors ligne.
 
-### 2.12 `app/logging_setup.py` — journalisation
+### 2.16 `app/logging_setup.py` — journalisation
 
 Tout passait auparavant par `print()` : rien n'était conservé. Après un incident
 nocturne — flux perdu, modèle qui plante, alerte non partie — il ne restait
@@ -611,6 +746,52 @@ de NSSM, environnement virtuel complet, port 8000 libre. Chacune de ces erreurs
 produirait sinon un échec au milieu de l'installation, avec des services à moitié
 créés.
 
+### 5.4 Sauvegarde et mise à jour
+
+```powershell
+.\venv\Scripts\python.exe scripts\backup.py create
+.\venv\Scripts\python.exe scripts\backup.py restore <archive.zip>
+```
+
+Sont sauvegardés la base d'alertes, les caméras, les zones, les réglages et la
+configuration — tout ce qui s'est construit à l'usage et ne se retrouve pas dans
+Git. Un an d'historique d'alertes est une donnée HSE.
+
+Le `.env` en est **volontairement** exclu : une archive de sauvegarde circule
+(copiée sur une clé, envoyée par messagerie), et un secret ne doit pas voyager
+avec elle. Il fait deux lignes, on le recopie à la main.
+
+La restauration met les fichiers actuels de côté avant d'écraser : si la
+restauration se révèle être une erreur, rien n'est perdu. **Une sauvegarde
+jamais restaurée n'est pas une sauvegarde** — testez-la sur une machine de
+développement avant d'en avoir besoin.
+
+Mise à jour du serveur : arrêter les services, sauvegarder, `git pull`,
+réinstaller les dépendances, lancer les tests, relancer les services. Le détail
+figure dans le guide d'installation.
+
+### 5.5 Intégration continue
+
+`.github/workflows/tests.yml` exécute les tests à chaque envoi sur GitHub, plus
+une vérification des imports (une erreur d'import empêche le service de démarrer
+sans forcément faire échouer un test unitaire) et de la cohérence de
+`config.yaml`. Vous êtes plusieurs sur ce dépôt : une régression doit être
+signalée par la machine, pas découverte en démonstration.
+
+### 5.6 Documentation destinée aux utilisateurs
+
+Ce document s'adresse à quelqu'un qui lit le code. Deux autres existent pour ceux
+qui n'en ouvriront jamais une ligne :
+
+- `docs/GUIDE_OPERATEUR.md` — pour l'équipe sécurité : que faire devant une
+  alerte, pourquoi le bouton « fausse alerte » compte, comment retrouver un
+  événement passé.
+- `docs/GUIDE_INSTALLATION.md` — pour le technicien : dimensionnement,
+  installation, raccordement des caméras, mise en service, dépannage.
+
+Un système que personne ne sait utiliser finit ignoré, et la qualité de la
+détection n'y change rien.
+
 ---
 
 ## 6. Performances mesurées
@@ -675,12 +856,12 @@ selon la rétention : clips et snapshots sont purgés à 30 jours par défaut.
 
 ## 7. Limites connues
 
-1. **Validé sur une seule webcam**, pas sur les caméras IP du site. Le
-   multi-caméra est implémenté et les zones sont en place, mais aucune caméra IP
-   réelle n'a encore été branchée : authentification caméra, latence réseau et
-   charge à 7 flux restent à éprouver.
+1. **Aucune caméra IP réelle branchée.** Le multi-caméra tourne (validé avec
+   une webcam et un fichier vidéo simultanément), mais l'authentification
+   caméra, la latence réseau et la charge à 7 flux restent à éprouver sur site.
 2. **Zones jamais dessinées sur une scène réelle.** Le mécanisme est testé
-   (15 tests unitaires), mais les zones utiles du site restent à tracer.
+   (29 tests unitaires, exclusions et horaires compris), mais les zones utiles
+   du site restent à tracer.
 3. **Trois modèles à ré-entraîner** : `load_control` (inutilisable),
    `Fall-Detected` (peu fiable), et le rappel EPI (~54 % sur NO-Hardhat, soit un
    ouvrier sans casque sur deux qui passe inaperçu).
@@ -692,6 +873,13 @@ selon la rétention : clips et snapshots sont purgés à 30 jours par défaut.
    alertes sont conservés.
 8. **Services Windows non éprouvés** : le script est écrit et vérifie ses
    prérequis, mais NSSM n'est pas installé sur la machine de développement.
+9. **Banc de test sans clips réels.** Le mécanisme fonctionne, mais il n'a
+   tourné que sur une mire de synthèse : les vidéos de référence (chantier,
+   incendie, quai de chargement, scène calme) restent à réunir. Tant qu'elles
+   manquent, les chiffres de qualité des modèles ne sont pas mesurables.
+10. **Suivi d'objets peu éprouvé** : validé par les tests et actif sans
+   incident, mais jamais confronté à une scène chargée où plusieurs personnes se
+   croisent — le cas où une association par proximité peut se tromper.
 
 ---
 
@@ -718,25 +906,33 @@ pour éviter de les redécouvrir.
 
 ## 9. Reste à faire, par priorité
 
-**Bloquant pour une mise en production**
+**Ce qui demande autre chose que du code**
 
-1. **Brancher les caméras IP du site**, tracer leurs zones, et vérifier que le
-   CPU tient la charge (voir le dimensionnement en 6.3).
-2. **Ré-entraîner** `load_control` et `Fall-Detected`, enrichir le dataset EPI
-   avec des images du site réel. C'est le seul point qui ne se règle pas par du
-   code : il faut des données.
-3. **Éprouver les services Windows** sur le serveur cible, avec NSSM installé.
+1. **Réunir les vidéos de référence** du banc de test : chantier avec et sans
+   EPI, départ de feu, quai de chargement, et surtout une scène banale où il ne
+   se passe rien. Sans elles, la qualité des modèles reste une impression.
+2. **Ré-entraîner** le rappel EPI d'abord (54 % : un ouvrier sans casque sur
+   deux passe inaperçu), puis `load_control` avec les images négatives que
+   produit le bouton « fausse alerte », puis la détection de chute.
+   `scripts/export_dataset.py` prépare le jeu de données ; le protocole adapté à
+   un GPU modeste figure dans le README.
+3. **Brancher les caméras IP du site**, tracer leurs zones, vérifier la charge.
+4. **Éprouver les services Windows** sur le serveur cible, avec NSSM installé.
 
-**Niveau professionnel**
+**Améliorations restantes**
 
-4. Groupe Telegram dédié plutôt que des `chat_id` individuels.
-5. Statistiques HSE : taux de conformité EPI par zone, délai moyen de prise en
-   charge des alertes. Les données sont déjà en base (zone, acquittement,
-   horodatage) — il ne manque que les requêtes et l'affichage.
-6. Rapport PDF hebdomadaire automatique au responsable HSE.
-7. Enregistrement vidéo continu, en complément des clips d'alerte.
-8. Lecture de plaques (OCR) pour compléter le cas d'usage 9.
+5. Groupe Telegram dédié plutôt que des `chat_id` individuels.
+6. Frise chronologique par caméra : parcourir une journée d'un coup d'œil et
+   sauter d'une alerte à l'autre.
+7. Rapport PDF hebdomadaire automatique au responsable HSE.
+8. Enregistrement vidéo continu, en complément des clips d'alerte.
+9. Lecture de plaques (OCR) pour compléter le cas d'usage 9.
+10. Authentification, si l'interface doit un jour sortir du réseau interne.
 
-**Déjà traité** (rappel, pour ne pas le rouvrir par erreur) : zones d'intérêt,
-multi-caméra, journalisation, tests automatisés, versions épinglées, services
-Windows rejouables, authentification écartée volontairement.
+**Déjà traité** (rappel, pour ne pas le rouvrir par erreur) : sources vidéo
+unifiées, gestion des caméras sans fichier de configuration, supervision et
+alertes techniques, zones avec exclusions et horaires, suivi d'objets et
+comptage, retour opérateur sur les fausses alertes, indicateurs de qualité,
+banc de test, export du jeu de données, recherche et pagination, mur de caméras
+configurable, journalisation, sauvegarde, intégration continue, guides
+opérateur et installation.

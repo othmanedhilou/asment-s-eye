@@ -1,1 +1,0 @@
-{"pid": 10564, "updated_at": "2026-08-30T00:21:16.964772", "cameras": {"webcam_test": {"state": "en ligne", "models": ["person_animal", "epi"], "fps_cible": 2.0, "updated_at": "2026-08-30T00:21:16.964746", "source": "0", "kind": "webcam", "error": null, "cycle_ms": 764, "fps_reel": 1.31, "modeles_actifs": 2, "objets_suivis": 0}}}

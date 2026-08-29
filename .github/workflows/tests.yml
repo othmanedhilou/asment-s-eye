@@ -1,0 +1,53 @@
+name: Tests
+
+# Vous etes plusieurs sur ce depot. Sans verification automatique, une
+# regression introduite par un commit se decouvre en demonstration, pas au
+# moment ou elle est ecrite.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Installer les dependances
+        run: |
+          python -m pip install --upgrade pip
+          # Torch en version CPU : l'image GPU pese plusieurs Go et n'apporte
+          # rien ici, la machine de production n'a pas de carte graphique non plus.
+          pip install torch==2.13.0 torchvision==0.28.0 --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements.txt
+
+      - name: Verifier que les modules se chargent
+        # Une erreur d'import ne se voit pas toujours dans les tests unitaires,
+        # alors qu'elle empeche le service de demarrer.
+        run: |
+          python -c "import app.api, app.pipeline, app.benchmark, app.tracking"
+
+      - name: Tests
+        run: pytest tests -q
+
+      - name: Verifier la configuration
+        run: |
+          python -c "
+          import yaml
+          config = yaml.safe_load(open('config/config.yaml', encoding='utf-8'))
+          assert config['cameras'], 'aucune camera declaree'
+          assert config['models'], 'aucun modele declare'
+          for nom, cam in config['cameras'].items():
+              for modele in cam.get('models', []):
+                  assert modele in config['models'], f'{nom} reference un modele inconnu : {modele}'
+          print('configuration coherente')
+          "

@@ -4,20 +4,24 @@ Système de supervision vidéo intelligente pour site cimentier (Ciments du Maro
 Détection temps réel de la fumée, du feu, du non-port des EPI et d'autres risques
 sur les flux caméras, avec alertes immédiates aux équipes de sécurité.
 
-📖 **[DOCUMENTATION.md](DOCUMENTATION.md)** — architecture détaillée, rôle de
-chaque module, dimensionnement du serveur, pièges de production.
+| Document | Pour qui |
+|---|---|
+| [DOCUMENTATION.md](DOCUMENTATION.md) | architecture, choix de conception, pièges rencontrés |
+| [docs/GUIDE_INSTALLATION.md](docs/GUIDE_INSTALLATION.md) | le technicien qui installe sur le serveur |
+| [docs/GUIDE_OPERATEUR.md](docs/GUIDE_OPERATEUR.md) | l'équipe sécurité qui l'utilise au quotidien |
 
 ## Architecture
 
 ```
-Caméras (webcam locale ou caméras IP en RTSP)
+Caméras (webcam, caméra IP RTSP, fichier vidéo, dossier d'images)
         │
         ▼
-   app/capture.py ...... thread de lecture dédié (ne garde que la dernière image)
+   app/capture.py ...... thread de lecture dédié, une source = une caméra
         │
         ▼
    app/pipeline.py ..... un thread par caméra, modèles en parallèle (OpenVINO, CPU)
         │
+        ├──► app/tracking.py ... suivi des objets, comptage, franchissements
         ├──► app/zones.py ...... la détection est-elle dans une zone surveillée ?
         │         │
         │         ▼
@@ -27,116 +31,148 @@ Caméras (webcam locale ou caméras IP en RTSP)
         │    app/notifier.py ... snapshot + son + Telegram
         │    app/recorder.py ... clip vidéo (5 s avant / 10 s après)
         │    app/storage.py .... base SQLite (historique, sévérité, acquittement)
+        │    app/health.py ..... état du pipeline et des caméras
         │
         ▼
    app/api.py .......... API REST + interface web (port 8000)
 ```
 
-L'interface web unique (http://localhost:8000) regroupe le mur de caméras, le
-tableau de bord, les zones, la gestion des alertes, les cas d'usage et les
-rapports.
+L'interface unique (http://localhost:8000) regroupe le mur de caméras, le tableau
+de bord, les zones, les alertes, les cas d'usage, les rapports et l'état système.
 
 ## Démarrage
 
-Prérequis : Python 3.13. Docker et ffmpeg ne servent qu'à simuler une caméra IP.
+Prérequis : Python 3.13. Ni Docker ni ffmpeg ne sont nécessaires.
 
 ```powershell
-# 1. Environnement
 python -m venv venv
 .\venv\Scripts\python.exe -m pip install -r requirements.txt
+.\venv\Scripts\python.exe scripts\export_openvino.py     # une seule fois
 
-# 2. Conversion des modèles en OpenVINO (une seule fois par machine)
-.\venv\Scripts\python.exe scripts\export_openvino.py
-
-# 3. Détection + interface
-.\venv\Scripts\python.exe -u -m app.pipeline                              # terminal 1
-.\venv\Scripts\python.exe -m uvicorn app.api:app --host 0.0.0.0 --port 8000   # terminal 2
+.\venv\Scripts\python.exe -u -m app.pipeline                                   # terminal 1
+.\venv\Scripts\python.exe -m uvicorn app.api:app --host 0.0.0.0 --port 8000    # terminal 2
 ```
 
 Interface : http://localhost:8000
 
-### Source vidéo
+### Sources vidéo
 
-Deux voies **mutuellement exclusives** — une webcam ne peut être ouverte que par
-un seul programme à la fois :
+Une caméra peut être quatre choses, déclarées depuis l'interface :
 
-- **Webcam directe** : `source: 0` dans `config/config.yaml`. Aucune dépendance.
-- **RTSP** : retirer `source`, puis lancer le relais et le flux de test.
-  ```powershell
-  cd docker; docker compose up -d mediamtx; cd ..
-  .\docker\push_webcam.ps1 -Device "Integrated Camera"
-  ```
-  Les vraies caméras du site parlent RTSP nativement : ni Docker ni ffmpeg ne
-  sont nécessaires pour elles.
+| Source | Exemple | Usage |
+|---|---|---|
+| Webcam | `0` | développement |
+| Caméra IP | `rtsp://user:mdp@192.168.1.42:554/stream1` | site réel |
+| Fichier vidéo | `videos/incendie.mp4` | rejeu, mise au point, mesure |
+| Dossier d'images | `videos/sequence/` | séquences annotées |
+
+Le rejeu de fichiers n'est pas un accessoire : sans accès aux caméras du site, la
+seule scène disponible serait une webcam de bureau, où il ne se passe jamais
+rien. Une vidéo rejouée traverse exactement le même pipeline qu'une caméra.
 
 ### Déploiement serveur
 
 `scripts/install.ps1` installe le pipeline et l'interface en services Windows
-(démarrage au boot, redémarrage après un crash, logs tournants). À exécuter en
-administrateur, **NSSM requis**. Le script est rejouable et vérifie ses
-prérequis. `scripts/uninstall.ps1` retire les services sans toucher aux données.
+(démarrage au boot, redémarrage après incident, journaux tournants). NSSM requis,
+à lancer en administrateur. `scripts/uninstall.ps1` fait l'inverse.
 
 ## Configuration
 
-**`config/config.yaml`** — caméras (source ou URL RTSP, modèles associés, `fps`
-et `workers` par caméra), chemins des modèles, seuils de confiance.
+**Interface → Caméras** — ajouter, modifier, tester et supprimer une caméra. Le
+pipeline s'aligne en quelques secondes, sans redémarrage. Plus besoin d'éditer un
+fichier sur le serveur.
+
+**Interface → Zones** — tracé des zones à la souris. Une zone peut *surveiller*
+ou *masquer*, s'appliquer à certains modèles, à certaines heures, et porter ses
+propres seuils. Enregistré dans `config/zones.json`, appliqué au cycle suivant.
+
+**Interface → Paramètres** — détection et alertes activables par modèle.
+
+**`config/config.yaml`** — modèles disponibles, seuils de confiance, cadence et
+résolution par défaut.
 
 **`.env`** — jeton du bot Telegram et destinataires (voir `.env.example`). Le
 premier reçoit toutes les alertes, les suivants uniquement les critiques.
 
-**Interface → Zones** — tracé des zones d'intérêt à la souris, et choix des
-modèles actifs dans chacune. Enregistré dans `config/zones.json`, appliqué au
-cycle suivant.
-
-**Interface → Paramètres** — activation de la détection et des alertes par
-modèle, appliquée immédiatement.
-
-**`SMOKEWATCH_LOG_LEVEL`** — `DEBUG` trace chaque détection ; `INFO` par défaut.
+**`SMOKEWATCH_LOG_LEVEL=DEBUG`** — trace chaque détection.
 
 ## Modèles
 
-Huit modèles YOLO entraînés sur Kaggle, convertis en OpenVINO pour accélérer
-l'inférence sur CPU (aucun GPU requis) :
+Huit modèles YOLO entraînés sur Kaggle, convertis en OpenVINO pour l'inférence
+sur processeur (aucun GPU requis) :
 
-| Modèle | Classes |
-|---|---|
-| `fire_smoke` | Fire, Smoke |
-| `epi` | Hardhat, Mask, Safety Vest et leurs absences, Person, machinery, vehicle, Safety Cone |
-| `gloves_glasses` | Gloves, Goggles et leurs absences, Fall-Detected |
-| `person_animal` | person, animal |
-| `vehicles` | car, truck, bus, motorcycle, bicycle |
-| `arc` | Arc Flash, Sparks |
-| `conveyor` | crack (déchirure de bande transporteuse) |
-| `load_control` | intact, torn, empty |
+| Modèle | Classes | Fiabilité |
+|---|---|---|
+| `fire_smoke` | Fire, Smoke | validée |
+| `arc` | Arc Flash, Sparks | correcte |
+| `epi` | Hardhat, Mask, Safety Vest et leurs absences | rappel ~54 % sur NO-Hardhat |
+| `gloves_glasses` | Gloves, Goggles et leurs absences, Fall-Detected | chute peu fiable |
+| `conveyor` | crack (déchirure de bande) | jamais éprouvée sur site |
+| `person_animal` | person, animal | correcte |
+| `vehicles` | car, truck, bus, motorcycle, bicycle | plaque non lue |
+| `load_control` | intact, torn, empty | **désactivé** — faux positifs confiants |
 
-La correspondance avec les 12 cas d'usage du cahier des charges et l'état de
-chacun sont visibles dans l'interface, page **Cas d'usage** (source :
-`app/usecases.py`).
+Outils : `scripts/export_openvino.py` (conversion), `scripts/inspect_models.py`
+(classes de chaque modèle), `scripts/run_inference.py` (essai sur une image).
 
-Convertir un nouveau modèle `.pt` : `scripts/export_openvino.py`.
-Lister les modèles présents et leurs classes : `scripts/inspect_models.py`.
-Tester un modèle sur une image ou une vidéo : `scripts/run_inference.py`.
+## Mesurer la qualité
 
-## Zones d'intérêt
+Deux mécanismes se complètent, et le second dépend du premier.
+
+**Le retour des opérateurs.** Chaque alerte peut être déclarée fausse d'un clic.
+Ce geste alimente les indicateurs (taux de fausses alertes par modèle et par
+caméra, délai moyen de prise en charge) *et* constitue une bibliothèque d'erreurs
+étiquetées.
+
+**Le banc de test.** Des clips de référence dont on sait ce qu'ils contiennent :
+
+```powershell
+copy config\benchmark.example.yaml config\benchmark.yaml   # décrire vos clips
+.\venv\Scripts\python.exe scripts\benchmark.py run
+.\venv\Scripts\python.exe scripts\benchmark.py compare --last
+```
+
+Sans lui, un changement de seuil ou un ré-entraînement se juge à l'impression.
+Le vrai danger n'est pas de stagner : c'est de reculer sans le voir.
+
+## Ré-entraîner un modèle
+
+```powershell
+.\venv\Scripts\python.exe scripts\export_dataset.py --model load_control --days 90
+```
+
+Produit un jeu de données YOLO issu de l'exploitation réelle : les alertes
+marquées fausses deviennent des **images de fond** — c'est ainsi qu'on apprend à
+un modèle à répondre « rien ici » — et les alertes justes fournissent des images
+pré-annotées à partir des positions enregistrées.
+
+Ensuite, sur Colab ou Kaggle : partir des poids actuels (pas de zéro), rester en
+640 pixels (taille figée à l'export OpenVINO), mesurer avant/après avec le banc
+de test, puis reconvertir avec `scripts/export_openvino.py`.
+
+## Zones et suivi
 
 Sans zone, un modèle analyse toute l'image : le détecteur d'EPI se déclenche sur
 le parking, celui de véhicules sur la route derrière la clôture. **C'est la
 première cause de fausses alertes sur site réel.**
 
-Une zone est un polygone associé aux modèles qui ont un sens dedans (EPI dans
-l'atelier, véhicules au quai). Les coordonnées sont normalisées, donc valides
-quelle que soit la résolution. Une caméra sans zone est analysée en entier.
+Le suivi d'objets (`tracking: true` sur une caméra) attribue un identifiant
+stable d'une image à l'autre. Il permet de compter sans doublon, de connaître un
+sens de passage sur une ligne franchie, et surtout de n'alerter **qu'une fois par
+personne** au lieu d'une fois par image — un deuxième ouvrier sans casque n'est
+plus masqué par l'alerte du premier.
 
 ## Sévérité des alertes
 
 | Niveau | Cas | Anti-répétition |
 |---|---|---|
 | Critique | feu, fumée, arc électrique, personne au sol | 1 min |
-| Haute | non-port des EPI, déchirure de convoyeur | 5 min |
-| Moyenne | présence personne/animal, véhicules, chargement | 15 min |
+| Haute | EPI manquant, déchirure de convoyeur | 5 min |
+| Moyenne | présence, véhicules, chargement | 15 min |
+| Technique | caméra hors ligne, incident système | 10 min |
 
-Le délai s'applique par caméra, zone, modèle et classe. Les alertes critiques
-sont diffusées à tous les destinataires Telegram, les autres au seul superviseur.
+Le délai s'applique par caméra, zone, modèle, classe — et par objet suivi quand
+le suivi est actif. Chaque zone peut imposer son propre délai.
 
 ## Tests
 
@@ -144,27 +180,38 @@ sont diffusées à tous les destinataires Telegram, les autres au seul supervise
 .\venv\Scripts\python.exe -m pytest tests -q
 ```
 
-51 tests couvrent la géométrie des zones, le moteur d'alerte (sévérité, seuils,
-anti-répétition) et la persistance (filtres, acquittement, statistiques, purge).
+161 tests couvrent les sources vidéo, la géométrie des zones et leurs horaires,
+le suivi d'objets et le comptage, le moteur d'alerte, la persistance, les
+indicateurs de qualité, l'API et le banc de test. Ils s'exécutent aussi à chaque
+envoi sur GitHub (`.github/workflows/tests.yml`).
+
+## Sauvegarde
+
+```powershell
+.\venv\Scripts\python.exe scripts\backup.py create
+.\venv\Scripts\python.exe scripts\backup.py restore <archive.zip>
+```
+
+Base d'alertes, caméras, zones et réglages. Le `.env` en est volontairement
+exclu : une archive circule, un secret ne doit pas voyager avec.
 
 ## Limites connues
 
-- Validé sur une webcam ; les caméras IP du site ne sont pas encore branchées.
+- Validé sur webcam et vidéos rejouées ; les caméras IP du site ne sont pas
+  encore branchées.
 - `load_control` produit des faux positifs confiants hors de son contexte
-  d'entraînement : désactivé par défaut, ré-entraînement nécessaire avec des
-  images négatives.
-- `Fall-Detected` est peu représenté dans son dataset : seuil relevé à 0.80.
-- Le rappel de `NO-Hardhat` / `NO-Mask` est d'environ 54 % : à renforcer avec des
-  images du site réel.
+  d'entraînement : désactivé par défaut, ré-entraînement requis avec des images
+  négatives.
+- `Fall-Detected` peu représenté dans son dataset : seuil relevé à 0,80.
+- Rappel `NO-Hardhat` / `NO-Mask` d'environ 54 % : à renforcer avec des images du
+  site réel.
 - `conveyor` n'a jamais été éprouvé sur une vraie bande transporteuse.
-- La lecture de plaques d'immatriculation (cas d'usage 9) reste à réaliser.
-- Interface sans authentification (choix assumé).
+- Lecture de plaques (cas d'usage 9) non réalisée.
+- Interface sans authentification : à réserver au réseau interne.
+- Pas d'enregistrement vidéo continu, seulement des clips autour des alertes.
 
 ## Maintenance
 
 Purge automatique au démarrage du pipeline : médias de plus de 30 jours, alertes
-de plus d'un an (`cleanup_old_data` dans `app/storage.py`).
-
-Journaux dans `logs/`, un fichier par jour, conservés 30 jours.
-
-Export CSV de l'historique pour le service HSE : interface → **Rapports**.
+de plus d'un an. Journaux dans `logs/`, un fichier par jour, conservés 30 jours.
+Export CSV de l'historique : interface → **Rapports**.

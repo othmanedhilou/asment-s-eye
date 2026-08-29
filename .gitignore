@@ -27,8 +27,9 @@ models/
 *.db-shm
 *.db-wal
 
-# Images transitoires du flux en direct
+# Etat runtime : regenere en continu par le pipeline
 data/live/
+data/health.json
 
 # Logs
 logs/
@@ -37,6 +38,12 @@ logs/
 # Clips vidéo & snapshots
 clips/
 snapshots/
+
+# Sauvegardes et jeux de données exportés (volumineux, reconstructibles)
+backups/
+datasets/
+data/benchmarks/
+videos/
 
 # Logs de compilation OpenVINO
 kernel.errors.txt
