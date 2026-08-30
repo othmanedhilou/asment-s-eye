@@ -46,14 +46,100 @@ votre modèle actuel ne sait pas faire : il alerte sur quelqu'un d'assis.
 2 588 images. Le format local compte : une plaque marocaine n'a ni la géométrie
 ni les caractères d'une plaque européenne.
 
-### Contrôle de chargement et convoyeur — rien de public
+### Contrôle de sortie des camions — à construire, et c'est faisable
 
-Recherche faite : **aucun jeu de données exploitable n'existe** pour ces deux
-cas. Le convoyeur ne fait l'objet que de
+Le besoin réel : **vérifier qu'un camion qui quitte l'usine est bâché et non
+surchargé**. Aucun jeu public ne correspond à ce cas, et c'est normal — il
+dépend de vos camions, de vos bâches et de l'angle de votre portail.
+
+Ce n'est pas un obstacle, c'est même le cas le plus favorable qui soit.
+
+#### Pourquoi c'est plus simple qu'il n'y paraît
+
+Une caméra de portail filme une **scène contrainte** : même angle, même
+distance, même cadrage à chaque passage. Un modèle n'a pas à généraliser à
+toutes les situations du monde, seulement à reconnaître ce que voit *cette*
+caméra. **300 à 500 images suffisent**, là où une scène libre en demanderait
+des milliers.
+
+#### Les classes à annoter
+
+Cinq classes, et la dernière est la plus importante :
+
+| Classe | Ce qu'elle décrit |
+|---|---|
+| `bache_absente` | chargement à découvert |
+| `bache_partielle` | bâche posée mais ne couvrant pas tout |
+| `bache_dechiree` | bâche présente mais percée ou déchirée |
+| `surcharge` | chargement dépassant les ridelles |
+| `conforme` | **camion en règle — rien à signaler** |
+
+`conforme` est ce qui manque au modèle actuel, et c'est la cause de son défaut :
+n'ayant jamais vu de camion en règle, il classe *forcément* toute image dans
+l'une des catégories de problème. Un modèle doit apprendre à se taire autant
+qu'à alerter.
+
+#### Collecter les images sans tri manuel
+
+Le système sait **quand** l'événement intéressant se produit : au franchissement
+de la ligne de sortie. Il peut donc photographier tout seul.
+
+1. Créez la caméra du portail, avec **suivi** et **lecture de plaques** activés.
+2. Page **Zones** : tracez une **ligne** en travers de la voie de sortie
+   (type `ligne`, deux points), restreinte au modèle `vehicles`.
+3. Dans le formulaire de la caméra, activez **Collecte d'images**.
+
+À chaque camion qui franchit la ligne, une image brute est enregistrée dans
+`datasets/collecte/<caméra>/<ligne>_<sens>/`, horodatée et **nommée avec la
+plaque** quand elle a été lue.
+
+En une semaine d'exploitation normale, vous obtenez quelques centaines d'images
+parfaitement cadrées — ce qu'aucun jeu public ne peut offrir, puisqu'elles
+montrent vos camions vus par votre caméra.
+
+#### Annoter
+
+Déposez le dossier sur [Roboflow](https://roboflow.com) (gratuit), annotez avec
+les cinq classes ci-dessus. Comptez deux à trois heures pour 400 images une fois
+la main prise.
+
+Deux conseils qui font la différence :
+
+- **Annotez la benne entière**, pas la bâche seule. C'est le rapport entre le
+  chargement et les ridelles qui dit la surcharge, et ce rapport disparaît si
+  l'on cadre trop serré.
+- **Gardez la proportion réelle** : si 80 % des camions sont conformes, gardez
+  cette proportion. Un jeu où les infractions dominent produit un modèle qui
+  voit des infractions partout — c'est précisément le défaut actuel.
+
+#### Entraîner
+
+Le carnet Colab fonctionne tel quel : renseignez `MODELE = 'load_control'`,
+sautez l'étape Roboflow publique, et pointez sur votre archive à l'étape 6.
+
+Partez de `yolov8n` plutôt que du modèle actuel : ses classes ne correspondent
+plus, et repartir de zéro sur une scène contrainte est rapide.
+
+#### Ce que ça donne en exploitation
+
+Les briques existent déjà et se combinent :
+
+    le camion franchit la ligne de sortie        → déclencheur
+    le modèle juge le chargement                 → bâche absente
+    la plaque est lue                            → 12345A6
+    l'alerte part sur Telegram avec la photo     → sévérité haute
+    l'événement est horodaté et consultable      → frise chronologique
+
+Soit, concrètement : *« 14 h 32 — camion 12345A6 sorti sans bâche »*, avec
+l'image, opposable et traçable.
+
+### Convoyeur — rien de public non plus
+
+Le convoyeur ne fait l'objet que de
 [publications](https://www.nature.com/articles/s41598-024-83619-6) dont les
-données ne sont pas diffusées.
-
-Ce n'est pas bloquant, parce que la meilleure source est déjà chez vous.
+données ne sont pas diffusées. Même méthode que ci-dessus : collecte sur site,
+annotation, entraînement. La scène y est encore plus contrainte — une bande
+transporteuse ne bouge pas.
 
 ---
 

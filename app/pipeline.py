@@ -6,6 +6,7 @@ os.environ.setdefault("OMP_NUM_THREADS", "1")
 
 import threading
 import time
+from datetime import datetime
 from pathlib import Path
 
 import cv2
@@ -25,6 +26,7 @@ from app.tracking import SimpleTracker, build_counters, occupation
 from app.zones import ZoneFilter
 
 LIVE_DIR = Path(__file__).resolve().parent.parent / "data" / "live"
+COLLECTE_DIR = Path(__file__).resolve().parent.parent / "datasets" / "collecte"
 
 log = setup_logging("pipeline")
 
@@ -125,6 +127,30 @@ def _save_live_frame(camera_name: str, frame, attempts: int = 5, delay: float = 
         log.debug(f"[{camera_name}] image live écrite sans renommage (fichier verrouillé)")
     except Exception as e:
         log.warning(f"[{camera_name}] échec sauvegarde frame live : {e}")
+
+
+def _collecter_image(camera_name: str, frame, contexte: str, plaque: str | None = None):
+    """Enregistre une image brute pour constituer un jeu d'entraînement.
+
+    Constituer un jeu de données à la main demande des heures de tri. Or le
+    système sait déjà **quand** l'événement intéressant se produit : au
+    franchissement d'une ligne, par exemple à la sortie du site. Une image par
+    passage, prise automatiquement, donne en quelques jours un jeu propre,
+    cadré comme la caméra réelle — ce qu'aucun jeu public ne peut offrir.
+
+    L'image est enregistrée SANS les boîtes de détection : elle servira à
+    annoter, et une annotation par-dessus une autre n'a aucun sens.
+    """
+    try:
+        dossier = COLLECTE_DIR / camera_name / contexte
+        dossier.mkdir(parents=True, exist_ok=True)
+        horodatage = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        suffixe = f"_{plaque}" if plaque else ""
+        chemin = dossier / f"{horodatage}{suffixe}.jpg"
+        cv2.imwrite(str(chemin), frame)
+        log.info(f"[{camera_name}] image collectée : {chemin.name}")
+    except Exception as e:
+        log.warning(f"[{camera_name}] échec de collecte : {e}")
 
 
 def _suivre_entre_cameras(camera_name, detection, frame, tracks, lecteur_plaques):
@@ -276,6 +302,17 @@ def run_camera(camera_name: str, cam_cfg: dict, config: dict, registry: ModelReg
                                         log.info(f"[{camera_name}] franchissement "
                                                  f"{passage['ligne']} ({passage['sens']}) "
                                                  f"— {passage['classe']}")
+                                        # Le franchissement est le bon moment
+                                        # pour photographier : c'est là que le
+                                        # camion est cadré comme il le sera en
+                                        # exploitation.
+                                        if cam_cfg.get("collecte"):
+                                            plaque = next((d.plaque for d in detections
+                                                           if d.track_id == passage["track_id"]
+                                                           and d.plaque), None)
+                                            _collecter_image(
+                                                camera_name, frame,
+                                                f"{passage['ligne']}_{passage['sens']}", plaque)
 
                             for detection in detections:
                                 matched = zone_filter.match(detection.model, detection.bbox, w, h)

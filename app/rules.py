@@ -10,7 +10,13 @@ ALERT_LABELS = {
     "epi": {"NO-Hardhat", "NO-Mask", "NO-Safety Vest"},
     "fire_smoke": {"Fire", "Smoke"},
     "gloves_glasses": {"NO-Gloves", "NO-Goggles", "Fall-Detected"},
-    "load_control": {"torn", "empty"},
+    # Contrôle de sortie des camions. Les deux premières classes viennent du
+    # modèle actuel ; les suivantes sont celles du modèle cible, entraîné sur le
+    # portail. Déclarer les deux permet de remplacer le modèle sans toucher au
+    # code — et « conforme » n'y figure pas : un camion en règle ne doit rien
+    # déclencher, c'est précisément la classe qui manque au modèle actuel.
+    "load_control": {"torn", "empty",
+                     "bache_absente", "bache_partielle", "bache_dechiree", "surcharge"},
     "person_animal": {"person", "animal"},
     "vehicles": {"car", "truck", "bus", "motorcycle", "bicycle"},
 }

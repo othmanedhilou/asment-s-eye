@@ -86,11 +86,15 @@ USE_CASES = [
     },
     {
         "num": 10,
-        "titre": "Load control (camion)",
+        "titre": "Contrôle de sortie des camions (bâchage, surcharge)",
         "model": "load_control",
         "classes": ["intact", "torn", "empty"],
         "etat": "a_entrainer",
-        "note": "Faux positifs confiants hors contexte — ré-entraînement avec images négatives requis",
+        "note": "Le modèle actuel décrit l'état d'une bâche, pas la conformité d'un "
+                "chargement : il ignore la surcharge et n'a aucune classe « conforme », "
+                "d'où ses affirmations hors contexte. À remplacer par un modèle entraîné "
+                "sur les images du portail (bâche absente / partielle / déchirée / "
+                "surcharge / conforme) — voir docs/GUIDE_REENTRAINEMENT.md",
     },
     {
         "num": 11,

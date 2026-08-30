@@ -82,6 +82,7 @@ class CameraBody(BaseModel):
     tracking: bool = False
     recording: bool = False
     plates: bool = False          # lecture des plaques (véhicules, suivi requis)
+    collecte: bool = False        # photographier chaque franchissement de ligne
     voisins: list[str] = []       # caméras pouvant recevoir un objet venu d'ici
     segment_minutes: int | None = None
     retention_days: int | None = None
@@ -310,6 +311,7 @@ def api_cameras():
             "tracking": cfg.get("tracking", False),
             "recording": cfg.get("recording", False),
             "plates": cfg.get("plates", False),
+            "collecte": cfg.get("collecte", False),
             "voisins": cfg.get("voisins", []),
             "online": online,
             "age_seconds": round(age, 1) if age is not None else None,

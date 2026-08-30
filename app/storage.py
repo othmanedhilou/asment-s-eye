@@ -26,7 +26,7 @@ SEVERITY_BY_MODEL = {
     "conveyor": "haute",       # bande déchirée : arrêt production + risque opérateur
     "gloves_glasses": "haute",   # inclut Fall-Detected
     "epi": "haute",
-    "load_control": "moyenne",
+    "load_control": "haute",     # camion non bâché : risque routier, et amende
     "person_animal": "moyenne",
     "vehicles": "moyenne",
     # Incidents techniques (caméra hors ligne, disque plein). Sévérité distincte
