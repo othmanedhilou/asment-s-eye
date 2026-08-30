@@ -190,6 +190,16 @@
                      laissez vide si la topologie n'est pas connue.</small>
             </label>
             <label class="field">
+              <span>Contrôle du bâchage</span>
+              <select id="cam-bachage">
+                <option value="false">Désactivé</option>
+                <option value="true">Activé — camion sans bâche détectée</option>
+              </select>
+              <small>Déduit l'infraction de l'absence de bâche, confirmée sur 3 images.
+                     Attendez-vous à des fausses alertes au début : marquez-les, elles
+                     corrigeront le modèle.</small>
+            </label>
+            <label class="field">
               <span>Collecte d'images</span>
               <select id="cam-collecte">
                 <option value="false">Désactivée</option>

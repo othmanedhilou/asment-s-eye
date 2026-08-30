@@ -18,12 +18,13 @@ ALERT_LABELS = {
     # portail. Déclarer les deux permet de remplacer le modèle sans toucher au
     # code — et « conforme » n'y figure pas : un camion en règle ne doit rien
     # déclencher, c'est précisément la classe qui manque au modèle actuel.
-    # « truck_odol » vient du jeu d'entraînement retenu : Over Dimension Over
+    # « truk_odol » vient du jeu d'entraînement retenu : Over Dimension Over
     # Load, le terme réglementaire indonésien pour un camion hors gabarit ou
-    # surchargé. « normal_truck » n'y figure pas — un camion conforme ne doit
-    # rien déclencher, et c'est précisément la classe qui manque au modèle
-    # actuel. Idem pour « roda » (les roues), annotées pour compter les essieux.
-    "load_control": {"torn", "empty", "truck_odol", "overloaded",
+    # surchargé. Orthographe indonésienne (truk, pas truck) — vérifiée sur le
+    # jeu réel, une faute ici et aucune détection ne serait jamais reconnue.
+    # « truk_normal » n'y figure pas : un camion conforme ne doit rien
+    # déclencher. Idem pour « roda », les roues, annotées pour compter les essieux.
+    "load_control": {"torn", "empty", "truk_odol", "overloaded",
                      "bache_absente", "bache_partielle", "bache_dechiree", "surcharge"},
     "person_animal": {"person", "animal"},
     "vehicles": {"car", "truck", "bus", "motorcycle", "bicycle"},

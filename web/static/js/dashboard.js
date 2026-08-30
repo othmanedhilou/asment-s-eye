@@ -279,6 +279,7 @@ function openCameraForm(name = null) {
   el("cam-recording").value = String(cam?.recording ?? false);
   el("cam-plates").value = String(cam?.plates ?? false);
   el("cam-collecte").value = String(cam?.collecte ?? false);
+  el("cam-bachage").value = String(cam?.bachage ?? false);
   el("cam-voisins").value = (cam?.voisins || []).join(", ");
   cam?.models.forEach((m) => {
     const box = models.querySelector(`input[value="${m}"]`);
@@ -316,6 +317,7 @@ function cameraFormPayload() {
     recording: el("cam-recording").value === "true",
     plates: el("cam-plates").value === "true",
     collecte: el("cam-collecte").value === "true",
+    bachage: el("cam-bachage").value === "true",
     voisins: el("cam-voisins").value.split(",").map((v) => v.trim()).filter(Boolean),
   };
 }

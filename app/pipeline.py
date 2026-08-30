@@ -11,6 +11,7 @@ from pathlib import Path
 
 import cv2
 
+from app.bachage import ControleBachage
 from app.cameras import active_cameras, camera_source
 from app.capture import FrameSource
 from app.config import load_config
@@ -228,6 +229,17 @@ def run_camera(camera_name: str, cam_cfg: dict, config: dict, registry: ModelReg
         log.info(f"[{camera_name}] suivi d'objets actif"
                  + (f", {len(compteurs)} ligne(s) de comptage" if compteurs else ""))
 
+    # Contrôle du bâchage : déduit l'absence de bâche de son absence de
+    # détection. Exige le suivi, comme la lecture de plaques : la confirmation
+    # se fait sur plusieurs images du MEME camion.
+    controle_bachage = None
+    if cam_cfg.get("bachage") and suivi_actif:
+        controle_bachage = ControleBachage(camera_name)
+        log.info(f"[{camera_name}] contrôle du bâchage actif")
+    elif cam_cfg.get("bachage"):
+        log.warning(f"[{camera_name}] contrôle du bâchage demandé mais suivi désactivé : "
+                    "sans suivi, aucune confirmation possible sur plusieurs images")
+
     # Lecture de plaques : n'a de sens qu'avec le suivi, puisque la fiabilité
     # vient du vote sur plusieurs images du MEME vehicule.
     lecteur_plaques = None
@@ -313,6 +325,13 @@ def run_camera(camera_name: str, cam_cfg: dict, config: dict, registry: ModelReg
                                             _collecter_image(
                                                 camera_name, frame,
                                                 f"{passage['ligne']}_{passage['sens']}", plaque)
+
+                            # Le constat d'absence de bâche se fait sur l'ensemble
+                            # des détections du modèle, camions ET bâches : c'est
+                            # leur relation qui porte l'information, pas chacune
+                            # prise isolément.
+                            if controle_bachage is not None and model_name == "load_control":
+                                detections = detections + controle_bachage.analyser(detections, w, h)
 
                             for detection in detections:
                                 matched = zone_filter.match(detection.model, detection.bbox, w, h)
