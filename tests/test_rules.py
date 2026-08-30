@@ -119,3 +119,71 @@ def test_callback_recoit_alerte_et_image():
     engine.process(detection(), frame="image")
     assert len(recues) == 1
     assert recues[0][1] == "image"
+
+
+# ── Bascule vers le modèle de chute dédié ────────────────────────────
+
+
+def test_chute_assuree_par_gloves_glasses_par_defaut(monkeypatch):
+    """Tant que le modèle dédié n'existe pas, gloves_glasses assure la chute."""
+    monkeypatch.setattr(rules_module, "_chute_dediee", False)
+    d = detection(model="gloves_glasses", label="Fall-Detected", confidence=0.9)
+    assert AlertEngine().process(d) is not None
+
+
+def test_gloves_glasses_se_tait_quand_le_modele_dedie_existe(monkeypatch):
+    """Sinon une même personne au sol déclencherait deux alertes, et le
+    décompte perdrait tout sens pour les opérateurs."""
+    monkeypatch.setattr(rules_module, "_chute_dediee", True)
+    d = detection(model="gloves_glasses", label="Fall-Detected", confidence=0.9)
+    assert AlertEngine().process(d) is None
+
+
+def test_modele_dedie_alerte_sur_personne_au_sol(monkeypatch):
+    monkeypatch.setattr(rules_module, "_chute_dediee", True)
+    assert AlertEngine().process(detection(model="fall", label="fallen")) is not None
+
+
+def test_modele_dedie_alerte_pendant_la_chute(monkeypatch):
+    """Secourir pendant la chute vaut mieux qu'après."""
+    monkeypatch.setattr(rules_module, "_chute_dediee", True)
+    assert AlertEngine().process(detection(model="fall", label="falling")) is not None
+
+
+def test_personne_debout_ne_declenche_rien(monkeypatch):
+    """C'est exactement ce que le modèle actuel ne sait pas faire."""
+    monkeypatch.setattr(rules_module, "_chute_dediee", True)
+    assert AlertEngine().process(detection(model="fall", label="standing")) is None
+
+
+def test_personne_penchee_ne_declenche_rien(monkeypatch):
+    """Un ouvrier qui se baisse n'est pas un ouvrier à terre."""
+    monkeypatch.setattr(rules_module, "_chute_dediee", True)
+    assert AlertEngine().process(detection(model="fall", label="bending")) is None
+
+
+def test_chute_est_critique():
+    from app.storage import severity_for
+    assert severity_for("fall", "fallen") == "critique"
+
+
+# ── Contrôle de sortie des camions ───────────────────────────────────
+
+
+def test_bache_absente_alerte():
+    assert AlertEngine().process(detection(model="load_control", label="bache_absente")) is not None
+
+
+def test_surcharge_alerte():
+    assert AlertEngine().process(detection(model="load_control", label="surcharge")) is not None
+
+
+def test_camion_conforme_ne_declenche_rien():
+    """La classe qui manque au modèle actuel : un camion en règle doit se taire."""
+    assert AlertEngine().process(detection(model="load_control", label="conforme")) is None
+
+
+def test_camion_non_bache_est_haute_severite():
+    """Risque routier et amende : ce n'est pas une observation de routine."""
+    from app.storage import severity_for
+    assert severity_for("load_control", "bache_absente") == "haute"

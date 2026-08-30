@@ -29,10 +29,12 @@ USE_CASES = [
     {
         "num": 3,
         "titre": "Personne KO / horizontale",
-        "model": "gloves_glasses",
-        "classes": ["Fall-Detected"],
-        "etat": "partiel",
-        "note": "Fiabilité limitée — dataset dédié à entraîner (seuil renforcé à 0.80)",
+        "model": "fall",
+        "classes": ["fallen", "falling"],
+        "etat": "a_entrainer",
+        "note": "Modèle dédié à entraîner (jeu public de 4 497 images disponible). "
+                "En attendant, la chute est assurée par gloves_glasses, dont la "
+                "fiabilité est faible — seuil relevé à 0.80 pour limiter le bruit.",
     },
     {
         "num": 4,

@@ -22,6 +22,7 @@ DB_PATH = DATA_DIR / "smokewatch.db"
 # Sévérité métier par modèle (logique HSE site cimentier)
 SEVERITY_BY_MODEL = {
     "fire_smoke": "critique",
+    "fall": "critique",         # personne au sol : secours immédiat
     "arc": "critique",
     "conveyor": "haute",       # bande déchirée : arrêt production + risque opérateur
     "gloves_glasses": "haute",   # inclut Fall-Detected

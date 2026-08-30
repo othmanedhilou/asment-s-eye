@@ -10,6 +10,7 @@ MODEL_NAMES = [
     "arc",
     "conveyor",
     "epi",
+    "fall",
     "fire_smoke",
     "gloves_glasses",
     "load_control",

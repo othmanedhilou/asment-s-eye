@@ -31,6 +31,14 @@ models:
     file: models/smokewatch_epi_best_openvino_model
     conf: 0.4
     enabled: true
+  # Détection de personne au sol, modèle dédié. Aujourd'hui la chute est une
+  # classe du modèle gloves_glasses, où elle est peu fiable. Passer à false
+  # une fois ce modèle entraîné : les alertes basculent automatiquement.
+  fall:
+    file: models/smokewatch_fall_best_openvino_model
+    conf: 0.4
+    enabled: false   # passer à true une fois le modèle entraîné et exporté
+
   fire_smoke:
     file: models/smokewatch_fire_smoke_best_openvino_model
     conf: 0.35

@@ -8,6 +8,7 @@ const MODEL_LABELS = {
   arc: "⚡ Arc électrique",
   conveyor: "🏗️ Convoyeur",
   epi: "🦺 EPI",
+  fall: "🚨 Personne au sol",
   fire_smoke: "🔥 Fumée / Feu",
   gloves_glasses: "🧤 Gants / lunettes / chute",
   load_control: "📦 Contrôle chargement",

@@ -8,6 +8,9 @@ ALERT_LABELS = {
     "arc": {"Arc Flash", "Sparks"},
     "conveyor": {"crack"},
     "epi": {"NO-Hardhat", "NO-Mask", "NO-Safety Vest"},
+    # Modèle de chute dédié. « falling » (en train de tomber) alerte aussi :
+    # secourir pendant la chute vaut mieux qu'après.
+    "fall": {"fallen", "falling"},
     "fire_smoke": {"Fire", "Smoke"},
     "gloves_glasses": {"NO-Gloves", "NO-Goggles", "Fall-Detected"},
     # Contrôle de sortie des camions. Les deux premières classes viennent du
@@ -43,6 +46,26 @@ COOLDOWN_BY_SEVERITY = {
 }
 
 
+_chute_dediee: bool | None = None
+
+
+def _modele_chute_dedie_actif() -> bool:
+    """Le modèle `fall` est-il déclaré et activé ?
+
+    Lu une fois : activer un modèle demande de toute façon un redémarrage du
+    pipeline, puisqu'il faut le charger.
+    """
+    global _chute_dediee
+    if _chute_dediee is None:
+        try:
+            from app.config import load_config
+
+            _chute_dediee = bool(load_config()["models"].get("fall", {}).get("enabled"))
+        except Exception:
+            _chute_dediee = False
+    return _chute_dediee
+
+
 class AlertEngine:
     """Filtre les détections brutes et déclenche une alerte avec cooldown par (caméra, modèle, label)."""
 
@@ -64,6 +87,13 @@ class AlertEngine:
     def process(self, detection: Detection, frame=None):
         labels = ALERT_LABELS.get(detection.model)
         if labels is None or detection.label not in labels:
+            return None
+
+        # Tant que le modèle de chute dédié n'existe pas, la chute est assurée
+        # par gloves_glasses. Dès qu'il est activé, cette classe se tait : sans
+        # cela, une même personne au sol déclencherait deux alertes, et les
+        # opérateurs perdraient confiance dans le décompte.
+        if detection.model == "gloves_glasses" and detection.label == "Fall-Detected"                 and _modele_chute_dedie_actif():
             return None
 
         if not is_alert_enabled(detection.model):
