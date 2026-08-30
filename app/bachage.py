@@ -45,7 +45,8 @@ log = setup_logging()
 
 # Classes du modèle. `truk_odol` / `truk_normal` viennent du jeu d'entraînement
 # indonésien (Over Dimension Over Load) ; les autres couvrent les modèles futurs.
-CLASSES_CAMION = {"truk_odol", "truk_normal", "truck", "camion", "overloaded", "notoverloaded"}
+CLASSES_CAMION = {"truk_odol", "truk_normal", "truck_odol", "normal_truck",
+                  "truck", "camion", "overloaded", "notoverloaded"}
 CLASSES_BACHE = {"tarp", "bache", "covered-trucks", "six-wheel covered-trucks"}
 
 # Surface minimale du camion, en part de l'image. Un camion qui occupe moins de

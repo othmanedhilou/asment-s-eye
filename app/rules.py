@@ -20,11 +20,13 @@ ALERT_LABELS = {
     # déclencher, c'est précisément la classe qui manque au modèle actuel.
     # « truk_odol » vient du jeu d'entraînement retenu : Over Dimension Over
     # Load, le terme réglementaire indonésien pour un camion hors gabarit ou
-    # surchargé. Orthographe indonésienne (truk, pas truck) — vérifiée sur le
-    # jeu réel, une faute ici et aucune détection ne serait jamais reconnue.
+    # surchargé. L'orthographe varie selon la version du jeu — « truk_odol »
+    # dans la v9 téléchargée, « truck_odol » sur la fiche du dépôt. Les deux
+    # sont déclarées : une faute ici et aucune détection ne serait reconnue,
+    # sans le moindre message d'erreur.
     # « truk_normal » n'y figure pas : un camion conforme ne doit rien
     # déclencher. Idem pour « roda », les roues, annotées pour compter les essieux.
-    "load_control": {"torn", "empty", "truk_odol", "overloaded",
+    "load_control": {"torn", "empty", "truk_odol", "truck_odol", "overloaded",
                      "bache_absente", "bache_partielle", "bache_dechiree", "surcharge"},
     "person_animal": {"person", "animal"},
     "vehicles": {"car", "truck", "bus", "motorcycle", "bicycle"},
