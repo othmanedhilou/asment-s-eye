@@ -9,6 +9,8 @@ sur les flux caméras, avec alertes immédiates aux équipes de sécurité.
 | [DOCUMENTATION.md](DOCUMENTATION.md) | architecture, choix de conception, pièges rencontrés |
 | [docs/GUIDE_INSTALLATION.md](docs/GUIDE_INSTALLATION.md) | le technicien qui installe sur le serveur |
 | [docs/GUIDE_OPERATEUR.md](docs/GUIDE_OPERATEUR.md) | l'équipe sécurité qui l'utilise au quotidien |
+| [docs/GUIDE_REENTRAINEMENT.md](docs/GUIDE_REENTRAINEMENT.md) | corriger un modèle : jeux de données, méthode, déploiement |
+| [notebooks/reentrainement.ipynb](notebooks/reentrainement.ipynb) | carnet Colab prêt à l'emploi |
 
 ## Architecture
 
