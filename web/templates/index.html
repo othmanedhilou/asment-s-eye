@@ -3,503 +3,437 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SmokeWatch — supervision</title>
+  <title>SmokeWatch</title>
   <link rel="stylesheet" href="/static/css/dashboard.css" />
 </head>
 <body>
-  <div class="app">
 
-    <!-- ── Marque ── -->
-    <div class="brand">
-      <div class="brand-mark">🔥</div>
-      <div class="brand-text">
-        <div class="brand-name">SmokeWatch</div>
-        <div class="brand-sub">Supervision</div>
-      </div>
+<!-- Icônes vectorielles. Un logiciel industriel n'utilise pas d'emoji : ils
+     changent d'aspect selon le système et donnent un air d'esquisse. -->
+<svg style="display:none">
+  <symbol id="i-cam" viewBox="0 0 24 24"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></symbol>
+  <symbol id="i-zone" viewBox="0 0 24 24"><path d="M3 5l7-2 5 2 6-2v16l-6 2-5-2-7 2z"/><path d="M10 3v16M15 5v16"/></symbol>
+  <symbol id="i-up" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24"><path d="M18 20V10M12 20V4M6 20v-6"/></symbol>
+  <symbol id="i-pulse" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></symbol>
+  <symbol id="i-cog" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.6 15a1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-full" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 00-2 2v3M21 8V5a2 2 0 00-2-2h-3M16 21h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></symbol>
+</svg>
+
+<div class="app" id="app">
+
+  <!-- ── Titre ── -->
+  <div class="titre">
+    <span class="titre-mark"></span>
+    <span class="titre-nom">SmokeWatch</span>
+  </div>
+
+  <!-- ── Onglets ── -->
+  <nav class="onglets">
+    <button class="onglet actif" data-vue="direct"><svg class="ico"><use href="#i-cam"/></svg>Direct</button>
+    <button class="onglet" data-vue="historique"><svg class="ico"><use href="#i-list"/></svg>Historique<span class="compteur" id="badge-alertes"></span></button>
+    <button class="onglet" data-vue="zones"><svg class="ico"><use href="#i-zone"/></svg>Zones</button>
+    <button class="onglet" data-vue="fichiers"><svg class="ico"><use href="#i-up"/></svg>Fichiers</button>
+    <button class="onglet" data-vue="analyse"><svg class="ico"><use href="#i-chart"/></svg>Analyse</button>
+    <button class="onglet" data-vue="systeme"><svg class="ico"><use href="#i-pulse"/></svg>Système</button>
+    <button class="onglet" data-vue="reglages"><svg class="ico"><use href="#i-cog"/></svg>Réglages</button>
+    <div class="onglets-fin">
+      <span id="horloge">--:--:--</span>
     </div>
+  </nav>
 
-    <!-- ── Barre supérieure ── -->
-    <header class="topbar">
-      <h1 id="page-title">Tableau de bord</h1>
-      <div class="topbar-spacer"></div>
-      <div class="topbar-stat"><span>Caméras</span><b id="top-cams">–</b></div>
-      <div class="topbar-sep"></div>
-      <div class="topbar-stat alarm"><span>À traiter</span><b id="top-unack">–</b></div>
-      <div class="topbar-sep"></div>
-      <div id="clock">--:--:--</div>
-    </header>
+  <!-- ── Panneau latéral ── -->
+  <aside class="panneau" id="panneau">
+    <div class="panneau-titre">
+      Caméras
+      <button id="btn-recharger" title="Rafraîchir"><svg class="ico"><use href="#i-refresh"/></svg></button>
+    </div>
+    <div class="arbre" id="arbre-cameras"></div>
 
-    <!-- ── Navigation ── -->
-    <nav class="sidenav">
-      <div class="nav-group">Supervision</div>
-      <div class="nav-links">
-        <button class="nav-link active" data-page="dashboard" data-title="Tableau de bord">
-          <span class="nav-icon">▤</span><span>Tableau de bord</span>
-        </button>
-        <button class="nav-link" data-page="cameras" data-title="Mur de caméras">
-          <span class="nav-icon">▣</span><span>Caméras</span>
-        </button>
-        <button class="nav-link" data-page="alerts" data-title="Alertes">
-          <span class="nav-icon">⚠</span><span>Alertes</span><span class="nav-badge" id="unack-badge"></span>
-        </button>
+    <div class="panneau-titre" style="margin-top:6px">Événements récents</div>
+    <div id="evenements"></div>
+  </aside>
+
+  <!-- ── Vue principale ── -->
+  <main class="vue">
+
+    <!-- Direct -->
+    <section class="page actif" id="vue-direct">
+      <div class="outils">
+        <div class="groupe" id="disposition">
+          <button class="bouton" data-cols="1">1×1</button>
+          <button class="bouton actif" data-cols="2">2×2</button>
+          <button class="bouton" data-cols="3">3×3</button>
+          <button class="bouton" data-cols="4">4×4</button>
+        </div>
+        <div class="outils-sep"></div>
+        <button class="bouton" id="btn-modifier" disabled>Modifier</button>
+        <button class="bouton danger" id="btn-supprimer" disabled>Supprimer</button>
+        <div class="outils-sep"></div>
+        <label class="bascule" title="Met en avant la caméra concernée dès qu'une alerte critique arrive">
+          <input type="checkbox" id="suivi-alertes" checked /> Suivi des alertes
+        </label>
+        <div class="outils-fin">
+          <button class="bouton" id="btn-plein-ecran"><svg class="ico"><use href="#i-full"/></svg>Plein écran</button>
+          <button class="bouton primaire" id="btn-ajout-camera"><svg class="ico"><use href="#i-plus"/></svg>Caméra</button>
+        </div>
       </div>
 
-      <div class="nav-group">Configuration</div>
-      <div class="nav-links">
-        <button class="nav-link" data-page="zones" data-title="Zones d'intérêt">
-          <span class="nav-icon">◫</span><span>Zones</span>
-        </button>
-        <button class="nav-link" data-page="sources" data-title="Fichiers de test">
-          <span class="nav-icon">⬆</span><span>Fichiers de test</span>
-        </button>
-        <button class="nav-link" data-page="settings" data-title="Paramètres">
-          <span class="nav-icon">⚙</span><span>Paramètres</span>
-        </button>
-      </div>
-
-      <div class="nav-group">Analyse</div>
-      <div class="nav-links">
-        <button class="nav-link" data-page="usecases" data-title="Cas d'usage">
-          <span class="nav-icon">◈</span><span>Cas d'usage</span>
-        </button>
-        <button class="nav-link" data-page="reports" data-title="Rapports">
-          <span class="nav-icon">▧</span><span>Rapports</span>
-        </button>
-        <button class="nav-link" data-page="system" data-title="État du système">
-          <span class="nav-icon">◉</span><span>Système</span><span class="nav-badge warn" id="system-badge"></span>
-        </button>
-      </div>
-
-      <div class="nav-footer">
-        <div class="sys-status">
-          <span class="status-dot" id="pipeline-dot"></span>
-          <span id="pipeline-state">Vérification…</span>
-        </div>
-        <div class="sys-info" id="sys-info"></div>
-      </div>
-    </nav>
-
-    <!-- ── Contenu ── -->
-    <main class="content">
-
-      <!-- Tableau de bord -->
-      <section class="page active" id="page-dashboard">
-        <div class="kpi-row">
-          <div class="kpi"><div class="kpi-value" id="kpi-24h">–</div><div class="kpi-label">Alertes 24 h</div></div>
-          <div class="kpi kpi-crit"><div class="kpi-value" id="kpi-crit">–</div><div class="kpi-label">Critiques 24 h</div></div>
-          <div class="kpi kpi-warn"><div class="kpi-value" id="kpi-unack">–</div><div class="kpi-label">À traiter</div></div>
-          <div class="kpi"><div class="kpi-value" id="kpi-mtta">–</div><div class="kpi-label">Délai moyen de prise en charge</div></div>
-          <div class="kpi"><div class="kpi-value" id="kpi-false">–</div><div class="kpi-label">Fausses alertes / jour / caméra</div></div>
-        </div>
-
-        <div class="grid">
-          <div class="card">
-            <h3>Activité — 24 dernières heures</h3>
-            <div class="chart" id="timeline-chart"></div>
-          </div>
-          <div class="card">
-            <h3>Détections par modèle — 7 jours</h3>
-            <div id="model-bars"></div>
-          </div>
-          <div class="card">
-            <h3>Détections par zone — 7 jours</h3>
-            <div id="zone-bars"></div>
-          </div>
-          <div class="card">
-            <h3>Fiabilité par modèle — 30 jours</h3>
-            <p class="card-lede">Part des alertes déclarées fausses par les opérateurs.</p>
-            <div id="quality-bars"></div>
-          </div>
-          <div class="card wide">
-            <h3>Dernières alertes</h3>
-            <div id="dash-alerts"></div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Caméras -->
-      <section class="page" id="page-cameras">
-        <div class="page-head">
-          <div>
-            <h2>Mur de caméras</h2>
-            <p class="page-lede" style="margin:0">Cliquez une image pour l'agrandir.</p>
-          </div>
-          <div class="page-actions">
-            <div class="seg" id="layout-switch">
-              <button data-layout="1" title="Une colonne">▯</button>
-              <button data-layout="2" class="active" title="Deux colonnes">▥</button>
-              <button data-layout="3" title="Trois colonnes">▩</button>
-            </div>
-            <label class="toggle-inline" title="Met en avant la caméra concernée dès qu'une alerte critique arrive">
-              <input type="checkbox" id="auto-focus" checked /> <span>Suivi des alertes</span>
-            </label>
-            <button class="btn ghost small" id="btn-fullscreen">⛶ Plein écran</button>
-            <button class="btn" id="btn-add-camera">＋ Caméra</button>
-          </div>
-        </div>
-
-        <div class="card" id="camera-form" hidden>
-          <h3 id="camera-form-title">Nouvelle caméra</h3>
-          <div class="form-grid">
-            <label class="field">
-              <span>Nom</span>
-              <input type="text" id="cam-name" placeholder="quai_chargement" autocomplete="off" />
-            </label>
-            <label class="field wide">
-              <span>Source</span>
-              <input type="text" id="cam-source" placeholder="0  ·  rtsp://user:mdp@192.168.1.42:554/stream  ·  videos/essai.mp4" autocomplete="off" />
-              <small>Webcam (numéro), caméra IP (adresse RTSP), fichier vidéo ou dossier d'images.
-                     Un fichier déposé dans <b>Fichiers de test</b> s'utilise directement ici.</small>
-            </label>
-            <div class="field wide">
-              <span>Fichiers déposés</span>
-              <div id="cam-file-picker" class="row-inline"></div>
-            </div>
-            <label class="field">
-              <span>Images analysées par seconde</span>
-              <input type="number" id="cam-fps" step="0.5" min="0.5" placeholder="4" />
-            </label>
-            <label class="field">
-              <span>État</span>
-              <select id="cam-enabled">
+      <!-- Configuration d'une caméra -->
+      <div class="bloc" id="form-camera" hidden style="margin:10px">
+        <div class="bloc-tete" id="form-camera-titre">Nouvelle caméra</div>
+        <div class="bloc-corps">
+          <div class="champs">
+            <label class="champ"><span>Nom</span>
+              <input type="text" id="cam-nom" placeholder="quai_chargement" autocomplete="off" /></label>
+            <label class="champ large"><span>Source</span>
+              <input type="text" id="cam-source" placeholder="0   ·   rtsp://user:mdp@192.168.1.42:554/stream   ·   videos/essai.mp4" autocomplete="off" />
+              <small>Webcam (numéro), caméra IP (RTSP), fichier vidéo ou dossier d'images.</small></label>
+            <div class="champ large"><span>Fichiers déposés</span>
+              <div id="choix-fichiers" class="enligne"></div></div>
+            <label class="champ"><span>Images par seconde</span>
+              <input type="number" id="cam-fps" step="0.5" min="0.5" placeholder="4" /></label>
+            <label class="champ"><span>État</span>
+              <select id="cam-actif">
                 <option value="true">Active</option>
-                <option value="false">En pause — conservée, non traitée</option>
-              </select>
-            </label>
-            <label class="field">
-              <span>Suivi des objets</span>
-              <select id="cam-tracking">
+                <option value="false">En pause</option>
+              </select></label>
+            <label class="champ"><span>Suivi des objets</span>
+              <select id="cam-suivi">
                 <option value="false">Désactivé</option>
-                <option value="true">Activé — comptage, une alerte par personne</option>
+                <option value="true">Activé</option>
               </select>
-              <small>Coûte du temps de calcul. Utile là où l'on compte ou l'on suit un passage.</small>
-            </label>
-            <label class="field">
-              <span>Lecture des plaques</span>
-              <select id="cam-plates">
+              <small>Comptage, sens de passage, une alerte par personne.</small></label>
+            <label class="champ"><span>Lecture des plaques</span>
+              <select id="cam-plaques">
                 <option value="false">Désactivée</option>
-                <option value="true">Activée — véhicules, suivi requis</option>
+                <option value="true">Activée</option>
               </select>
-              <small>Le numéro est établi par vote sur plusieurs images du même véhicule.</small>
-            </label>
-            <label class="field wide">
-              <span>Caméras voisines</span>
-              <input type="text" id="cam-voisins" placeholder="quai_sortie, portail_nord" autocomplete="off" />
-              <small>Caméras vers lesquelles un objet peut se diriger, séparées par des virgules.
-                     Sert à écarter les rapprochements géographiquement impossibles ;
-                     laissez vide si la topologie n'est pas connue.</small>
-            </label>
-            <label class="field">
-              <span>Contrôle du bâchage</span>
+              <small>Exige le suivi : le numéro est établi par vote sur plusieurs images.</small></label>
+            <label class="champ"><span>Contrôle du bâchage</span>
               <select id="cam-bachage">
                 <option value="false">Désactivé</option>
-                <option value="true">Activé — camion sans bâche détectée</option>
+                <option value="true">Activé</option>
               </select>
-              <small>Déduit l'infraction de l'absence de bâche, confirmée sur 3 images.
-                     Attendez-vous à des fausses alertes au début : marquez-les, elles
-                     corrigeront le modèle.</small>
-            </label>
-            <label class="field">
-              <span>Collecte d'images</span>
+              <small>Signale un camion sans bâche, confirmé sur 3 images.</small></label>
+            <label class="champ"><span>Collecte d'images</span>
               <select id="cam-collecte">
                 <option value="false">Désactivée</option>
-                <option value="true">Photographier chaque franchissement de ligne</option>
+                <option value="true">À chaque franchissement de ligne</option>
               </select>
-              <small>Constitue un jeu d'entraînement cadré comme la caméra réelle,
-                     sans tri manuel. Voir <code>datasets/collecte/</code>.</small>
-            </label>
-            <label class="field">
-              <span>Enregistrement continu</span>
-              <select id="cam-recording">
+              <small>Constitue un jeu d'entraînement cadré comme la caméra réelle.</small></label>
+            <label class="champ"><span>Enregistrement continu</span>
+              <select id="cam-enregistrement">
                 <option value="false">Désactivé</option>
-                <option value="true">Activé — segments de 5 min, 7 jours</option>
+                <option value="true">Segments de 5 min, 7 jours</option>
               </select>
-              <small>S'arrête automatiquement sous 10 Go d'espace libre.</small>
-            </label>
-            <div class="field wide">
-              <span>Modèles actifs sur cette caméra</span>
-              <div id="cam-models" class="checklist"></div>
-              <small>N'activez que les modèles pertinents pour ce que voit la caméra :
-                     c'est le principal levier de performance.</small>
-            </div>
+              <small>S'arrête sous 10 Go d'espace libre.</small></label>
+            <label class="champ large"><span>Caméras voisines</span>
+              <input type="text" id="cam-voisins" placeholder="quai_sortie, portail_nord" autocomplete="off" />
+              <small>Caméras vers lesquelles un objet peut se diriger. Écarte les
+                     rapprochements géographiquement impossibles.</small></label>
+            <div class="champ large"><span>Modèles actifs</span>
+              <div id="cam-modeles" class="cases"></div>
+              <small>N'activez que les modèles pertinents : c'est le principal levier de performance.</small></div>
           </div>
-          <div class="form-actions">
-            <button class="btn" id="cam-save">Enregistrer</button>
-            <button class="btn ghost" id="cam-test">Tester la connexion</button>
-            <button class="btn ghost" id="cam-cancel">Annuler</button>
-            <span class="form-status" id="cam-status"></span>
+          <div class="actions">
+            <button class="bouton primaire" id="cam-valider">Enregistrer</button>
+            <button class="bouton" id="cam-tester">Tester la connexion</button>
+            <button class="bouton" id="cam-annuler">Annuler</button>
+            <span class="msg" id="cam-msg"></span>
           </div>
         </div>
+      </div>
 
-        <div class="camera-grid cols-2" id="camera-grid"></div>
-      </section>
+      <div class="mur c2" id="mur"></div>
 
-      <!-- Alertes -->
-      <section class="page" id="page-alerts">
-        <div class="card">
-          <div class="timeline-head">
-            <h3>Frise chronologique</h3>
-            <div class="timeline-controls">
-              <select id="timeline-camera"><option value="">Toutes les caméras</option></select>
-              <select id="timeline-day"></select>
-            </div>
-          </div>
-          <div class="timeline-track" id="timeline-track"></div>
-          <div class="timeline-hours" id="timeline-hours"></div>
-          <div class="timeline-detail" id="timeline-detail"></div>
+      <div class="frise-zone">
+        <div class="frise-tete">
+          <span>Frise</span>
+          <select id="frise-camera"><option value="">Toutes les caméras</option></select>
+          <select id="frise-jour"></select>
+          <span class="msg" id="frise-detail" style="margin-left:auto"></span>
         </div>
+        <div class="frise" id="frise"></div>
+        <div class="frise-heures" id="frise-heures"></div>
+      </div>
+    </section>
 
-        <div class="filters" style="margin-top:16px">
-          <select id="filter-model"><option value="">Tous les modèles</option></select>
-          <select id="filter-camera"><option value="">Toutes les caméras</option></select>
-          <select id="filter-zone"><option value="">Toutes les zones</option></select>
-          <select id="filter-severity">
-            <option value="">Toutes sévérités</option>
-            <option value="critique">Critique</option>
-            <option value="haute">Haute</option>
-            <option value="moyenne">Moyenne</option>
-            <option value="technique">Technique</option>
-          </select>
-          <select id="filter-ack">
-            <option value="">Traitées et non traitées</option>
-            <option value="false">À traiter</option>
-            <option value="true">Traitées</option>
-          </select>
-          <select id="filter-false">
-            <option value="">Vraies et fausses</option>
-            <option value="false">Vraies alertes</option>
-            <option value="true">Fausses alertes</option>
-          </select>
-          <select id="filter-period">
-            <option value="">Tout l'historique</option>
-            <option value="1">Dernière heure</option>
-            <option value="24" selected>24 heures</option>
-            <option value="168">7 jours</option>
-            <option value="720">30 jours</option>
-          </select>
-          <select id="filter-hours">
-            <option value="">Toute la journée</option>
-            <option value="6-14">Poste du matin — 6 h à 14 h</option>
-            <option value="14-22">Poste d'après-midi — 14 h à 22 h</option>
-            <option value="22-6">Poste de nuit — 22 h à 6 h</option>
-          </select>
-          <input type="search" id="filter-label" placeholder="Rechercher une classe…" />
-          <input type="search" id="filter-plaque" placeholder="Rechercher une plaque…" />
-        </div>
+    <!-- Historique -->
+    <section class="page" id="vue-historique">
+      <div class="filtres">
+        <select id="f-modele"><option value="">Tous modèles</option></select>
+        <select id="f-camera"><option value="">Toutes caméras</option></select>
+        <select id="f-zone"><option value="">Toutes zones</option></select>
+        <select id="f-gravite">
+          <option value="">Toutes gravités</option>
+          <option value="critique">Critique</option>
+          <option value="haute">Haute</option>
+          <option value="moyenne">Moyenne</option>
+          <option value="technique">Technique</option>
+        </select>
+        <select id="f-traite">
+          <option value="">Traitées et non traitées</option>
+          <option value="false">À traiter</option>
+          <option value="true">Traitées</option>
+        </select>
+        <select id="f-fausse">
+          <option value="">Vraies et fausses</option>
+          <option value="false">Vraies</option>
+          <option value="true">Fausses</option>
+        </select>
+        <select id="f-periode">
+          <option value="">Tout l'historique</option>
+          <option value="1">1 heure</option>
+          <option value="24" selected>24 heures</option>
+          <option value="168">7 jours</option>
+          <option value="720">30 jours</option>
+        </select>
+        <select id="f-poste">
+          <option value="">Toute la journée</option>
+          <option value="6-14">Matin 6–14 h</option>
+          <option value="14-22">Après-midi 14–22 h</option>
+          <option value="22-6">Nuit 22–6 h</option>
+        </select>
+        <input type="search" id="f-classe" placeholder="Classe…" />
+        <input type="search" id="f-plaque" placeholder="Plaque…" />
+      </div>
+      <div style="flex:1;overflow-y:auto" id="tableau-alertes"></div>
+      <div class="pagination" id="pagination"></div>
+    </section>
 
-        <div class="alerts-table" id="alerts-table"></div>
-        <div class="pager" id="alerts-pager"></div>
-      </section>
-
-      <!-- Zones -->
-      <section class="page" id="page-zones">
-        <h2>Zones d'intérêt</h2>
-        <p class="page-lede">
-          Délimitez les secteurs à surveiller et les modèles qui s'y appliquent. Hors zone, les
-          détections sont ignorées — c'est le principal levier contre les fausses alertes. Une zone
-          d'exclusion fait l'inverse : elle masque ce qui gêne, comme la route au fond du champ ou un
-          écran de contrôle. Sans aucune zone, la caméra est analysée en entier.
-        </p>
-
-        <div class="zone-layout">
-          <div class="card">
-            <h3>Tracé</h3>
-            <div class="zone-toolbar">
+    <!-- Zones -->
+    <section class="page defile" id="vue-zones">
+      <h2>Zones d'intérêt</h2>
+      <p class="lede">
+        Délimitez les secteurs à surveiller et les modèles qui s'y appliquent. Hors zone, les
+        détections sont ignorées — c'est le principal levier contre les fausses alertes. Une zone
+        d'exclusion fait l'inverse : elle masque ce qui gêne, comme la route au fond du champ.
+        Sans aucune zone, la caméra est analysée en entier.
+      </p>
+      <div class="zone-plan">
+        <div class="bloc">
+          <div class="bloc-tete">Tracé</div>
+          <div class="bloc-corps">
+            <div class="enligne" style="margin-bottom:8px">
               <select id="zone-camera"></select>
-              <button class="btn ghost small" id="zone-undo">↶ Dernier point</button>
-              <button class="btn ghost small" id="zone-clear">Effacer le tracé</button>
+              <button class="bouton" id="zone-annuler-point">Dernier point</button>
+              <button class="bouton" id="zone-effacer">Effacer</button>
             </div>
-            <div class="zone-canvas-wrap">
-              <img id="zone-frame" alt="flux caméra" />
+            <div class="toile">
+              <img id="zone-image" alt="" />
               <canvas id="zone-canvas"></canvas>
             </div>
-            <p class="muted" id="zone-hint" style="margin-bottom:0">
+            <p class="msg" id="zone-aide" style="margin:6px 0 0">
               Cliquez sur l'image pour poser les sommets — 3 minimum.
             </p>
           </div>
+        </div>
 
-          <div class="card">
-            <h3>Nouvelle zone</h3>
-            <label class="field">
-              <span>Nom</span>
-              <input type="text" id="zone-name" placeholder="atelier, quai de chargement…" autocomplete="off" />
-            </label>
-            <label class="field">
-              <span>Rôle</span>
+        <div class="bloc">
+          <div class="bloc-tete">Nouvelle zone</div>
+          <div class="bloc-corps">
+            <label class="champ"><span>Nom</span>
+              <input type="text" id="zone-nom" placeholder="atelier, quai…" autocomplete="off" /></label>
+            <label class="champ" style="margin-top:8px"><span>Rôle</span>
               <select id="zone-type">
-                <option value="surveillance">Surveiller cette zone</option>
-                <option value="exclusion">Ignorer cette zone — masque</option>
-              </select>
-            </label>
-            <div class="field">
-              <span>Modèles concernés</span>
-              <div id="zone-models" class="checklist"></div>
-              <small>Aucun coché = tous les modèles.</small>
-            </div>
-            <div class="field">
-              <span>Horaire de surveillance</span>
-              <div class="row-inline">
-                <input type="time" id="zone-start" /> <span class="muted">→</span> <input type="time" id="zone-end" />
+                <option value="surveillance">Surveiller</option>
+                <option value="exclusion">Ignorer (masque)</option>
+              </select></label>
+            <div class="champ" style="margin-top:8px"><span>Modèles concernés</span>
+              <div id="zone-modeles" class="cases"></div>
+              <small>Aucun coché = tous les modèles.</small></div>
+            <div class="champ" style="margin-top:8px"><span>Horaire</span>
+              <div class="enligne">
+                <input type="time" id="zone-debut" /><span class="msg">→</span><input type="time" id="zone-fin" />
               </div>
-              <small>Vide = 24 h/24. Une plage peut passer minuit (22:00 → 06:00).</small>
+              <small>Vide = 24 h/24. Une plage peut passer minuit.</small></div>
+            <div class="champ" style="margin-top:8px"><span>Seuil et délai propres</span>
+              <div class="enligne">
+                <input type="number" id="zone-seuil" step="0.05" min="0" max="1" placeholder="seuil" />
+                <input type="number" id="zone-delai" step="30" min="0" placeholder="délai (s)" />
+              </div></div>
+            <div class="actions">
+              <button class="bouton" id="zone-ajouter">Ajouter la zone</button>
             </div>
-            <div class="field">
-              <span>Seuil et délai propres à la zone</span>
-              <div class="row-inline">
-                <input type="number" id="zone-conf" step="0.05" min="0" max="1" placeholder="seuil" />
-                <input type="number" id="zone-cooldown" step="30" min="0" placeholder="délai (s)" />
-              </div>
-              <small>Vides = valeurs par défaut du modèle et de la sévérité.</small>
-            </div>
-            <button class="btn" id="zone-add">＋ Ajouter la zone</button>
 
-            <h3 style="margin-top:24px">Zones de cette caméra</h3>
-            <div id="zone-list"></div>
-            <div class="form-actions">
-              <button class="btn" id="zone-save">Enregistrer</button>
-              <span class="form-status" id="zone-status"></span>
+            <div class="bloc-tete" style="margin:12px -12px 0;padding-left:12px">Zones de cette caméra</div>
+            <div id="zone-liste" style="margin-top:8px"></div>
+            <div class="actions">
+              <button class="bouton primaire" id="zone-enregistrer">Enregistrer</button>
+              <span class="msg" id="zone-msg"></span>
             </div>
           </div>
         </div>
-      </section>
-
-      <!-- Fichiers de test -->
-      <section class="page" id="page-sources">
-        <h2>Fichiers de test</h2>
-        <p class="page-lede">
-          Déposez une vidéo ou une image : elle devient une source utilisable comme une caméra, avec
-          les mêmes zones, les mêmes modèles et les mêmes alertes. C'est ce qui permet d'éprouver le
-          système sans attendre l'accès aux caméras du site — une webcam de bureau ne montre jamais
-          de départ de feu ni d'ouvrier sans casque.
-        </p>
-
-        <div class="card">
-          <h3>Déposer un fichier</h3>
-          <div class="dropzone" id="dropzone">
-            <div class="dropzone-title">Glissez un fichier ici, ou cliquez pour parcourir</div>
-            <div class="dropzone-hint">
-              Vidéos : mp4, avi, mov, mkv, webm — Images : jpg, png, bmp, webp — 1 Go maximum
-            </div>
-          </div>
-          <input type="file" id="file-input" hidden
-                 accept=".mp4,.avi,.mov,.mkv,.webm,.m4v,.jpg,.jpeg,.png,.bmp,.webp" />
-          <div class="progress" id="upload-progress" hidden><span></span></div>
-          <p class="form-status" id="upload-status"></p>
-        </div>
-
-        <div class="card">
-          <h3>Fichiers disponibles</h3>
-          <div id="uploads-list"></div>
-        </div>
-      </section>
-
-      <!-- Cas d'usage -->
-      <section class="page" id="page-usecases">
-        <h2>Cas d'usage du cahier des charges</h2>
-        <p class="page-lede">
-          Les 12 cas définis en section 3.2, et leur état réel d'implémentation.
-        </p>
-        <div class="uc-legend">
-          <span><span class="uc-dot operationnel"></span>Opérationnel</span>
-          <span><span class="uc-dot partiel"></span>Partiel</span>
-          <span><span class="uc-dot a_entrainer"></span>À entraîner</span>
-        </div>
-        <div id="usecases-table"></div>
-      </section>
-
-      <!-- Rapports -->
-      <section class="page" id="page-reports">
-        <h2>Rapports</h2>
-        <div class="grid">
-          <div class="card">
-            <h3>Répartition par sévérité — 7 jours</h3>
-            <div id="severity-bars"></div>
-          </div>
-          <div class="card">
-            <h3>Fausses alertes par caméra — 30 jours</h3>
-            <p class="card-lede">Objectif du cahier des charges : moins de 2 par jour et par caméra.</p>
-            <div id="false-by-camera"></div>
-          </div>
-          <div class="card wide">
-            <h3>Exports</h3>
-            <p class="card-lede">
-              Le PDF s'adresse au responsable HSE : gravité, localisation, fiabilité des détections
-              et délai de prise en charge. Le CSV s'adresse à qui veut retravailler les données.
-            </p>
-            <div class="export-actions">
-              <a class="btn" href="/api/export/pdf?days=7">📄 Rapport PDF — 7 jours</a>
-              <a class="btn ghost" href="/api/export/pdf?days=30">📄 Rapport PDF — 30 jours</a>
-              <a class="btn ghost" href="/api/export/csv">⬇ Historique complet (CSV)</a>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Système -->
-      <section class="page" id="page-system">
-        <h2>État du système</h2>
-        <p class="page-lede">
-          Un système de surveillance qui s'arrête devient silencieux — et le silence ressemble au
-          calme. Cette page existe pour que l'arrêt se voie.
-        </p>
-        <div class="kpi-row" id="system-kpis"></div>
-        <div class="card">
-          <h3>Caméras</h3>
-          <div id="system-cameras"></div>
-        </div>
-
-        <div class="card">
-          <h3>Objets suivis d'une caméra à l'autre</h3>
-          <p class="card-lede">
-            Rapprochements récents. Une correspondance établie par la plaque est certaine ;
-            une correspondance fondée sur l'apparence reste <b>probable</b> — deux ouvriers
-            en tenue identique produisent la même signature.
-          </p>
-          <div id="handoffs-list"></div>
-        </div>
-      </section>
-
-      <!-- Paramètres -->
-      <section class="page" id="page-settings">
-        <h2>Paramètres</h2>
-        <div class="card">
-          <h3>Modèles de détection</h3>
-          <p class="card-lede">
-            Activez ou désactivez la détection et les alertes par modèle. Effet immédiat, sans
-            redémarrage.
-          </p>
-          <div id="controls-list"></div>
-        </div>
-      </section>
-
-    </main>
-  </div>
-
-  <!-- Visionneuse plein écran -->
-  <div class="viewer" id="viewer" hidden>
-    <div class="viewer-bar">
-      <span class="tile-name" id="viewer-name"></span>
-      <span id="viewer-state"></span>
-      <div class="topbar-spacer"></div>
-      <button class="btn ghost small" id="viewer-close">✕ Fermer</button>
-    </div>
-    <div class="viewer-body"><img id="viewer-img" alt="" /></div>
-  </div>
-
-  <!-- Boîte de dialogue de confirmation -->
-  <div class="modal" id="modal" hidden>
-    <div class="modal-box" role="dialog" aria-modal="true">
-      <div class="modal-title" id="modal-title"></div>
-      <div class="modal-text" id="modal-text"></div>
-      <div class="modal-actions">
-        <button class="btn ghost" id="modal-cancel">Annuler</button>
-        <button class="btn danger" id="modal-confirm">Confirmer</button>
       </div>
+    </section>
+
+    <!-- Fichiers -->
+    <section class="page defile" id="vue-fichiers">
+      <h2>Fichiers de test</h2>
+      <p class="lede">
+        Déposez une vidéo ou une image : elle devient une source utilisable comme une caméra, avec
+        les mêmes zones, les mêmes modèles et les mêmes alertes. C'est ce qui permet d'éprouver le
+        système sans attendre l'accès aux caméras du site — une webcam de bureau ne montre jamais
+        de départ de feu ni d'ouvrier sans casque.
+      </p>
+      <div class="bloc">
+        <div class="bloc-tete">Déposer</div>
+        <div class="bloc-corps">
+          <div class="depot" id="depot">
+            Glissez un fichier ici, ou cliquez pour parcourir<br>
+            <span style="font-size:10.5px">mp4, avi, mov, mkv, webm — jpg, png, bmp, webp — 1 Go max</span>
+          </div>
+          <input type="file" id="fichier-entree" hidden
+                 accept=".mp4,.avi,.mov,.mkv,.webm,.m4v,.jpg,.jpeg,.png,.bmp,.webp" />
+          <div class="jauge" id="jauge" hidden><span></span></div>
+          <p class="msg" id="depot-msg"></p>
+        </div>
+      </div>
+      <div class="bloc">
+        <div class="bloc-tete">Fichiers disponibles</div>
+        <div class="bloc-corps"><div id="liste-fichiers"></div></div>
+      </div>
+    </section>
+
+    <!-- Analyse -->
+    <section class="page defile" id="vue-analyse">
+      <h2>Analyse</h2>
+      <p class="lede">Indicateurs sur 24 heures, 7 et 30 jours.</p>
+      <div class="bloc">
+        <div class="bloc-tete">Indicateurs</div>
+        <div class="bloc-corps"><table class="liste" id="indicateurs"></table></div>
+      </div>
+      <div class="duo">
+        <div class="bloc">
+          <div class="bloc-tete">Activité — 24 h</div>
+          <div class="bloc-corps"><div class="histo" id="histo-24h"></div></div>
+        </div>
+        <div class="bloc">
+          <div class="bloc-tete">Par modèle — 7 j</div>
+          <div class="bloc-corps"><div id="rangs-modele"></div></div>
+        </div>
+        <div class="bloc">
+          <div class="bloc-tete">Par zone — 7 j</div>
+          <div class="bloc-corps"><div id="rangs-zone"></div></div>
+        </div>
+        <div class="bloc">
+          <div class="bloc-tete">Fiabilité — 30 j</div>
+          <div class="bloc-corps">
+            <p class="lede" style="margin:0 0 8px">Part des alertes déclarées fausses par les opérateurs.</p>
+            <div id="rangs-fiabilite"></div>
+          </div>
+        </div>
+        <div class="bloc">
+          <div class="bloc-tete">Fausses alertes par caméra — 30 j</div>
+          <div class="bloc-corps">
+            <p class="lede" style="margin:0 0 8px">Objectif : moins de 2 par jour et par caméra.</p>
+            <div id="rangs-fausses"></div>
+          </div>
+        </div>
+        <div class="bloc">
+          <div class="bloc-tete">Exports</div>
+          <div class="bloc-corps">
+            <p class="lede" style="margin:0 0 8px">
+              Le PDF s'adresse au responsable HSE, le CSV à qui retravaille les données.
+            </p>
+            <div class="exports">
+              <a class="bouton primaire" href="/api/export/pdf?days=7">Rapport PDF — 7 j</a>
+              <a class="bouton" href="/api/export/pdf?days=30">PDF — 30 j</a>
+              <a class="bouton" href="/api/export/csv">Historique CSV</a>
+            </div>
+          </div>
+        </div>
+        <div class="bloc large">
+          <div class="bloc-tete">Cas d'usage du cahier des charges</div>
+          <div class="bloc-corps"><table class="liste" id="cas-usage"></table></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Système -->
+    <section class="page defile" id="vue-systeme">
+      <h2>État du système</h2>
+      <p class="lede">
+        Un système de surveillance qui s'arrête devient silencieux, et le silence ressemble au
+        calme. Cette page existe pour que l'arrêt se voie.
+      </p>
+      <div class="bloc">
+        <div class="bloc-tete">Machine</div>
+        <div class="bloc-corps"><table class="liste" id="systeme-machine"></table></div>
+      </div>
+      <div class="bloc">
+        <div class="bloc-tete">Caméras</div>
+        <div class="bloc-corps"><table class="liste" id="systeme-cameras"></table></div>
+      </div>
+      <div class="bloc">
+        <div class="bloc-tete">Objets suivis d'une caméra à l'autre</div>
+        <div class="bloc-corps">
+          <p class="lede" style="margin:0 0 8px">
+            Une correspondance établie par la plaque est certaine ; une correspondance fondée sur
+            l'apparence reste probable — deux ouvriers en tenue identique produisent la même signature.
+          </p>
+          <table class="liste" id="systeme-rapprochements"></table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Réglages -->
+    <section class="page defile" id="vue-reglages">
+      <h2>Réglages</h2>
+      <p class="lede">Activation de la détection et des alertes par modèle. Effet immédiat, sans redémarrage.</p>
+      <div class="bloc">
+        <div class="bloc-tete">Modèles de détection</div>
+        <div class="bloc-corps"><div id="liste-reglages"></div></div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ── Barre d'état ── -->
+  <footer class="etat">
+    <div class="etat-bloc"><span class="pastille" id="etat-pastille"></span><span id="etat-pipeline">Vérification…</span></div>
+    <div class="etat-bloc">Caméras <b id="etat-cameras">–</b></div>
+    <div class="etat-bloc">Cycle <b id="etat-cycle">–</b></div>
+    <div class="etat-bloc alarme">À traiter <b id="etat-atraiter">–</b></div>
+    <div class="etat-fin">
+      <div class="etat-bloc">CPU <b id="etat-cpu">–</b></div>
+      <div class="etat-bloc">Mém <b id="etat-mem">–</b></div>
+      <div class="etat-bloc">Disque <b id="etat-disque">–</b></div>
+    </div>
+  </footer>
+</div>
+
+<!-- Visionneuse -->
+<div class="visionneuse" id="visionneuse" hidden>
+  <div class="visionneuse-barre">
+    <span class="inc-nom" id="visionneuse-nom"></span>
+    <span id="visionneuse-etat"></span>
+    <button class="bouton" id="visionneuse-fermer" style="margin-left:auto">
+      <svg class="ico"><use href="#i-close"/></svg>Fermer
+    </button>
+  </div>
+  <div class="visionneuse-corps"><img id="visionneuse-image" alt="" /></div>
+</div>
+
+<!-- Dialogue -->
+<div class="dialogue" id="dialogue" hidden>
+  <div class="dialogue-boite" role="dialog" aria-modal="true">
+    <div class="dialogue-titre" id="dialogue-titre"></div>
+    <div class="dialogue-texte" id="dialogue-texte"></div>
+    <div class="dialogue-actions">
+      <button class="bouton" id="dialogue-annuler">Annuler</button>
+      <button class="bouton danger" id="dialogue-confirmer">Confirmer</button>
     </div>
   </div>
+</div>
 
-  <div class="toasts" id="toasts"></div>
+<div class="avis" id="avis"></div>
 
-  <script src="/static/js/dashboard.js"></script>
+<script src="/static/js/dashboard.js"></script>
 </body>
 </html>

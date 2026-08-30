@@ -1,439 +1,646 @@
-/* SmokeWatch — interface de supervision
+/* SmokeWatch — poste de supervision
  *
- * Aucune dépendance : une page de supervision doit s'ouvrir même si le serveur
- * du site est coupé d'Internet.
+ * Aucune dépendance : la page doit s'ouvrir même si le serveur du site est
+ * coupé d'Internet.
  */
 
-const MODEL_LABELS = {
-  arc: "⚡ Arc électrique",
-  conveyor: "🏗️ Convoyeur",
-  epi: "🦺 EPI",
-  fall: "🚨 Personne au sol",
-  fire_smoke: "🔥 Fumée / Feu",
-  gloves_glasses: "🧤 Gants / lunettes / chute",
-  load_control: "📦 Contrôle chargement",
-  person_animal: "🚶 Personne / animal",
-  vehicles: "🚗 Véhicules",
-  systeme: "🩺 Incident technique",
+const MODELES = {
+  arc: "Arc électrique",
+  conveyor: "Convoyeur",
+  epi: "EPI",
+  fall: "Personne au sol",
+  fire_smoke: "Fumée / feu",
+  gloves_glasses: "Gants / lunettes",
+  load_control: "Chargement camion",
+  person_animal: "Personne / animal",
+  vehicles: "Véhicules",
+  systeme: "Incident technique",
 };
 
-const OPERATOR = "opérateur";
-const PAGE_SIZE = 25;
+const OPERATEUR = "opérateur";
+const PAR_PAGE = 30;
 
 let cameras = [];
-let cameraNames = [];
-let uploads = [];
-let lastCriticalId = null;
-let alertsPage = 0;
-let timelineDay = null;
-let viewerCamera = null;
+let noms = [];
+let fichiers = [];
+let selection = null;
+let derniereCritique = null;
+let page = 0;
+let jourFrise = null;
+let visionnee = null;
 
 const el = (id) => document.getElementById(id);
-const modelName = (m) => MODEL_LABELS[m] || m;
-const fmtTime = (iso) => new Date(iso).toLocaleString("fr-FR");
-const esc = (s) => String(s ?? "").replace(/[<>&"]/g, (c) =>
+const nomModele = (m) => MODELES[m] || m;
+const heure = (iso) => new Date(iso).toLocaleTimeString("fr-FR");
+const dateHeure = (iso) => new Date(iso).toLocaleString("fr-FR");
+const ech = (s) => String(s ?? "").replace(/[<>&"]/g, (c) =>
   ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" }[c]));
 
 async function api(url, options) {
   const r = await fetch(url, options);
   if (!r.ok) {
-    const err = await r.json().catch(() => ({}));
-    throw new Error(err.detail || `Erreur ${r.status}`);
+    const e = await r.json().catch(() => ({}));
+    throw new Error(e.detail || `Erreur ${r.status}`);
   }
   return r.json();
 }
 
-/* ═══ Retours visuels ═══ */
+/* ═══ Retours ═══ */
 
-function toast(titre, corps = "", type = "") {
-  const box = document.createElement("div");
-  box.className = `toast ${type}`;
-  box.innerHTML = `
-    <div>
-      <div class="toast-title">${esc(titre)}</div>
-      ${corps ? `<div class="toast-body">${esc(corps)}</div>` : ""}
-    </div>
-    <button class="toast-close" aria-label="Fermer">✕</button>`;
-  box.querySelector(".toast-close").addEventListener("click", () => box.remove());
-  el("toasts").appendChild(box);
-  setTimeout(() => box.remove(), type === "critique" ? 20000 : 6000);
+function avis(titre, corps = "", type = "") {
+  const n = document.createElement("div");
+  n.className = `avis-item ${type}`;
+  n.innerHTML = `<div><div class="avis-titre">${ech(titre)}</div>` +
+    (corps ? `<div class="avis-corps">${ech(corps)}</div>` : "") +
+    `</div><button class="avis-fermer" aria-label="Fermer">×</button>`;
+  n.querySelector("button").addEventListener("click", () => n.remove());
+  el("avis").appendChild(n);
+  setTimeout(() => n.remove(), type === "critique" ? 20000 : 6000);
 }
 
-/* Remplace confirm() : une action destructrice mérite d'annoncer ses
-   conséquences, ce qu'une boîte native ne permet pas. */
+/* Remplace confirm() : une action destructrice doit annoncer ses conséquences,
+   ce qu'une boîte native ne permet pas. */
 function confirmer(titre, texte, libelle = "Confirmer") {
   return new Promise((resolve) => {
-    const modal = el("modal");
-    el("modal-title").textContent = titre;
-    el("modal-text").textContent = texte;
-    el("modal-confirm").textContent = libelle;
-    modal.hidden = false;
+    const d = el("dialogue");
+    el("dialogue-titre").textContent = titre;
+    el("dialogue-texte").textContent = texte;
+    el("dialogue-confirmer").textContent = libelle;
+    d.hidden = false;
 
-    const fermer = (reponse) => {
-      modal.hidden = true;
-      el("modal-confirm").onclick = null;
-      el("modal-cancel").onclick = null;
-      document.removeEventListener("keydown", surTouche);
-      resolve(reponse);
+    const fin = (r) => {
+      d.hidden = true;
+      el("dialogue-confirmer").onclick = null;
+      el("dialogue-annuler").onclick = null;
+      document.removeEventListener("keydown", touche);
+      resolve(r);
     };
-    const surTouche = (e) => { if (e.key === "Escape") fermer(false); };
-
-    el("modal-confirm").onclick = () => fermer(true);
-    el("modal-cancel").onclick = () => fermer(false);
-    document.addEventListener("keydown", surTouche);
-    el("modal-confirm").focus();
+    const touche = (e) => { if (e.key === "Escape") fin(false); };
+    el("dialogue-confirmer").onclick = () => fin(true);
+    el("dialogue-annuler").onclick = () => fin(false);
+    document.addEventListener("keydown", touche);
+    el("dialogue-confirmer").focus();
   });
 }
 
-function vide(cible, icone, titre, texte, action = "") {
-  el(cible).innerHTML = `
-    <div class="empty">
-      <div class="empty-icon">${icone}</div>
-      <div class="empty-title">${esc(titre)}</div>
-      <p>${texte}</p>
-      ${action}
-    </div>`;
+function vide(cible, titre, texte) {
+  el(cible).innerHTML =
+    `<div class="vide"><div class="vide-titre">${ech(titre)}</div><p>${texte}</p></div>`;
 }
 
-function squelette(cible, lignes = 3) {
-  el(cible).innerHTML = '<div class="skeleton"></div>'.repeat(lignes);
-}
+/* ═══ Onglets ═══ */
 
-/* ═══ Navigation ═══ */
+function onglets() {
+  document.querySelectorAll(".onglet").forEach((b) => {
+    b.addEventListener("click", () => {
+      document.querySelectorAll(".onglet").forEach((x) => x.classList.remove("actif"));
+      document.querySelectorAll(".page").forEach((p) => p.classList.remove("actif"));
+      b.classList.add("actif");
+      el(`vue-${b.dataset.vue}`).classList.add("actif");
 
-function setupNav() {
-  document.querySelectorAll(".nav-link").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      document.querySelectorAll(".nav-link").forEach((b) => b.classList.remove("active"));
-      document.querySelectorAll(".page").forEach((p) => p.classList.remove("active"));
-      btn.classList.add("active");
-      el(`page-${btn.dataset.page}`).classList.add("active");
-      el("page-title").textContent = btn.dataset.title;
-      document.querySelector(".content").scrollTop = 0;
+      // Le panneau des caméras n'a de sens que devant les images et les zones.
+      const avecPanneau = ["direct", "zones"].includes(b.dataset.vue);
+      el("panneau").hidden = !avecPanneau;
+      el("app").classList.toggle("sans-panneau", !avecPanneau);
 
       ({
-        dashboard: loadDashboard,
-        cameras: loadCameras,
-        alerts: () => { loadAlertsTable(); loadTimeline(); },
-        zones: loadZonesPage,
-        sources: loadUploads,
-        usecases: loadUseCases,
-        reports: loadReports,
-        system: () => { loadSystem(); loadHandoffs(); },
-      })[btn.dataset.page]?.();
+        direct: () => { chargerCameras(); chargerFrise(); },
+        historique: chargerAlertes,
+        zones: chargerZones,
+        fichiers: chargerFichiers,
+        analyse: chargerAnalyse,
+        systeme: chargerSysteme,
+      })[b.dataset.vue]?.();
     });
   });
 
-  // Raccourcis clavier : un poste de supervision se pilote sans quitter l'écran.
+  // Raccourcis : un poste de supervision se pilote sans quitter l'écran.
   document.addEventListener("keydown", (e) => {
     if (e.target.matches("input, select, textarea")) return;
-    const raccourcis = { 1: "dashboard", 2: "cameras", 3: "alerts", 4: "zones" };
-    if (raccourcis[e.key]) goToPage(raccourcis[e.key]);
+    const vues = ["direct", "historique", "zones", "fichiers", "analyse", "systeme", "reglages"];
+    if (vues[Number(e.key) - 1]) allerA(vues[Number(e.key) - 1]);
     if (e.key === "Escape") fermerVisionneuse();
   });
 }
 
-function goToPage(name) {
-  document.querySelector(`.nav-link[data-page="${name}"]`)?.click();
+function allerA(vue) {
+  document.querySelector(`.onglet[data-vue="${vue}"]`)?.click();
 }
 
-function tickHorloge() {
-  el("clock").textContent = new Date().toLocaleTimeString("fr-FR");
+function tick() {
+  el("horloge").textContent = new Date().toLocaleTimeString("fr-FR");
 }
 
-/* ═══ Mur de caméras ═══ */
+/* ═══ Caméras ═══ */
 
-async function loadCameras() {
-  const data = await api("/api/cameras");
-  cameras = data.cameras;
-  cameraNames = cameras.map((c) => c.name);
-  el("top-cams").textContent = `${cameras.filter((c) => c.online).length}/${cameras.length}`;
-  el("sys-info").textContent =
-    `${cameras.length} caméra${cameras.length > 1 ? "s" : ""} · ${Object.keys(MODEL_LABELS).length - 1} modèles`;
+async function chargerCameras() {
+  const d = await api("/api/cameras");
+  cameras = d.cameras;
+  noms = cameras.map((c) => c.name);
+  dessinerArbre();
+  dessinerMur();
+  majBarreEtat();
+}
 
-  const grid = el("camera-grid");
+function etatCamera(c) {
+  if (!c.enabled) return "pause";
+  return c.online ? "en-ligne" : "hors-ligne";
+}
+
+function majActions() {
+  const actif = Boolean(selection);
+  el("btn-modifier").disabled = !actif;
+  el("btn-supprimer").disabled = !actif;
+  el("btn-modifier").textContent = actif ? `Modifier « ${selection} »` : "Modifier";
+}
+
+function dessinerArbre() {
+  majActions();
+  const arbre = el("arbre-cameras");
   if (!cameras.length) {
-    vide("camera-grid", "▣", "Aucune caméra configurée",
-      "Ajoutez une caméra, ou déposez une vidéo dans « Fichiers de test » pour éprouver le système sans matériel.",
-      '<button class="btn" onclick="openCameraForm()">＋ Ajouter une caméra</button>');
+    arbre.innerHTML = '<div class="vide" style="padding:14px"><p>Aucune caméra.</p></div>';
+    return;
+  }
+  arbre.innerHTML = cameras.map((c) => `
+    <div class="arbre-item ${selection === c.name ? "actif" : ""}" data-cam="${ech(c.name)}">
+      <span class="pastille ${etatCamera(c)}"></span>
+      <span class="arbre-nom">${ech(c.name)}</span>
+      <span class="arbre-detail">${c.cycle_ms ? c.cycle_ms + "ms" : ""}</span>
+    </div>`).join("");
+
+  arbre.querySelectorAll("[data-cam]").forEach((n) =>
+    n.addEventListener("click", () => {
+      selection = selection === n.dataset.cam ? null : n.dataset.cam;
+      dessinerArbre();
+      dessinerMur();
+    }));
+}
+
+function dessinerMur() {
+  const mur = el("mur");
+  const liste = selection ? cameras.filter((c) => c.name === selection) : cameras;
+
+  if (!liste.length) {
+    mur.innerHTML = `<div class="mur-vide"><div>
+      <div class="vide-titre">Aucune caméra configurée</div>
+      <p>Ajoutez une caméra, ou déposez une vidéo dans l'onglet Fichiers.</p>
+    </div></div>`;
     return;
   }
 
-  grid.innerHTML = cameras.map((cam) => {
-    const led = !cam.enabled
-      ? '<span class="led pause">Pause</span>'
-      : cam.online ? '<span class="led live">Direct</span>' : '<span class="led off">Hors ligne</span>';
-    const modeles = cam.models.length
-      ? cam.models.map((m) => `<span class="chip">${modelName(m)}</span>`).join("")
-      : '<span class="chip">aucun modèle</span>';
-    const zones = cam.zones?.length
-      ? cam.zones.map((z) => `<span class="chip zone">◫ ${esc(z)}</span>`).join("")
-      : '<span class="chip">plein cadre</span>';
-    const debit = cam.cycle_ms ? `${cam.cycle_ms} ms` : (cam.state || "—");
+  mur.innerHTML = liste.map((c) => {
+    const e = etatCamera(c);
+    const badge = e === "en-ligne" ? '<span class="rec direct">DIRECT</span>'
+      : e === "pause" ? '<span class="rec pause">PAUSE</span>'
+        : '<span class="rec perdu">HORS LIGNE</span>';
+    const infos = [
+      c.models.length ? `${c.models.length} mod.` : "aucun modèle",
+      c.zones?.length ? `${c.zones.length} zone(s)` : "plein cadre",
+      c.tracking ? "suivi" : "",
+      c.plates ? "plaques" : "",
+    ].filter(Boolean).join(" · ");
 
     return `
-      <article class="camera-tile" id="tile-${esc(cam.name)}">
-        <div class="tile-video" data-open="${esc(cam.name)}">
-          <img id="feed-${esc(cam.name)}" src="/video/${encodeURIComponent(cam.name)}.jpg" alt=""
-               onerror="this.style.opacity=0.12" onload="this.style.opacity=1" />
-          <div class="tile-top">
-            <span class="tile-name">${esc(cam.name)}</span>
-            <span class="tile-right">${led}</span>
-          </div>
-          <div class="tile-bottom">
-            <span>${esc(String(cam.source ?? ""))}</span>
-            <span class="tile-right">${debit}</span>
-          </div>
+      <div class="tuile" id="tuile-${ech(c.name)}" data-cam="${ech(c.name)}">
+        <img id="flux-${ech(c.name)}" src="/video/${encodeURIComponent(c.name)}.jpg" alt=""
+             onerror="this.style.opacity=0.1" onload="this.style.opacity=1" />
+        <div class="inc haut">
+          <span class="inc-nom">${ech(c.name)}</span>
+          <span class="inc-fin">${badge}</span>
         </div>
-        <div class="tile-meta">${modeles}${zones}</div>
-        <div class="tile-actions">
-          <button class="btn ghost small" data-edit="${esc(cam.name)}">Modifier</button>
-          <button class="btn ghost small" data-zones="${esc(cam.name)}">Zones</button>
-          <button class="btn ghost small" data-delete="${esc(cam.name)}">Supprimer</button>
+        <div class="inc bas">
+          <span>${ech(infos)}</span>
+          <span class="inc-fin">${c.cycle_ms ? c.cycle_ms + " ms" : ""}</span>
         </div>
-      </article>`;
+      </div>`;
   }).join("");
 
-  grid.querySelectorAll("[data-open]").forEach((n) =>
-    n.addEventListener("click", () => ouvrirVisionneuse(n.dataset.open)));
-  grid.querySelectorAll("[data-edit]").forEach((b) =>
-    b.addEventListener("click", () => openCameraForm(b.dataset.edit)));
-  grid.querySelectorAll("[data-zones]").forEach((b) =>
-    b.addEventListener("click", () => { goToPage("zones"); selectZoneCamera(b.dataset.zones); }));
-  grid.querySelectorAll("[data-delete]").forEach((b) =>
-    b.addEventListener("click", () => deleteCamera(b.dataset.delete)));
+  mur.querySelectorAll("[data-cam]").forEach((t) =>
+    t.addEventListener("click", () => ouvrirVisionneuse(t.dataset.cam)));
 }
 
-function refreshVideos() {
+function rafraichirFlux() {
   const t = Date.now();
-  for (const name of cameraNames) {
-    const img = el(`feed-${name}`);
-    if (img) img.src = `/video/${encodeURIComponent(name)}.jpg?t=${t}`;
+  for (const n of noms) {
+    const img = el(`flux-${n}`);
+    if (img) img.src = `/video/${encodeURIComponent(n)}.jpg?t=${t}`;
   }
-  if (viewerCamera) {
-    el("viewer-img").src = `/video/${encodeURIComponent(viewerCamera)}.jpg?t=${t}`;
-  }
+  if (visionnee) el("visionneuse-image").src = `/video/${encodeURIComponent(visionnee)}.jpg?t=${t}`;
 }
 
 function ouvrirVisionneuse(nom) {
-  viewerCamera = nom;
-  const cam = cameras.find((c) => c.name === nom);
-  el("viewer-name").textContent = nom;
-  el("viewer-state").innerHTML = cam?.online
-    ? '<span class="led live">Direct</span>'
-    : '<span class="led off">Hors ligne</span>';
-  el("viewer-img").src = `/video/${encodeURIComponent(nom)}.jpg?t=${Date.now()}`;
-  el("viewer").hidden = false;
+  visionnee = nom;
+  const c = cameras.find((x) => x.name === nom);
+  el("visionneuse-nom").textContent = nom;
+  el("visionneuse-etat").innerHTML = c?.online
+    ? '<span class="rec direct">DIRECT</span>' : '<span class="rec perdu">HORS LIGNE</span>';
+  el("visionneuse-image").src = `/video/${encodeURIComponent(nom)}.jpg?t=${Date.now()}`;
+  el("visionneuse").hidden = false;
 }
 
 function fermerVisionneuse() {
-  viewerCamera = null;
-  el("viewer").hidden = true;
+  visionnee = null;
+  el("visionneuse").hidden = true;
 }
 
-function setupCameraWall() {
-  el("layout-switch").addEventListener("click", (e) => {
-    const btn = e.target.closest("button");
-    if (!btn) return;
-    document.querySelectorAll("#layout-switch button").forEach((b) => b.classList.remove("active"));
-    btn.classList.add("active");
-    el("camera-grid").className = `camera-grid cols-${btn.dataset.layout}`;
+function outilsDirect() {
+  el("disposition").addEventListener("click", (e) => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    document.querySelectorAll("#disposition .bouton").forEach((x) => x.classList.remove("actif"));
+    b.classList.add("actif");
+    el("mur").className = `mur c${b.dataset.cols}`;
   });
 
-  el("btn-fullscreen").addEventListener("click", () => {
+  el("btn-plein-ecran").addEventListener("click", () => {
     if (document.fullscreenElement) document.exitFullscreen();
-    else el("page-cameras").requestFullscreen?.();
+    else el("vue-direct").requestFullscreen?.();
   });
 
-  el("viewer-close").addEventListener("click", fermerVisionneuse);
-  el("viewer").addEventListener("click", (e) => {
-    if (e.target === el("viewer")) fermerVisionneuse();
-  });
+  el("btn-recharger").addEventListener("click", chargerCameras);
+  el("btn-modifier").addEventListener("click", () => selection && ouvrirFormCamera(selection));
+  el("btn-supprimer").addEventListener("click", () => selection && supprimerCamera(selection));
+  el("visionneuse-fermer").addEventListener("click", fermerVisionneuse);
 }
 
 /* ═══ Configuration d'une caméra ═══ */
 
-function openCameraForm(name = null) {
-  const form = el("camera-form");
-  form.hidden = false;
-  el("camera-form-title").textContent = name ? `Modifier « ${name} »` : "Nouvelle caméra";
-  el("cam-status").textContent = "";
-  el("cam-status").className = "form-status";
+function ouvrirFormCamera(nom = null) {
+  const f = el("form-camera");
+  f.hidden = false;
+  el("form-camera-titre").textContent = nom ? `Modifier « ${nom} »` : "Nouvelle caméra";
+  el("cam-msg").textContent = "";
+  el("cam-msg").className = "msg";
 
-  const models = el("cam-models");
-  if (!models.children.length) {
-    models.innerHTML = Object.entries(MODEL_LABELS)
-      .filter(([k]) => k !== "systeme")
-      .map(([k, v]) => `<label><input type="checkbox" value="${k}" /> <span>${v}</span></label>`)
-      .join("");
+  const cases = el("cam-modeles");
+  if (!cases.children.length) {
+    cases.innerHTML = Object.entries(MODELES).filter(([k]) => k !== "systeme")
+      .map(([k, v]) => `<label><input type="checkbox" value="${k}" /> ${v}</label>`).join("");
   }
-  models.querySelectorAll("input").forEach((c) => (c.checked = false));
+  cases.querySelectorAll("input").forEach((c) => (c.checked = false));
 
-  const cam = cameras.find((c) => c.name === name);
-  el("cam-name").value = cam?.name ?? "";
-  el("cam-name").disabled = Boolean(name);
-  el("cam-source").value = cam?.source ?? "";
-  el("cam-fps").value = cam?.fps ?? "";
-  el("cam-enabled").value = String(cam?.enabled ?? true);
-  el("cam-tracking").value = String(cam?.tracking ?? false);
-  el("cam-recording").value = String(cam?.recording ?? false);
-  el("cam-plates").value = String(cam?.plates ?? false);
-  el("cam-collecte").value = String(cam?.collecte ?? false);
-  el("cam-bachage").value = String(cam?.bachage ?? false);
-  el("cam-voisins").value = (cam?.voisins || []).join(", ");
-  cam?.models.forEach((m) => {
-    const box = models.querySelector(`input[value="${m}"]`);
-    if (box) box.checked = true;
+  const c = cameras.find((x) => x.name === nom);
+  el("cam-nom").value = c?.name ?? "";
+  el("cam-nom").disabled = Boolean(nom);
+  el("cam-source").value = c?.source ?? "";
+  el("cam-fps").value = c?.fps ?? "";
+  el("cam-actif").value = String(c?.enabled ?? true);
+  el("cam-suivi").value = String(c?.tracking ?? false);
+  el("cam-plaques").value = String(c?.plates ?? false);
+  el("cam-bachage").value = String(c?.bachage ?? false);
+  el("cam-collecte").value = String(c?.collecte ?? false);
+  el("cam-enregistrement").value = String(c?.recording ?? false);
+  el("cam-voisins").value = (c?.voisins || []).join(", ");
+  c?.models.forEach((m) => {
+    const b = cases.querySelector(`input[value="${m}"]`);
+    if (b) b.checked = true;
   });
 
-  renderFilePicker();
-  form.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  choixFichiers();
+  f.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
-/* Les fichiers déposés se choisissent d'un clic : recopier un chemin à la main
-   est la principale source d'erreur au moment de créer une caméra. */
-function renderFilePicker() {
-  const box = el("cam-file-picker");
-  if (!uploads.length) {
-    box.innerHTML = '<span class="muted">Aucun fichier déposé. Voir « Fichiers de test ».</span>';
+/* Choisir un fichier déposé d'un clic : recopier un chemin à la main est la
+   première source d'erreur au moment de créer une caméra. */
+function choixFichiers() {
+  const box = el("choix-fichiers");
+  if (!fichiers.length) {
+    box.innerHTML = '<span class="msg">Aucun fichier déposé — voir l\'onglet Fichiers.</span>';
     return;
   }
-  box.innerHTML = uploads.slice(0, 8).map((f) =>
-    `<button type="button" class="btn ghost small" data-src="${esc(f.source)}">
-       ${f.type === "video" ? "🎞" : "🖼"} ${esc(f.nom)}
-     </button>`).join("");
+  box.innerHTML = fichiers.slice(0, 8).map((f) =>
+    `<button type="button" class="bouton" data-src="${ech(f.source)}">${ech(f.nom)}</button>`).join("");
   box.querySelectorAll("[data-src]").forEach((b) =>
     b.addEventListener("click", () => { el("cam-source").value = b.dataset.src; }));
 }
 
-function cameraFormPayload() {
-  const source = el("cam-source").value.trim();
+function donneesCamera() {
+  const s = el("cam-source").value.trim();
   return {
-    source: /^\d+$/.test(source) ? Number(source) : source,
-    models: [...el("cam-models").querySelectorAll("input:checked")].map((c) => c.value),
+    source: /^\d+$/.test(s) ? Number(s) : s,
+    models: [...el("cam-modeles").querySelectorAll("input:checked")].map((c) => c.value),
     fps: el("cam-fps").value ? Number(el("cam-fps").value) : null,
-    enabled: el("cam-enabled").value === "true",
-    tracking: el("cam-tracking").value === "true",
-    recording: el("cam-recording").value === "true",
-    plates: el("cam-plates").value === "true",
-    collecte: el("cam-collecte").value === "true",
+    enabled: el("cam-actif").value === "true",
+    tracking: el("cam-suivi").value === "true",
+    plates: el("cam-plaques").value === "true",
     bachage: el("cam-bachage").value === "true",
+    collecte: el("cam-collecte").value === "true",
+    recording: el("cam-enregistrement").value === "true",
     voisins: el("cam-voisins").value.split(",").map((v) => v.trim()).filter(Boolean),
   };
 }
 
-function setupCameraForm() {
-  el("btn-add-camera").addEventListener("click", () => openCameraForm());
+function formCamera() {
+  el("btn-ajout-camera").addEventListener("click", () => ouvrirFormCamera());
+  el("cam-annuler").addEventListener("click", () => (el("form-camera").hidden = true));
 
-  // La lecture de plaques repose sur le vote entre plusieurs images du meme
-  // vehicule : sans suivi, elle n'aurait rien sur quoi voter.
-  el("cam-plates").addEventListener("change", (e) => {
-    if (e.target.value === "true" && el("cam-tracking").value !== "true") {
-      el("cam-tracking").value = "true";
-      toast("Suivi activé", "La lecture de plaques repose sur le suivi des objets.");
-    }
-  });
-  el("cam-cancel").addEventListener("click", () => (el("camera-form").hidden = true));
+  // Ces deux options reposent sur le vote entre plusieurs images du même objet :
+  // sans suivi, elles n'ont rien sur quoi voter.
+  for (const id of ["cam-plaques", "cam-bachage"]) {
+    el(id).addEventListener("change", (e) => {
+      if (e.target.value === "true" && el("cam-suivi").value !== "true") {
+        el("cam-suivi").value = "true";
+        avis("Suivi activé", "Cette option repose sur le suivi des objets.");
+      }
+    });
+  }
 
-  el("cam-test").addEventListener("click", async () => {
-    const status = el("cam-status");
-    const source = cameraFormPayload().source;
-    if (source === "") { status.className = "form-status error"; status.textContent = "Renseignez une source."; return; }
-
-    status.className = "form-status";
-    status.textContent = "Test en cours…";
+  el("cam-tester").addEventListener("click", async () => {
+    const m = el("cam-msg");
+    const source = donneesCamera().source;
+    if (source === "") { m.className = "msg err"; m.textContent = "Renseignez une source."; return; }
+    m.className = "msg"; m.textContent = "Test…";
     try {
-      const res = await api("/api/cameras/test", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      const r = await api("/api/cameras/test", {
+        method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ source }),
       });
-      if (res.ok) {
-        status.className = "form-status ok";
-        status.textContent = `Connexion établie — ${res.kind}, ${res.width}×${res.height}`
-          + (res.fps ? `, ${res.fps} img/s` : "");
-      } else {
-        status.className = "form-status error";
-        status.textContent = res.error;
-      }
-    } catch (e) {
-      status.className = "form-status error";
-      status.textContent = e.message;
-    }
+      if (r.ok) {
+        m.className = "msg ok";
+        m.textContent = `${r.kind} — ${r.width}×${r.height}` + (r.fps ? ` — ${r.fps} img/s` : "");
+      } else { m.className = "msg err"; m.textContent = r.error; }
+    } catch (e) { m.className = "msg err"; m.textContent = e.message; }
   });
 
-  el("cam-save").addEventListener("click", async () => {
-    const status = el("cam-status");
-    const name = el("cam-name").value.trim();
-    if (!name) { status.className = "form-status error"; status.textContent = "Donnez un nom à la caméra."; return; }
-
+  el("cam-valider").addEventListener("click", async () => {
+    const m = el("cam-msg");
+    const nom = el("cam-nom").value.trim();
+    if (!nom) { m.className = "msg err"; m.textContent = "Donnez un nom."; return; }
     try {
-      await api(`/api/cameras/${encodeURIComponent(name)}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(cameraFormPayload()),
+      await api(`/api/cameras/${encodeURIComponent(nom)}`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(donneesCamera()),
       });
-      el("camera-form").hidden = true;
-      toast("Caméra enregistrée", "Le pipeline la prend en compte dans quelques secondes.", "ok");
-      await loadCameras();
-    } catch (e) {
-      status.className = "form-status error";
-      status.textContent = e.message;
-    }
+      el("form-camera").hidden = true;
+      avis("Caméra enregistrée", "Prise en compte dans quelques secondes.", "ok");
+      chargerCameras();
+    } catch (e) { m.className = "msg err"; m.textContent = e.message; }
   });
 }
 
-async function deleteCamera(name) {
-  const ok = await confirmer(
-    `Supprimer « ${name} » ?`,
-    "La caméra ne sera plus traitée. Ses zones et son historique d'alertes sont conservés.",
-    "Supprimer");
+async function supprimerCamera(nom) {
+  const ok = await confirmer(`Supprimer « ${nom} » ?`,
+    "La caméra ne sera plus traitée. Ses zones et son historique sont conservés.", "Supprimer");
   if (!ok) return;
   try {
-    await api(`/api/cameras/${encodeURIComponent(name)}`, { method: "DELETE" });
-    toast("Caméra supprimée", name, "ok");
-    await loadCameras();
-  } catch (e) {
-    toast("Suppression impossible", e.message, "error");
-  }
+    await api(`/api/cameras/${encodeURIComponent(nom)}`, { method: "DELETE" });
+    avis("Caméra supprimée", nom, "ok");
+    chargerCameras();
+  } catch (e) { avis("Suppression impossible", e.message, "err"); }
 }
 
-/* ═══ Fichiers de test ═══ */
+/* ═══ Événements du panneau ═══ */
 
-async function loadUploads() {
-  try {
-    uploads = (await api("/api/uploads")).fichiers;
-  } catch {
-    uploads = [];
+async function chargerEvenements() {
+  let d;
+  try { d = await api("/api/alerts?limit=14"); } catch { return; }
+
+  const box = el("evenements");
+  if (!d.items.length) {
+    box.innerHTML = '<div class="vide" style="padding:14px"><p>Aucun événement.</p></div>';
+    return;
   }
+  box.innerHTML = d.items.map((a) => `
+    <div class="evt ${a.severity}" data-cam="${ech(a.camera)}">
+      <span class="evt-h">${heure(a.timestamp)}</span>
+      <span class="evt-t">${ech(a.label)}</span>
+      <span class="evt-c">${ech(a.camera)}${a.zone ? " · " + ech(a.zone) : ""}</span>
+    </div>`).join("");
 
-  if (!uploads.length) {
-    vide("uploads-list", "🎞", "Aucun fichier déposé",
-      "Déposez une vidéo de chantier, de départ de feu ou de quai de chargement : elle sera analysée comme une caméra réelle.");
-    renderFilePicker();
+  box.querySelectorAll("[data-cam]").forEach((n) =>
+    n.addEventListener("click", () => { selection = n.dataset.cam; dessinerArbre(); dessinerMur(); }));
+}
+
+/* ═══ Historique ═══ */
+
+function filtres() {
+  const p = new URLSearchParams();
+  const champs = {
+    model: "f-modele", camera: "f-camera", zone: "f-zone", severity: "f-gravite",
+    acknowledged: "f-traite", false_positive: "f-fausse", since_hours: "f-periode",
+  };
+  for (const [k, id] of Object.entries(champs)) {
+    const v = el(id)?.value;
+    if (v) p.set(k, v);
+  }
+  const cl = el("f-classe")?.value.trim();
+  if (cl) p.set("label", cl);
+  const pl = el("f-plaque")?.value.trim();
+  if (pl) p.set("plaque", pl);
+  const poste = el("f-poste")?.value;
+  if (poste) { const [a, b] = poste.split("-"); p.set("hour_from", a); p.set("hour_to", b); }
+  return p;
+}
+
+async function chargerAlertes() {
+  const p = filtres();
+  p.set("limit", PAR_PAGE);
+  p.set("offset", page * PAR_PAGE);
+  const d = await api(`/api/alerts?${p}`);
+
+  if (!d.items.length) {
+    vide("tableau-alertes", "Aucune alerte",
+      "Aucun événement ne correspond à ces critères. Élargissez la période ou retirez un filtre.");
+    el("pagination").innerHTML = "";
     return;
   }
 
-  el("uploads-list").innerHTML = uploads.map((f) => `
-    <div class="file-row">
-      <div class="file-icon">${f.type === "video" ? "🎞" : "🖼"}</div>
-      <div class="file-main">
-        <div class="file-name">${esc(f.nom)}</div>
-        <div class="file-sub">${esc(f.source)} · ${f.taille_mo} Mo</div>
-      </div>
-      <button class="btn small" data-use="${esc(f.source)}">Créer une caméra</button>
-      <button class="btn ghost small" data-del="${esc(f.nom)}">Supprimer</button>
-    </div>`).join("");
+  el("tableau-alertes").innerHTML = `
+    <table class="liste">
+      <thead><tr>
+        <th style="width:64px"></th><th>Détection</th><th>Caméra</th><th>Modèle</th>
+        <th style="width:70px">Gravité</th><th style="width:54px">Conf.</th>
+        <th style="width:130px">Horodatage</th><th style="width:200px">Traitement</th>
+      </tr></thead>
+      <tbody>${d.items.map(ligneAlerte).join("")}</tbody>
+    </table>`;
 
-  el("uploads-list").querySelectorAll("[data-use]").forEach((b) =>
+  el("tableau-alertes").querySelectorAll("[data-ack]").forEach((b) =>
+    b.addEventListener("click", () => prendreEnCharge(b.dataset.ack, b)));
+  el("tableau-alertes").querySelectorAll("[data-faux]").forEach((b) =>
+    b.addEventListener("click", () => marquer(b.dataset.faux, true)));
+  el("tableau-alertes").querySelectorAll("[data-vrai]").forEach((b) =>
+    b.addEventListener("click", () => marquer(b.dataset.vrai, false)));
+  el("tableau-alertes").querySelectorAll("[data-img]").forEach((n) =>
+    n.addEventListener("click", () => window.open(n.dataset.img, "_blank")));
+
+  pagination(d);
+}
+
+function ligneAlerte(a) {
+  const vign = a.snapshot
+    ? `<img class="vignette" src="/api/snapshot?path=${encodeURIComponent(a.snapshot)}"
+            data-img="/api/snapshot?path=${encodeURIComponent(a.snapshot)}" alt="" />`
+    : "";
+  const clip = a.clip
+    ? ` <a class="lien" href="/api/clip?path=${encodeURIComponent(a.clip)}" target="_blank">clip</a>` : "";
+  const zone = a.zone ? ` <span class="etiq zone">${ech(a.zone)}</span>` : "";
+  const plaque = a.plaque ? ` <span class="etiq plaque">${ech(a.plaque)}</span>` : "";
+  const faux = a.false_positive ? ' <span class="etiq">fausse</span>' : "";
+
+  const traitement = a.acknowledged
+    ? `<span class="msg">${ech(a.ack_by || "traitée")}</span>`
+    : `<button class="bouton" data-ack="${a.id}">Prendre en charge</button>`;
+  const jugement = a.false_positive
+    ? `<button class="bouton" data-vrai="${a.id}">Vraie</button>`
+    : `<button class="bouton danger" data-faux="${a.id}"
+               title="Le système s'est trompé — sert aussi à corriger le modèle">Fausse</button>`;
+
+  return `<tr class="${a.severity}${a.false_positive ? " fausse" : ""}">
+    <td>${vign}</td>
+    <td>${ech(a.label)}${faux}${zone}${plaque}</td>
+    <td>${ech(a.camera)}${clip}</td>
+    <td>${nomModele(a.model)}</td>
+    <td><span class="grav ${a.severity}">${a.severity}</span></td>
+    <td class="num">${a.confidence.toFixed(2)}</td>
+    <td class="num">${dateHeure(a.timestamp)}</td>
+    <td><div class="enligne">${traitement}${jugement}</div></td>
+  </tr>`;
+}
+
+function pagination(d) {
+  const pages = Math.ceil(d.total / PAR_PAGE);
+  const p = el("pagination");
+  if (pages <= 1) { p.innerHTML = `<span>${d.total} alerte(s)</span>`; return; }
+  p.innerHTML = `
+    <button class="bouton" ${page === 0 ? "disabled" : ""} id="prec">Précédent</button>
+    <span>Page ${page + 1} / ${pages} — ${d.total} alerte(s)</span>
+    <button class="bouton" ${page + 1 >= pages ? "disabled" : ""} id="suiv">Suivant</button>`;
+  el("prec")?.addEventListener("click", () => { page--; chargerAlertes(); });
+  el("suiv")?.addEventListener("click", () => { page++; chargerAlertes(); });
+}
+
+async function prendreEnCharge(id, bouton) {
+  bouton.disabled = true;
+  await api(`/api/alerts/${id}/ack`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ operator: OPERATEUR }),
+  });
+  chargerAlertes();
+}
+
+async function marquer(id, fausse) {
+  await api(`/api/alerts/${id}/false`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ is_false: fausse, operator: OPERATEUR }),
+  });
+  if (fausse) avis("Marquée fausse", "L'image rejoint le jeu de données du ré-entraînement.", "ok");
+  chargerAlertes();
+}
+
+function brancherFiltres() {
+  ["f-modele", "f-camera", "f-zone", "f-gravite", "f-traite", "f-fausse", "f-periode", "f-poste"]
+    .forEach((id) => el(id)?.addEventListener("change", () => { page = 0; chargerAlertes(); }));
+  const rech = attendre(() => { page = 0; chargerAlertes(); }, 350);
+  el("f-classe")?.addEventListener("input", rech);
+  el("f-plaque")?.addEventListener("input", rech);
+}
+
+function attendre(fn, delai) {
+  let t;
+  return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), delai); };
+}
+
+function remplirFiltres() {
+  el("f-modele").innerHTML = '<option value="">Tous modèles</option>'
+    + Object.entries(MODELES).map(([k, v]) => `<option value="${k}">${v}</option>`).join("");
+  const opts = cameras.map((c) => `<option value="${ech(c.name)}">${ech(c.name)}</option>`).join("");
+  el("f-camera").innerHTML = '<option value="">Toutes caméras</option>' + opts;
+  el("frise-camera").innerHTML = '<option value="">Toutes les caméras</option>' + opts;
+  const zonesVues = new Set();
+  cameras.forEach((c) => c.zones?.forEach((z) => zonesVues.add(z)));
+  el("f-zone").innerHTML = '<option value="">Toutes zones</option>'
+    + [...zonesVues].map((z) => `<option value="${ech(z)}">${ech(z)}</option>`).join("");
+}
+
+/* ═══ Frise ═══ */
+
+async function chargerFrise() {
+  const cam = el("frise-camera")?.value || "";
+  const p = new URLSearchParams();
+  if (cam) p.set("camera", cam);
+  if (jourFrise) p.set("day", jourFrise);
+
+  const d = await api(`/api/timeline?${p}`);
+  jourFrise = d.day;
+
+  // N'afficher que les journées ayant produit des alertes : un calendrier
+  // majoritairement vide ne rend service à personne.
+  const jours = d.jours_disponibles.length ? d.jours_disponibles : [d.day];
+  el("frise-jour").innerHTML = jours.map((j) =>
+    `<option value="${j}" ${j === d.day ? "selected" : ""}>${formatJour(j)}</option>`).join("");
+
+  el("frise-heures").innerHTML = [0, 3, 6, 9, 12, 15, 18, 21, 24].map((h) =>
+    `<span style="left:${(h / 24) * 100}%">${String(h).padStart(2, "0")}h</span>`).join("");
+
+  const f = el("frise");
+  if (!d.alertes.length) {
+    f.innerHTML = '<div class="frise-vide">Aucune alerte ce jour-là.</div>';
+    el("frise-detail").textContent = "";
+    return;
+  }
+  f.innerHTML = d.alertes.map((a) => `
+    <button class="marque ${a.severity}${a.false_positive ? " fausse" : ""}"
+            style="left:${a.position * 100}%" data-id="${a.id}"
+            title="${heure(a.timestamp)} — ${ech(a.label)} (${ech(a.camera)})"></button>`).join("");
+
+  f.querySelectorAll(".marque").forEach((m) =>
+    m.addEventListener("click", () => {
+      f.querySelectorAll(".marque").forEach((x) => x.classList.remove("selection"));
+      m.classList.add("selection");
+      const a = d.alertes.find((x) => x.id === Number(m.dataset.id));
+      el("frise-detail").textContent =
+        `${heure(a.timestamp)} — ${a.label} · ${a.camera}${a.zone ? " · " + a.zone : ""}`;
+    }));
+}
+
+function formatJour(iso) {
+  return new Date(`${iso}T12:00:00`)
+    .toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" });
+}
+
+function brancherFrise() {
+  el("frise-jour").addEventListener("change", (e) => { jourFrise = e.target.value; chargerFrise(); });
+  el("frise-camera").addEventListener("change", () => { jourFrise = null; chargerFrise(); });
+}
+
+/* ═══ Fichiers ═══ */
+
+async function chargerFichiers() {
+  try { fichiers = (await api("/api/uploads")).fichiers; } catch { fichiers = []; }
+
+  if (!fichiers.length) {
+    vide("liste-fichiers", "Aucun fichier déposé",
+      "Déposez une vidéo de chantier, de départ de feu ou de quai de chargement : elle sera analysée comme une caméra réelle.");
+    choixFichiers();
+    return;
+  }
+
+  el("liste-fichiers").innerHTML = `
+    <table class="liste">
+      <thead><tr><th>Fichier</th><th style="width:80px">Type</th><th style="width:80px">Taille</th>
+      <th style="width:220px"></th></tr></thead>
+      <tbody>${fichiers.map((f) => `
+        <tr>
+          <td>${ech(f.nom)}<br><span class="msg">${ech(f.source)}</span></td>
+          <td>${f.type}</td>
+          <td class="num">${f.taille_mo} Mo</td>
+          <td><div class="enligne">
+            <button class="bouton" data-use="${ech(f.source)}">Créer une caméra</button>
+            <button class="bouton danger" data-del="${ech(f.nom)}">Supprimer</button>
+          </div></td>
+        </tr>`).join("")}</tbody>
+    </table>`;
+
+  el("liste-fichiers").querySelectorAll("[data-use]").forEach((b) =>
     b.addEventListener("click", () => {
-      goToPage("cameras");
-      openCameraForm();
+      allerA("direct");
+      ouvrirFormCamera();
       el("cam-source").value = b.dataset.use;
-      el("cam-name").value = b.dataset.use.split("/").pop().replace(/\.[^.]+$/, "").slice(0, 40);
+      el("cam-nom").value = b.dataset.use.split("/").pop().replace(/\.[^.]+$/, "").slice(0, 40);
     }));
 
-  el("uploads-list").querySelectorAll("[data-del]").forEach((b) =>
+  el("liste-fichiers").querySelectorAll("[data-del]").forEach((b) =>
     b.addEventListener("click", async () => {
       const ok = await confirmer(`Supprimer « ${b.dataset.del} » ?`,
         "Le fichier est effacé du serveur. Une caméra qui l'utilise doit être supprimée d'abord.",
@@ -441,46 +648,43 @@ async function loadUploads() {
       if (!ok) return;
       try {
         await api(`/api/uploads/${encodeURIComponent(b.dataset.del)}`, { method: "DELETE" });
-        toast("Fichier supprimé", b.dataset.del, "ok");
-        loadUploads();
-      } catch (e) {
-        toast("Suppression impossible", e.message, "error");
-      }
+        avis("Fichier supprimé", b.dataset.del, "ok");
+        chargerFichiers();
+      } catch (e) { avis("Suppression impossible", e.message, "err"); }
     }));
 
-  renderFilePicker();
+  choixFichiers();
 }
 
-function setupUpload() {
-  const zone = el("dropzone");
-  const input = el("file-input");
+function brancherDepot() {
+  const z = el("depot");
+  const entree = el("fichier-entree");
 
-  zone.addEventListener("click", () => input.click());
-  input.addEventListener("change", () => {
-    if (input.files.length) envoyerFichier(input.files[0]);
-    input.value = "";
+  z.addEventListener("click", () => entree.click());
+  entree.addEventListener("change", () => {
+    if (entree.files.length) envoyer(entree.files[0]);
+    entree.value = "";
   });
-
-  ["dragenter", "dragover"].forEach((ev) =>
-    zone.addEventListener(ev, (e) => { e.preventDefault(); zone.classList.add("over"); }));
-  ["dragleave", "drop"].forEach((ev) =>
-    zone.addEventListener(ev, (e) => { e.preventDefault(); zone.classList.remove("over"); }));
-  zone.addEventListener("drop", (e) => {
-    if (e.dataTransfer.files.length) envoyerFichier(e.dataTransfer.files[0]);
+  ["dragenter", "dragover"].forEach((e) =>
+    z.addEventListener(e, (ev) => { ev.preventDefault(); z.classList.add("survol"); }));
+  ["dragleave", "drop"].forEach((e) =>
+    z.addEventListener(e, (ev) => { ev.preventDefault(); z.classList.remove("survol"); }));
+  z.addEventListener("drop", (ev) => {
+    if (ev.dataTransfer.files.length) envoyer(ev.dataTransfer.files[0]);
   });
 }
 
 /* XMLHttpRequest plutôt que fetch : c'est le seul moyen d'afficher une
    progression, et un fichier vidéo peut prendre une minute à monter. */
-function envoyerFichier(fichier) {
-  const status = el("upload-status");
-  const barre = el("upload-progress");
-  const jauge = barre.querySelector("span");
+function envoyer(fichier) {
+  const msg = el("depot-msg");
+  const jauge = el("jauge");
+  const barre = jauge.querySelector("span");
 
-  status.className = "form-status";
-  status.textContent = `Envoi de ${fichier.name}…`;
-  barre.hidden = false;
-  jauge.style.width = "0%";
+  msg.className = "msg";
+  msg.textContent = `Envoi de ${fichier.name}…`;
+  jauge.hidden = false;
+  barre.style.width = "0%";
 
   const form = new FormData();
   form.append("file", fichier);
@@ -488,779 +692,470 @@ function envoyerFichier(fichier) {
   const xhr = new XMLHttpRequest();
   xhr.open("POST", "/api/uploads");
   xhr.upload.addEventListener("progress", (e) => {
-    if (e.lengthComputable) jauge.style.width = `${(e.loaded / e.total) * 100}%`;
+    if (e.lengthComputable) barre.style.width = `${(e.loaded / e.total) * 100}%`;
   });
   xhr.addEventListener("load", () => {
-    barre.hidden = true;
-    let reponse = {};
-    try { reponse = JSON.parse(xhr.responseText); } catch { /* réponse illisible */ }
-
+    jauge.hidden = true;
+    let r = {};
+    try { r = JSON.parse(xhr.responseText); } catch { /* réponse illisible */ }
     if (xhr.status === 200) {
-      const a = reponse.apercu || {};
-      status.className = "form-status ok";
-      status.textContent = `${reponse.nom} — ${reponse.taille_mo} Mo`
-        + (a.width ? `, ${a.width}×${a.height}` : "");
-      toast("Fichier importé", "Il est utilisable comme source de caméra.", "ok");
-      loadUploads();
+      const a = r.apercu || {};
+      msg.className = "msg ok";
+      msg.textContent = `${r.nom} — ${r.taille_mo} Mo` + (a.width ? `, ${a.width}×${a.height}` : "");
+      avis("Fichier importé", "Utilisable comme source de caméra.", "ok");
+      chargerFichiers();
     } else {
-      status.className = "form-status error";
-      status.textContent = reponse.detail || `Échec (${xhr.status})`;
-      toast("Import refusé", status.textContent, "error");
+      msg.className = "msg err";
+      msg.textContent = r.detail || `Échec (${xhr.status})`;
+      avis("Import refusé", msg.textContent, "err");
     }
   });
   xhr.addEventListener("error", () => {
-    barre.hidden = true;
-    status.className = "form-status error";
-    status.textContent = "Connexion interrompue pendant l'envoi.";
+    jauge.hidden = true;
+    msg.className = "msg err";
+    msg.textContent = "Connexion interrompue pendant l'envoi.";
   });
   xhr.send(form);
 }
 
-/* ═══ Tableau de bord ═══ */
+/* ═══ Analyse ═══ */
 
-async function loadDashboard() {
-  const [summary, timeline, alerts, quality] = await Promise.all([
+async function chargerAnalyse() {
+  const [resume, frise, qualite, usages] = await Promise.all([
     api("/api/stats/summary"), api("/api/stats/timeline?hours=24"),
-    api("/api/alerts?limit=6"), api("/api/stats/quality?days=30"),
+    api("/api/stats/quality?days=30"), api("/api/usecases"),
   ]);
 
-  el("kpi-24h").textContent = summary.total_24h;
-  el("kpi-crit").textContent = summary.critiques_24h;
-  el("kpi-unack").textContent = summary.non_acquittees;
-  el("top-unack").textContent = summary.non_acquittees;
-  el("unack-badge").textContent = summary.non_acquittees || "";
+  const mtta = qualite.delai_prise_en_charge_s;
+  const parCam = Object.values(qualite.par_camera || {});
+  const pire = parCam.length ? Math.max(...parCam.map((c) => c.fausses_par_jour)) : null;
 
-  const mtta = quality.delai_prise_en_charge_s;
-  el("kpi-mtta").textContent = mtta == null ? "–" : mtta < 90 ? `${mtta} s` : `${Math.round(mtta / 60)} min`;
+  el("indicateurs").innerHTML = `<tbody>
+    ${indic("Alertes 24 h", resume.total_24h)}
+    ${indic("Critiques 24 h", resume.critiques_24h, resume.critiques_24h > 0)}
+    ${indic("À traiter", resume.non_acquittees, resume.non_acquittees > 0)}
+    ${indic("Alertes 7 jours", resume.total_7d)}
+    ${indic("Délai moyen de prise en charge",
+    mtta == null ? "–" : mtta < 90 ? `${mtta} s` : `${Math.round(mtta / 60)} min`)}
+    ${indic("Fausses alertes / jour / caméra (pire)",
+      pire == null ? "–" : pire.toFixed(1), pire > 2)}
+  </tbody>`;
 
-  const parCam = Object.values(quality.par_camera || {});
-  const pire = parCam.length ? Math.max(...parCam.map((c) => c.fausses_par_jour)) : 0;
-  el("kpi-false").textContent = parCam.length ? pire.toFixed(1) : "–";
-  el("kpi-false").parentElement.classList.toggle("kpi-crit", pire > 2);
+  const max = Math.max(1, ...frise.map((t) => t.total));
+  el("histo-24h").innerHTML = frise.map((t) => `
+    <div class="colonne" title="${t.heure} — ${t.total} alerte(s), ${t.critique} critique(s)">
+      <div class="barre ${t.critique ? "crit" : ""}" style="height:${(t.total / max) * 100}%"></div>
+      <div class="colonne-lab">${t.heure}</div>
+    </div>`).join("");
 
-  renderTimelineChart(timeline);
-  renderBars("model-bars", summary.par_modele_7j, modelName);
-  renderBars("zone-bars", summary.par_zone_7j, (k) => k || "plein cadre");
-  renderQuality(quality);
+  rangs("rangs-modele", resume.par_modele_7j, nomModele);
+  rangs("rangs-zone", resume.par_zone_7j, (k) => k || "plein cadre");
+  fiabilite(qualite);
+  faussesParCamera(qualite);
 
-  const box = el("dash-alerts");
-  if (!alerts.items.length) {
-    vide("dash-alerts", "✓", "Aucune alerte", "Rien à signaler sur la période.");
-  } else {
-    box.innerHTML = "";
-    box.className = "alerts-table";
-    alerts.items.forEach((a) => box.appendChild(alertRow(a, false)));
-  }
+  const etats = { operationnel: "Opérationnel", partiel: "Partiel", a_entrainer: "À entraîner" };
+  el("cas-usage").innerHTML = `
+    <thead><tr><th style="width:34px">#</th><th>Cas d'usage</th><th>Modèle</th>
+    <th style="width:100px">État</th><th style="width:120px">Détection</th></tr></thead>
+    <tbody>${usages.usecases.map((u) => `
+      <tr>
+        <td class="num">${String(u.num).padStart(2, "0")}</td>
+        <td>${ech(u.titre)}${u.note ? `<br><span class="msg">${ech(u.note)}</span>` : ""}</td>
+        <td>${u.model ? nomModele(u.model) : "—"}</td>
+        <td><span class="grav ${u.etat === "operationnel" ? "moyenne" : u.etat === "partiel" ? "haute" : "critique"}">${etats[u.etat]}</span></td>
+        <td class="msg">${u.detect ? "active" : "inactive"}</td>
+      </tr>`).join("")}</tbody>`;
 }
 
-function renderTimelineChart(timeline) {
-  const max = Math.max(1, ...timeline.map((t) => t.total));
-  el("timeline-chart").innerHTML = timeline.map((t) => `
-    <div class="bar-col" title="${t.heure} — ${t.total} alerte(s), ${t.critique} critique(s)">
-      <div class="bar ${t.critique ? "crit" : ""}" style="height:${(t.total / max) * 100}%"></div>
-      <div class="bar-label">${t.heure}</div>
+function indic(nom, valeur, alarme = false) {
+  return `<tr><td>${nom}</td><td class="num" style="text-align:right${alarme ? ";color:var(--crit)" : ""}">${valeur}</td></tr>`;
+}
+
+function rangs(cible, data, libelle) {
+  const e = Object.entries(data || {}).sort((a, b) => b[1] - a[1]);
+  if (!e.length) { el(cible).innerHTML = '<p class="msg">Aucune donnée.</p>'; return; }
+  const max = Math.max(...e.map(([, v]) => v));
+  el(cible).innerHTML = e.map(([k, v]) => `
+    <div class="rang">
+      <div class="rang-nom">${ech(libelle(k))}</div>
+      <div class="rang-piste"><div class="rang-part" style="width:${(v / max) * 100}%"></div></div>
+      <div class="rang-val">${v}</div>
     </div>`).join("");
 }
 
-function renderBars(cible, data, libelle) {
-  const entrees = Object.entries(data || {}).sort((a, b) => b[1] - a[1]);
-  if (!entrees.length) { el(cible).innerHTML = '<p class="muted">Aucune donnée.</p>'; return; }
-  const max = Math.max(...entrees.map(([, v]) => v));
-  el(cible).innerHTML = entrees.map(([k, v]) => `
-    <div class="hbar-row">
-      <div class="hbar-name">${esc(libelle(k))}</div>
-      <div class="hbar-track"><div class="hbar-fill" style="width:${(v / max) * 100}%"></div></div>
-      <div class="hbar-val">${v}</div>
-    </div>`).join("");
-}
-
-function renderQuality(quality) {
-  const entrees = Object.entries(quality.par_modele || {});
-  if (!entrees.length) {
-    el("quality-bars").innerHTML =
-      `<p class="muted">Aucune alerte marquée pour l'instant. Le bouton « Fausse alerte »
-       alimente cet indicateur — c'est ce qui permet de savoir quel modèle corriger.</p>`;
+function fiabilite(q) {
+  const e = Object.entries(q.par_modele || {});
+  if (!e.length) {
+    el("rangs-fiabilite").innerHTML =
+      `<p class="msg">Aucune alerte marquée. Le bouton « Fausse » alimente cet indicateur —
+       c'est lui qui désigne le modèle à corriger.</p>`;
     return;
   }
-  el("quality-bars").innerHTML = entrees
-    .sort((a, b) => b[1].taux_faux - a[1].taux_faux)
-    .map(([modele, s]) => {
+  el("rangs-fiabilite").innerHTML = e.sort((a, b) => b[1].taux_faux - a[1].taux_faux)
+    .map(([m, s]) => {
       const pct = Math.round(s.taux_faux * 100);
-      const cls = pct >= 40 ? "bad" : pct >= 15 ? "warn" : "good";
-      return `
-        <div class="hbar-row">
-          <div class="hbar-name">${modelName(modele)}</div>
-          <div class="hbar-track"><div class="hbar-fill ${cls}" style="width:${pct}%"></div></div>
-          <div class="hbar-val">${pct}% <span class="muted">${s.fausses}/${s.alertes}</span></div>
-        </div>`;
+      const cls = pct >= 40 ? "mauvais" : pct >= 15 ? "moyen" : "bon";
+      return `<div class="rang">
+        <div class="rang-nom">${nomModele(m)}</div>
+        <div class="rang-piste"><div class="rang-part ${cls}" style="width:${pct}%"></div></div>
+        <div class="rang-val">${pct}% · ${s.fausses}/${s.alertes}</div>
+      </div>`;
     }).join("");
 }
 
-/* ═══ Alertes ═══ */
-
-function alertFilters() {
-  const params = new URLSearchParams();
-  const champs = {
-    model: "filter-model", camera: "filter-camera", zone: "filter-zone",
-    severity: "filter-severity", acknowledged: "filter-ack",
-    false_positive: "filter-false", since_hours: "filter-period",
-  };
-  for (const [cle, id] of Object.entries(champs)) {
-    const v = el(id)?.value;
-    if (v) params.set(cle, v);
-  }
-  const label = el("filter-label")?.value.trim();
-  if (label) params.set("label", label);
-  const plaque = el("filter-plaque")?.value.trim();
-  if (plaque) params.set("plaque", plaque);
-  const poste = el("filter-hours")?.value;
-  if (poste) {
-    const [de, a] = poste.split("-");
-    params.set("hour_from", de);
-    params.set("hour_to", a);
-  }
-  return params;
-}
-
-async function loadAlertsTable() {
-  squelette("alerts-table", 4);
-  const params = alertFilters();
-  params.set("limit", PAGE_SIZE);
-  params.set("offset", alertsPage * PAGE_SIZE);
-
-  const data = await api(`/api/alerts?${params}`);
-  const table = el("alerts-table");
-
-  if (!data.items.length) {
-    vide("alerts-table", "🔍", "Aucune alerte",
-      "Aucun événement ne correspond à ces critères. Élargissez la période ou retirez un filtre.");
-  } else {
-    table.innerHTML = "";
-    data.items.forEach((a) => table.appendChild(alertRow(a, true)));
-  }
-  renderPager(data);
-}
-
-function renderPager(data) {
-  const pages = Math.ceil(data.total / PAGE_SIZE);
-  const pager = el("alerts-pager");
-  if (pages <= 1) {
-    pager.innerHTML = `<span>${data.total} alerte(s)</span>`;
-    return;
-  }
-  pager.innerHTML = `
-    <button class="btn ghost small" ${alertsPage === 0 ? "disabled" : ""} id="prev-page">← Précédent</button>
-    <span>Page ${alertsPage + 1} sur ${pages} — ${data.total} alerte(s)</span>
-    <button class="btn ghost small" ${alertsPage + 1 >= pages ? "disabled" : ""} id="next-page">Suivant →</button>`;
-  el("prev-page")?.addEventListener("click", () => { alertsPage--; loadAlertsTable(); });
-  el("next-page")?.addEventListener("click", () => { alertsPage++; loadAlertsTable(); });
-}
-
-function alertRow(a, avecActions) {
-  const row = document.createElement("div");
-  row.className = `alert-row sev-${a.severity}${a.false_positive ? " is-false" : ""}`;
-
-  const vignette = a.snapshot
-    ? `<img class="alert-thumb" src="/api/snapshot?path=${encodeURIComponent(a.snapshot)}"
-            alt="" onerror="this.style.opacity=0.15" />`
-    : '<div class="alert-thumb"></div>';
-
-  const clip = a.clip
-    ? `<a class="clip-link" href="/api/clip?path=${encodeURIComponent(a.clip)}" target="_blank">🎬 clip</a>`
-    : "";
-  const zone = a.zone ? `<span class="chip zone">◫ ${esc(a.zone)}</span>` : "";
-  const plaque = a.plaque ? `<span class="chip accent">▭ ${esc(a.plaque)}</span>` : "";
-  const faux = a.false_positive ? '<span class="tag-false">fausse</span>' : "";
-
-  let actions = "";
-  if (avecActions) {
-    actions = a.acknowledged
-      ? `<button class="btn ghost small" disabled>✓ ${esc(a.ack_by || "traitée")}</button>`
-      : `<button class="btn small" data-ack="${a.id}">Prendre en charge</button>`;
-    actions += a.false_positive
-      ? `<button class="btn ghost small" data-true="${a.id}" title="Revenir sur ce jugement">↩</button>`
-      : `<button class="btn ghost small" data-false="${a.id}"
-                 title="Le système s'est trompé — sert aussi à corriger le modèle">✗ Fausse</button>`;
-  }
-
-  row.innerHTML = `
-    ${vignette}
-    <div class="alert-main">
-      <div class="alert-l1">${esc(a.label)} ${faux}</div>
-      <div class="alert-l2">
-        <span>${esc(a.camera)}</span>${zone}${plaque}
-        <span>${modelName(a.model)}</span>${clip}
-      </div>
-    </div>
-    <div><span class="sev ${a.severity}">${a.severity}</span></div>
-    <div class="alert-conf">${a.confidence.toFixed(2)}</div>
-    <div class="alert-time">${fmtTime(a.timestamp)}</div>
-    <div class="alert-actions">${actions}</div>`;
-
-  row.querySelector(".alert-thumb")?.addEventListener("click", () => {
-    if (a.snapshot) window.open(`/api/snapshot?path=${encodeURIComponent(a.snapshot)}`, "_blank");
-  });
-  row.querySelector("[data-ack]")?.addEventListener("click", (e) => ackAlert(a.id, e.target));
-  row.querySelector("[data-false]")?.addEventListener("click", () => flagAlert(a.id, true));
-  row.querySelector("[data-true]")?.addEventListener("click", () => flagAlert(a.id, false));
-  return row;
-}
-
-async function ackAlert(id, btn) {
-  btn.disabled = true;
-  btn.textContent = "…";
-  await api(`/api/alerts/${id}/ack`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ operator: OPERATOR }),
-  });
-  loadAlertsTable();
-}
-
-async function flagAlert(id, estFausse) {
-  await api(`/api/alerts/${id}/false`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ is_false: estFausse, operator: OPERATOR }),
-  });
-  if (estFausse) {
-    toast("Marquée comme fausse alerte",
-      "L'image rejoint le jeu de données qui servira à corriger le modèle.", "ok");
-  }
-  loadAlertsTable();
-}
-
-/* ═══ Frise chronologique ═══ */
-
-async function loadTimeline() {
-  const camera = el("timeline-camera")?.value || "";
-  const params = new URLSearchParams();
-  if (camera) params.set("camera", camera);
-  if (timelineDay) params.set("day", timelineDay);
-
-  const data = await api(`/api/timeline?${params}`);
-  timelineDay = data.day;
-
-  // N'afficher que les journées ayant produit des alertes : un calendrier
-  // majoritairement vide ne rend service à personne.
-  const jours = data.jours_disponibles.length ? data.jours_disponibles : [data.day];
-  el("timeline-day").innerHTML = jours
-    .map((j) => `<option value="${j}" ${j === data.day ? "selected" : ""}>${formatJour(j)}</option>`)
-    .join("");
-
-  renderTimelineTrack(data.alertes);
-}
-
-function formatJour(iso) {
-  return new Date(`${iso}T12:00:00`)
-    .toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "long" });
-}
-
-function renderTimelineTrack(alertes) {
-  el("timeline-hours").innerHTML = [0, 3, 6, 9, 12, 15, 18, 21, 24]
-    .map((h) => `<span style="left:${(h / 24) * 100}%">${String(h).padStart(2, "0")}h</span>`).join("");
-
-  const track = el("timeline-track");
-  if (!alertes.length) {
-    track.innerHTML = '<div class="timeline-empty">Aucune alerte ce jour-là.</div>';
-    el("timeline-detail").innerHTML = "";
-    return;
-  }
-
-  track.innerHTML = alertes.map((a) => `
-    <button class="timeline-mark ${a.severity}${a.false_positive ? " is-false" : ""}"
-            style="left:${a.position * 100}%" data-id="${a.id}"
-            title="${new Date(a.timestamp).toLocaleTimeString("fr-FR")} — ${esc(a.label)} (${esc(a.camera)})"></button>
-  `).join("");
-
-  track.querySelectorAll(".timeline-mark").forEach((mark) => {
-    mark.addEventListener("click", () => {
-      track.querySelectorAll(".timeline-mark").forEach((m) => m.classList.remove("selected"));
-      mark.classList.add("selected");
-      showTimelineDetail(alertes.find((a) => a.id === Number(mark.dataset.id)));
-    });
-  });
-}
-
-function showTimelineDetail(a) {
-  if (!a) return;
-  const heure = new Date(a.timestamp).toLocaleTimeString("fr-FR");
-  const image = a.snapshot
-    ? `<img src="/api/snapshot?path=${encodeURIComponent(a.snapshot)}" alt="" onerror="this.remove()" />`
-    : "";
-  const clip = a.clip
-    ? `<a class="clip-link" href="/api/clip?path=${encodeURIComponent(a.clip)}" target="_blank">🎬 clip vidéo</a>`
-    : '<span class="muted">pas de clip</span>';
-  const etat = a.false_positive ? '<span class="tag-false">fausse alerte</span>'
-    : a.acknowledged ? `<span class="muted">traitée par ${esc(a.ack_by || "—")}</span>`
-      : '<span class="muted">à traiter</span>';
-
-  el("timeline-detail").innerHTML = `
-    ${image}
-    <div>
-      <div class="alert-l1">${heure} — ${esc(a.label)} <span class="sev ${a.severity}">${a.severity}</span></div>
-      <div class="alert-l2"><span>${esc(a.camera)}</span>
-        ${a.zone ? `<span class="chip zone">◫ ${esc(a.zone)}</span>` : ""}
-        <span>${modelName(a.model)}</span></div>
-      <div class="alert-l2">${clip} · ${etat}</div>
+function faussesParCamera(q) {
+  const e = Object.entries(q.par_camera || {});
+  if (!e.length) { el("rangs-fausses").innerHTML = '<p class="msg">Aucune donnée.</p>'; return; }
+  el("rangs-fausses").innerHTML = e.map(([c, s]) => {
+    const trop = s.fausses_par_jour > 2;
+    return `<div class="rang">
+      <div class="rang-nom">${ech(c)}</div>
+      <div class="rang-piste"><div class="rang-part ${trop ? "mauvais" : "bon"}"
+           style="width:${Math.min(100, (s.fausses_par_jour / 4) * 100)}%"></div></div>
+      <div class="rang-val">${s.fausses_par_jour}/j</div>
     </div>`;
-}
-
-function setupTimeline() {
-  el("timeline-day").addEventListener("change", (e) => { timelineDay = e.target.value; loadTimeline(); });
-  el("timeline-camera").addEventListener("change", () => { timelineDay = null; loadTimeline(); });
-}
-
-/* ═══ Cas d'usage ═══ */
-
-async function loadUseCases() {
-  const data = await api("/api/usecases");
-  const etats = { operationnel: "Opérationnel", partiel: "Partiel", a_entrainer: "À entraîner" };
-  el("usecases-table").innerHTML = data.usecases.map((uc) => `
-    <div class="uc-row">
-      <div class="uc-num">${String(uc.num).padStart(2, "0")}</div>
-      <div>
-        <div class="uc-title"><span class="uc-dot ${uc.etat}"></span>${esc(uc.titre)}</div>
-        <div class="muted" style="font-size:12px">
-          ${uc.model ? modelName(uc.model) : "aucun modèle"} · ${esc(uc.classes.join(", "))}
-        </div>
-        ${uc.note ? `<div class="uc-note">${esc(uc.note)}</div>` : ""}
-      </div>
-      <div class="uc-state">${etats[uc.etat]}</div>
-      <div class="uc-live">${uc.detect ? "détection active" : "détection inactive"}</div>
-    </div>`).join("");
-}
-
-/* ═══ Rapports ═══ */
-
-async function loadReports() {
-  const [summary, quality] = await Promise.all([
-    api("/api/stats/summary"), api("/api/stats/quality?days=30"),
-  ]);
-  renderBars("severity-bars", summary.par_severite_7j, (k) => k);
-
-  const entrees = Object.entries(quality.par_camera || {});
-  if (!entrees.length) {
-    el("false-by-camera").innerHTML = '<p class="muted">Aucune donnée.</p>';
-    return;
-  }
-  el("false-by-camera").innerHTML = entrees.map(([cam, s]) => {
-    const depasse = s.fausses_par_jour > 2;
-    return `
-      <div class="hbar-row">
-        <div class="hbar-name">${esc(cam)}</div>
-        <div class="hbar-track">
-          <div class="hbar-fill ${depasse ? "bad" : "good"}"
-               style="width:${Math.min(100, (s.fausses_par_jour / 4) * 100)}%"></div>
-        </div>
-        <div class="hbar-val">${s.fausses_par_jour}/j</div>
-      </div>`;
   }).join("");
 }
 
 /* ═══ Système ═══ */
 
-async function loadSystem() {
-  const h = await api("/api/health");
+async function chargerSysteme() {
+  const [h, rapp] = await Promise.all([
+    api("/api/health"),
+    api("/api/handoffs").catch(() => ({ correspondances: [] })),
+  ]);
   const m = h.machine || {};
-  const kpi = (valeur, libelle, alerte = false) =>
-    `<div class="kpi ${alerte ? "kpi-crit" : ""}">
-       <div class="kpi-value">${valeur}</div><div class="kpi-label">${libelle}</div></div>`;
 
-  el("system-kpis").innerHTML = [
-    kpi(h.pipeline.running ? "Actif" : "Arrêté", "Pipeline de détection", !h.pipeline.running),
-    kpi(`${h.cameras_actives}/${h.cameras_configurees}`, "Caméras actives"),
-    kpi(m.cpu_percent != null ? `${m.cpu_percent}%` : "–", "Processeur", (m.cpu_percent ?? 0) > 90),
-    kpi(m.memory_percent != null ? `${m.memory_percent}%` : "–", "Mémoire", (m.memory_percent ?? 0) > 90),
-    kpi(m.disk_free_gb != null ? `${m.disk_free_gb} Go` : "–", "Disque libre", (m.disk_free_gb ?? 99) < 5),
-  ].join("");
+  el("systeme-machine").innerHTML = `<tbody>
+    ${indic("Pipeline de détection", h.pipeline.running ? "actif" : "arrêté", !h.pipeline.running)}
+    ${indic("Caméras actives", `${h.cameras_actives} / ${h.cameras_configurees}`)}
+    ${indic("Processeur", m.cpu_percent != null ? `${m.cpu_percent} %` : "–", (m.cpu_percent ?? 0) > 90)}
+    ${indic("Mémoire", m.memory_percent != null ? `${m.memory_percent} %` : "–", (m.memory_percent ?? 0) > 90)}
+    ${indic("Disque libre", m.disk_free_gb != null ? `${m.disk_free_gb} Go` : "–", (m.disk_free_gb ?? 99) < 5)}
+  </tbody>`;
 
   const lignes = Object.entries(h.cameras || {});
-  if (!lignes.length) {
-    vide("system-cameras", "◉", "Aucun état publié",
-      "Le pipeline n'a encore rien signalé. S'il devrait tourner, vérifiez le service de détection.");
-    return;
-  }
-  el("system-cameras").innerHTML = lignes.map(([nom, c]) => `
-    <div class="sys-row">
-      <div class="sys-name">${esc(nom)}</div>
-      <div><span class="state-tag ${(c.state || "").replace(/\s/g, "-")}">${esc(c.state || "inconnu")}</span></div>
-      <div class="muted">
-        ${c.cycle_ms ? `${c.cycle_ms} ms/cycle` : ""}
-        ${c.modeles_actifs != null ? ` · ${c.modeles_actifs} modèles` : ""}
-        ${c.objets_suivis != null ? ` · ${c.objets_suivis} objet(s) suivi(s)` : ""}
-      </div>
-      <div class="muted">${esc(c.error || "")}</div>
-    </div>`).join("");
+  el("systeme-cameras").innerHTML = lignes.length ? `
+    <thead><tr><th>Caméra</th><th style="width:110px">État</th><th style="width:90px">Cycle</th>
+    <th style="width:90px">Modèles</th><th style="width:90px">Objets</th><th>Erreur</th></tr></thead>
+    <tbody>${lignes.map(([n, c]) => `
+      <tr>
+        <td>${ech(n)}</td>
+        <td><span class="grav ${c.state === "en ligne" ? "moyenne" : "critique"}">${ech(c.state || "inconnu")}</span></td>
+        <td class="num">${c.cycle_ms ? c.cycle_ms + " ms" : "–"}</td>
+        <td class="num">${c.modeles_actifs ?? "–"}</td>
+        <td class="num">${c.objets_suivis ?? "–"}</td>
+        <td class="msg">${ech(c.error || "")}</td>
+      </tr>`).join("")}</tbody>`
+    : '<tbody><tr><td class="msg">Le pipeline n\'a publié aucun état.</td></tr></tbody>';
+
+  const corr = rapp.correspondances || [];
+  el("systeme-rapprochements").innerHTML = corr.length ? `
+    <thead><tr><th style="width:80px">Heure</th><th>Trajet</th><th style="width:110px">Classe</th>
+    <th style="width:100px">Plaque</th><th style="width:170px">Fiabilité</th></tr></thead>
+    <tbody>${corr.map((c) => `
+      <tr>
+        <td class="num">${new Date(c.horodatage * 1000).toLocaleTimeString("fr-FR")}</td>
+        <td>${ech(c.de)} → ${ech(c.vers)}</td>
+        <td>${ech(c.classe)}</td>
+        <td class="num">${ech(c.plaque || "–")}</td>
+        <td>${c.certain ? '<span class="etiq plaque">plaque — certain</span>'
+      : `<span class="etiq">apparence — ${c.score}</span>`}</td>
+      </tr>`).join("")}</tbody>`
+    : '<tbody><tr><td class="msg">Aucun rapprochement. Il faut au moins deux caméras avec suivi.</td></tr></tbody>';
 }
 
-async function loadHandoffs() {
-  let data;
+/* ═══ Barre d'état ═══ */
+
+async function majBarreEtat() {
   try {
-    data = await api("/api/handoffs");
-  } catch {
-    return;
-  }
-
-  if (!data.correspondances.length) {
-    vide("handoffs-list", "⇄", "Aucun rapprochement",
-      "Aucun objet n'a encore été retrouvé d'une caméra à l'autre. Cela demande au moins deux caméras avec le suivi activé.");
-    return;
-  }
-
-  el("handoffs-list").innerHTML = data.correspondances.map((c) => {
-    const heure = new Date(c.horodatage * 1000).toLocaleTimeString("fr-FR");
-    const certitude = c.certain
-      ? '<span class="chip accent">plaque — certain</span>'
-      : `<span class="chip">apparence — probable (${c.score})</span>`;
-    return `
-      <div class="file-row">
-        <div class="file-icon">⇄</div>
-        <div class="file-main">
-          <div class="file-name">${esc(c.de)} → ${esc(c.vers)}</div>
-          <div class="file-sub">${heure} · ${esc(c.classe)}${c.plaque ? ` · ${esc(c.plaque)}` : ""}</div>
-        </div>
-        ${certitude}
-      </div>`;
-  }).join("");
-}
-
-async function refreshPipelineState() {
-  try {
-    const h = await api("/api/health");
+    const [h, resume] = await Promise.all([api("/api/health"), api("/api/stats/summary")]);
     const actif = h.pipeline.running;
-    el("pipeline-dot").className = `status-dot ${actif ? "" : "down"}`;
-    el("pipeline-state").textContent = actif ? "Détection active" : "Détection arrêtée";
-    el("system-badge").textContent = actif ? "" : "!";
+    el("etat-pastille").className = `pastille ${actif ? "en-ligne" : "hors-ligne"}`;
+    el("etat-pipeline").textContent = actif ? "Détection active" : "Détection arrêtée";
+
+    const enLigne = cameras.filter((c) => c.online).length;
+    el("etat-cameras").textContent = `${enLigne}/${cameras.length}`;
+
+    const cycles = Object.values(h.cameras || {}).map((c) => c.cycle_ms).filter(Boolean);
+    el("etat-cycle").textContent = cycles.length
+      ? `${Math.round(cycles.reduce((a, b) => a + b, 0) / cycles.length)} ms` : "–";
+
+    el("etat-atraiter").textContent = resume.non_acquittees;
+    el("badge-alertes").textContent = resume.non_acquittees || "";
+
+    const m = h.machine || {};
+    el("etat-cpu").textContent = m.cpu_percent != null ? `${m.cpu_percent}%` : "–";
+    el("etat-mem").textContent = m.memory_percent != null ? `${m.memory_percent}%` : "–";
+    el("etat-disque").textContent = m.disk_free_gb != null ? `${m.disk_free_gb} Go` : "–";
   } catch {
-    el("pipeline-state").textContent = "Interface injoignable";
-    el("pipeline-dot").className = "status-dot down";
+    el("etat-pipeline").textContent = "Interface injoignable";
+    el("etat-pastille").className = "pastille hors-ligne";
   }
 }
 
 /* ═══ Alertes critiques en direct ═══ */
 
-async function watchCriticalAlerts() {
-  let data;
-  try {
-    data = await api("/api/alerts?limit=1&severity=critique&since_hours=1");
-  } catch { return; }
+async function guetter() {
+  let d;
+  try { d = await api("/api/alerts?limit=1&severity=critique&since_hours=1"); } catch { return; }
+  const a = d.items[0];
+  if (!a) return;
+  if (derniereCritique === null) { derniereCritique = a.id; return; }
+  if (a.id === derniereCritique) return;
+  derniereCritique = a.id;
 
-  const derniere = data.items[0];
-  if (!derniere) return;
-  if (lastCriticalId === null) { lastCriticalId = derniere.id; return; }
-  if (derniere.id === lastCriticalId) return;
-  lastCriticalId = derniere.id;
+  avis(`${a.label} — ${a.camera}`, a.zone ? `Zone ${a.zone}` : "", "critique");
 
-  toast(`${derniere.label} — ${derniere.camera}`,
-    derniere.zone ? `Zone ${derniere.zone}` : "", "critique");
-
-  if (el("auto-focus")?.checked) {
-    document.querySelectorAll(".camera-tile").forEach((t) => t.classList.remove("alerting"));
-    const tuile = el(`tile-${derniere.camera}`);
-    tuile?.classList.add("alerting");
-    tuile?.scrollIntoView({ behavior: "smooth", block: "center" });
+  if (el("suivi-alertes")?.checked) {
+    document.querySelectorAll(".tuile").forEach((t) => t.classList.remove("alerte"));
+    const t = el(`tuile-${a.camera}`);
+    t?.classList.add("alerte");
+    t?.scrollIntoView({ behavior: "smooth", block: "center" });
   }
 }
 
-/* ═══ Paramètres ═══ */
+/* ═══ Réglages ═══ */
 
-async function loadSettings() {
-  const settings = await api("/api/settings");
-  el("controls-list").innerHTML = "";
-  for (const [modele, valeurs] of Object.entries(settings)) {
-    const row = document.createElement("div");
-    row.className = "control-row";
-    row.innerHTML = `<div class="control-name">${modelName(modele)}</div>`;
-    row.appendChild(makeToggle(modele, "detect", valeurs.detect, "Détection"));
-    row.appendChild(makeToggle(modele, "alert", valeurs.alert, "Alertes"));
-    el("controls-list").appendChild(row);
+async function chargerReglages() {
+  const s = await api("/api/settings");
+  el("liste-reglages").innerHTML = "";
+  for (const [m, v] of Object.entries(s)) {
+    const l = document.createElement("div");
+    l.className = "ligne-reglage";
+    l.innerHTML = `<div>${nomModele(m)}</div>`;
+    l.appendChild(interrupteur(m, "detect", v.detect, "Détection"));
+    l.appendChild(interrupteur(m, "alert", v.alert, "Alertes"));
+    el("liste-reglages").appendChild(l);
   }
 }
 
-function makeToggle(modele, cle, valeur, texte) {
-  const label = document.createElement("label");
-  label.className = "switch";
-  label.innerHTML = `<input type="checkbox" ${valeur ? "checked" : ""} />
-                     <span class="slider"></span><span class="switch-text">${texte}</span>`;
-  label.querySelector("input").addEventListener("change", async (e) => {
+function interrupteur(modele, cle, valeur, texte) {
+  const l = document.createElement("label");
+  l.className = "inter";
+  l.innerHTML = `<input type="checkbox" ${valeur ? "checked" : ""} /><span class="rail"></span><span>${texte}</span>`;
+  l.querySelector("input").addEventListener("change", async (e) => {
     try {
       await api(`/api/settings/${modele}/${cle}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ value: e.target.checked }),
       });
     } catch (err) {
       e.target.checked = !e.target.checked;
-      toast("Réglage non appliqué", err.message, "error");
+      avis("Réglage non appliqué", err.message, "err");
     }
   });
-  return label;
+  return l;
 }
 
-/* ═══ Éditeur de zones ═══ */
+/* ═══ Zones ═══ */
 
-const zoneEditor = { camera: null, zones: [], draft: [] };
+const zones = { camera: null, liste: [], trace: [] };
 
-async function loadZonesPage() {
-  const select = el("zone-camera");
-  select.innerHTML = cameraNames.map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join("");
-  if (!select.dataset.bound) {
-    select.addEventListener("change", () => selectZoneCamera(select.value));
-    select.dataset.bound = "1";
+async function chargerZones() {
+  const s = el("zone-camera");
+  s.innerHTML = noms.map((n) => `<option value="${ech(n)}">${ech(n)}</option>`).join("");
+  if (!s.dataset.pret) {
+    s.addEventListener("change", () => choisirCameraZone(s.value));
+    s.dataset.pret = "1";
   }
-
-  const models = el("zone-models");
-  if (!models.children.length) {
-    models.innerHTML = Object.entries(MODEL_LABELS)
-      .filter(([k]) => k !== "systeme")
-      .map(([k, v]) => `<label><input type="checkbox" value="${k}" /> <span>${v}</span></label>`)
-      .join("");
+  const cases = el("zone-modeles");
+  if (!cases.children.length) {
+    cases.innerHTML = Object.entries(MODELES).filter(([k]) => k !== "systeme")
+      .map(([k, v]) => `<label><input type="checkbox" value="${k}" /> ${v}</label>`).join("");
   }
-  await selectZoneCamera(zoneEditor.camera || select.value || cameraNames[0]);
+  await choisirCameraZone(zones.camera || s.value || noms[0]);
 }
 
-async function selectZoneCamera(camera) {
-  if (!camera) return;
-  zoneEditor.camera = camera;
-  zoneEditor.draft = [];
-  el("zone-camera").value = camera;
-  el("zone-frame").src = `/video/${encodeURIComponent(camera)}.jpg?t=${Date.now()}`;
-  const data = await api(`/api/zones/${encodeURIComponent(camera)}`);
-  zoneEditor.zones = data.zones || [];
-  renderZoneList();
-  drawZones();
+async function choisirCameraZone(cam) {
+  if (!cam) return;
+  zones.camera = cam;
+  zones.trace = [];
+  el("zone-camera").value = cam;
+  el("zone-image").src = `/video/${encodeURIComponent(cam)}.jpg?t=${Date.now()}`;
+  zones.liste = (await api(`/api/zones/${encodeURIComponent(cam)}`)).zones || [];
+  listerZones();
+  dessinerZones();
 }
 
-function syncCanvasSize() {
-  const img = el("zone-frame");
-  const canvas = el("zone-canvas");
+function tailleToile() {
+  const img = el("zone-image");
+  const c = el("zone-canvas");
   if (!img.clientWidth) return false;
-  canvas.width = img.clientWidth;
-  canvas.height = img.clientHeight;
+  c.width = img.clientWidth;
+  c.height = img.clientHeight;
   return true;
 }
 
-function drawZones() {
-  const canvas = el("zone-canvas");
-  if (!syncCanvasSize()) return;
-  const ctx = canvas.getContext("2d");
-  const { width: w, height: h } = canvas;
-  ctx.clearRect(0, 0, w, h);
+function dessinerZones() {
+  const c = el("zone-canvas");
+  if (!tailleToile()) return;
+  const ctx = c.getContext("2d");
+  ctx.clearRect(0, 0, c.width, c.height);
 
-  for (const zone of zoneEditor.zones) {
-    const exclusion = zone.type === "exclusion";
-    drawPolygon(ctx, zone.polygon, w, h,
-      exclusion ? "rgba(240,68,56,0.95)" : "rgba(247,144,9,0.95)",
-      exclusion ? "rgba(240,68,56,0.18)" : "rgba(247,144,9,0.15)", zone.name);
+  for (const z of zones.liste) {
+    const excl = z.type === "exclusion";
+    polygone(ctx, z.polygon, c.width, c.height,
+      excl ? "rgba(229,72,77,0.95)" : "rgba(224,140,26,0.95)",
+      excl ? "rgba(229,72,77,0.16)" : "rgba(224,140,26,0.14)", z.name);
   }
-  if (zoneEditor.draft.length) {
-    drawPolygon(ctx, zoneEditor.draft, w, h, "rgba(18,183,106,0.95)", "rgba(18,183,106,0.16)", null, true);
+  if (zones.trace.length) {
+    polygone(ctx, zones.trace, c.width, c.height,
+      "rgba(48,164,108,0.95)", "rgba(48,164,108,0.16)", null, true);
   }
 }
 
-function drawPolygon(ctx, polygon, w, h, trait, fond, libelle, points) {
-  if (!polygon.length) return;
+function polygone(ctx, poly, w, h, trait, fond, nom, points) {
+  if (!poly.length) return;
   ctx.beginPath();
-  polygon.forEach(([x, y], i) => {
+  poly.forEach(([x, y], i) => {
     const px = x * w, py = y * h;
     i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
   });
-  if (polygon.length >= 3) {
-    ctx.closePath();
-    ctx.fillStyle = fond;
-    ctx.fill();
-  }
+  if (poly.length >= 3) { ctx.closePath(); ctx.fillStyle = fond; ctx.fill(); }
   ctx.strokeStyle = trait;
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 1.5;
   ctx.stroke();
 
   if (points) {
-    for (const [x, y] of polygon) {
+    for (const [x, y] of poly) {
       ctx.beginPath();
-      ctx.arc(x * w, y * h, 4, 0, Math.PI * 2);
+      ctx.arc(x * w, y * h, 3, 0, Math.PI * 2);
       ctx.fillStyle = trait;
       ctx.fill();
     }
   }
-  if (libelle) {
-    const [x, y] = polygon[0];
+  if (nom) {
+    const [x, y] = poly[0];
     ctx.fillStyle = trait;
-    ctx.font = "12px system-ui, sans-serif";
-    ctx.fillText(libelle, x * w + 5, y * h - 6);
+    ctx.font = "11px system-ui, sans-serif";
+    ctx.fillText(nom, x * w + 4, y * h - 5);
   }
 }
 
-function decrireZone(zone) {
-  const parts = [`${zone.polygon.length} sommets`];
-  parts.push(zone.models?.length ? zone.models.map(modelName).join(" · ") : "tous les modèles");
-  if (zone.schedule?.start && zone.schedule?.end) parts.push(`${zone.schedule.start} → ${zone.schedule.end}`);
-  if (zone.conf) parts.push(`seuil ${zone.conf}`);
-  if (zone.cooldown) parts.push(`délai ${zone.cooldown} s`);
-  return parts.join(" · ");
+function decrire(z) {
+  const p = [`${z.polygon.length} sommets`];
+  p.push(z.models?.length ? z.models.map(nomModele).join(", ") : "tous modèles");
+  if (z.schedule?.start && z.schedule?.end) p.push(`${z.schedule.start}→${z.schedule.end}`);
+  if (z.conf) p.push(`seuil ${z.conf}`);
+  if (z.cooldown) p.push(`délai ${z.cooldown}s`);
+  return p.join(" · ");
 }
 
-function renderZoneList() {
-  const list = el("zone-list");
-  if (!zoneEditor.zones.length) {
-    list.innerHTML = '<p class="muted">Aucune zone : la caméra est analysée en entier.</p>';
+function listerZones() {
+  const l = el("zone-liste");
+  if (!zones.liste.length) {
+    l.innerHTML = '<p class="msg">Aucune zone : la caméra est analysée en entier.</p>';
     return;
   }
-  list.innerHTML = "";
-  zoneEditor.zones.forEach((zone, index) => {
-    const row = document.createElement("div");
-    row.className = "zone-item";
-    row.innerHTML = `
-      <div>
-        <div class="zone-item-name">${esc(zone.name)}
-          <span class="zone-kind ${zone.type === "exclusion" ? "excl" : ""}">
-            ${zone.type === "exclusion" ? "masque" : "surveillée"}</span>
+  l.innerHTML = "";
+  zones.liste.forEach((z, i) => {
+    const d = document.createElement("div");
+    d.className = "zone-ligne";
+    d.innerHTML = `<div>
+        <div class="zone-nom">${ech(z.name)}
+          <span class="zone-type ${z.type === "exclusion" ? "excl" : ""}">${z.type === "exclusion" ? "masque" : "surveillée"}</span>
         </div>
-        <div class="muted" style="font-size:12px">${esc(decrireZone(zone))}</div>
+        <div class="msg">${ech(decrire(z))}</div>
       </div>
-      <button class="btn ghost small">Supprimer</button>`;
-    row.querySelector("button").addEventListener("click", () => {
-      zoneEditor.zones.splice(index, 1);
-      renderZoneList();
-      drawZones();
+      <button class="bouton danger">Supprimer</button>`;
+    d.querySelector("button").addEventListener("click", () => {
+      zones.liste.splice(i, 1);
+      listerZones();
+      dessinerZones();
     });
-    list.appendChild(row);
+    l.appendChild(d);
   });
 }
 
-function setupZoneEditor() {
-  const canvas = el("zone-canvas");
+function brancherZones() {
+  const c = el("zone-canvas");
 
-  canvas.addEventListener("click", (e) => {
-    const rect = canvas.getBoundingClientRect();
+  c.addEventListener("click", (e) => {
+    const r = c.getBoundingClientRect();
     // Coordonnées normalisées : indépendantes de la taille d'affichage et de la
     // résolution de la caméra.
-    const x = (e.clientX - rect.left) / rect.width;
-    const y = (e.clientY - rect.top) / rect.height;
-    zoneEditor.draft.push([+x.toFixed(4), +y.toFixed(4)]);
-    el("zone-hint").textContent = `${zoneEditor.draft.length} sommet(s) posé(s)`
-      + (zoneEditor.draft.length >= 3 ? " — nommez la zone puis « Ajouter »." : " — 3 minimum.");
-    drawZones();
+    zones.trace.push([
+      +((e.clientX - r.left) / r.width).toFixed(4),
+      +((e.clientY - r.top) / r.height).toFixed(4),
+    ]);
+    el("zone-aide").textContent = `${zones.trace.length} sommet(s)`
+      + (zones.trace.length >= 3 ? " — nommez la zone puis « Ajouter »." : " — 3 minimum.");
+    dessinerZones();
   });
 
-  el("zone-undo").addEventListener("click", () => { zoneEditor.draft.pop(); drawZones(); });
-  el("zone-clear").addEventListener("click", () => { zoneEditor.draft = []; drawZones(); });
+  el("zone-annuler-point").addEventListener("click", () => { zones.trace.pop(); dessinerZones(); });
+  el("zone-effacer").addEventListener("click", () => { zones.trace = []; dessinerZones(); });
 
-  el("zone-add").addEventListener("click", () => {
-    const status = el("zone-status");
-    const nom = el("zone-name").value.trim();
-    if (zoneEditor.draft.length < 3) {
-      status.className = "form-status error";
-      status.textContent = "Tracez au moins 3 sommets sur l'image.";
-      return;
-    }
-    if (!nom) {
-      status.className = "form-status error";
-      status.textContent = "Donnez un nom à la zone.";
-      return;
-    }
+  el("zone-ajouter").addEventListener("click", () => {
+    const m = el("zone-msg");
+    const nom = el("zone-nom").value.trim();
+    if (zones.trace.length < 3) { m.className = "msg err"; m.textContent = "Tracez au moins 3 sommets."; return; }
+    if (!nom) { m.className = "msg err"; m.textContent = "Donnez un nom à la zone."; return; }
 
-    const zone = {
-      name: nom,
-      polygon: zoneEditor.draft,
-      type: el("zone-type").value,
-      models: [...el("zone-models").querySelectorAll("input:checked")].map((c) => c.value),
+    const z = {
+      name: nom, polygon: zones.trace, type: el("zone-type").value,
+      models: [...el("zone-modeles").querySelectorAll("input:checked")].map((x) => x.value),
     };
-    const debut = el("zone-start").value, fin = el("zone-end").value;
-    if (debut && fin) zone.schedule = { start: debut, end: fin };
-    if (el("zone-conf").value) zone.conf = Number(el("zone-conf").value);
-    if (el("zone-cooldown").value) zone.cooldown = Number(el("zone-cooldown").value);
+    const d = el("zone-debut").value, f = el("zone-fin").value;
+    if (d && f) z.schedule = { start: d, end: f };
+    if (el("zone-seuil").value) z.conf = Number(el("zone-seuil").value);
+    if (el("zone-delai").value) z.cooldown = Number(el("zone-delai").value);
 
-    zoneEditor.zones.push(zone);
-    zoneEditor.draft = [];
-    el("zone-name").value = "";
-    el("zone-conf").value = "";
-    el("zone-cooldown").value = "";
-    el("zone-models").querySelectorAll("input:checked").forEach((c) => (c.checked = false));
-    status.className = "form-status";
-    status.textContent = "Zone ajoutée — pensez à enregistrer.";
-    renderZoneList();
-    drawZones();
+    zones.liste.push(z);
+    zones.trace = [];
+    el("zone-nom").value = "";
+    el("zone-seuil").value = "";
+    el("zone-delai").value = "";
+    el("zone-modeles").querySelectorAll("input:checked").forEach((x) => (x.checked = false));
+    m.className = "msg";
+    m.textContent = "Zone ajoutée — pensez à enregistrer.";
+    listerZones();
+    dessinerZones();
   });
 
-  el("zone-save").addEventListener("click", async () => {
-    const status = el("zone-status");
+  el("zone-enregistrer").addEventListener("click", async () => {
+    const m = el("zone-msg");
     try {
-      const data = await api(`/api/zones/${encodeURIComponent(zoneEditor.camera)}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ zones: zoneEditor.zones }),
+      const d = await api(`/api/zones/${encodeURIComponent(zones.camera)}`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ zones: zones.liste }),
       });
-      status.className = "form-status ok";
-      status.textContent = `${data.zones} zone(s) enregistrée(s), appliquées au prochain cycle.`;
-      toast("Zones enregistrées", "Prises en compte sans redémarrage.", "ok");
-      loadCameras();
-    } catch (e) {
-      status.className = "form-status error";
-      status.textContent = e.message;
-    }
+      m.className = "msg ok";
+      m.textContent = `${d.zones} zone(s) enregistrée(s), appliquées au prochain cycle.`;
+      chargerCameras();
+    } catch (e) { m.className = "msg err"; m.textContent = e.message; }
   });
 
-  el("zone-frame").addEventListener("load", drawZones);
-  window.addEventListener("resize", drawZones);
-}
-
-/* ═══ Filtres ═══ */
-
-function setupFilters() {
-  const ids = ["filter-model", "filter-camera", "filter-zone", "filter-severity",
-    "filter-ack", "filter-false", "filter-period", "filter-hours"];
-  ids.forEach((id) => el(id)?.addEventListener("change", () => { alertsPage = 0; loadAlertsTable(); }));
-  const recherche = debounce(() => { alertsPage = 0; loadAlertsTable(); }, 350);
-  el("filter-label")?.addEventListener("input", recherche);
-  el("filter-plaque")?.addEventListener("input", recherche);
-}
-
-function debounce(fn, delai) {
-  let minuteur;
-  return (...args) => { clearTimeout(minuteur); minuteur = setTimeout(() => fn(...args), delai); };
-}
-
-function populateFilters() {
-  el("filter-model").innerHTML = '<option value="">Tous les modèles</option>'
-    + Object.entries(MODEL_LABELS).map(([k, v]) => `<option value="${k}">${v}</option>`).join("");
-
-  const zones = new Set();
-  cameras.forEach((c) => c.zones?.forEach((z) => zones.add(z)));
-
-  el("filter-camera").innerHTML = '<option value="">Toutes les caméras</option>'
-    + cameras.map((c) => `<option value="${esc(c.name)}">${esc(c.name)}</option>`).join("");
-  el("timeline-camera").innerHTML = '<option value="">Toutes les caméras</option>'
-    + cameras.map((c) => `<option value="${esc(c.name)}">${esc(c.name)}</option>`).join("");
-  el("filter-zone").innerHTML = '<option value="">Toutes les zones</option>'
-    + [...zones].map((z) => `<option value="${esc(z)}">${esc(z)}</option>`).join("");
+  el("zone-image").addEventListener("load", dessinerZones);
+  window.addEventListener("resize", dessinerZones);
 }
 
 /* ═══ Démarrage ═══ */
 
 async function init() {
-  setupNav();
-  setupFilters();
-  setupZoneEditor();
-  setupTimeline();
-  setupCameraForm();
-  setupCameraWall();
-  setupUpload();
+  onglets();
+  outilsDirect();
+  formCamera();
+  brancherFiltres();
+  brancherFrise();
+  brancherDepot();
+  brancherZones();
 
-  tickHorloge();
-  await loadCameras();
-  await loadUploads();
-  populateFilters();
-  await loadSettings();
-  await loadDashboard();
-  await refreshPipelineState();
+  tick();
+  await chargerCameras();
+  await chargerFichiers();
+  remplirFiltres();
+  await chargerReglages();
+  await chargerEvenements();
+  await chargerFrise();
 
-  setInterval(tickHorloge, 1000);
-  setInterval(refreshVideos, 700);
-  setInterval(loadDashboard, 15000);
-  setInterval(refreshPipelineState, 10000);
-  setInterval(watchCriticalAlerts, 5000);
-  setInterval(loadCameras, 30000);
+  setInterval(tick, 1000);
+  setInterval(rafraichirFlux, 700);
+  setInterval(majBarreEtat, 5000);
+  setInterval(chargerEvenements, 8000);
+  setInterval(guetter, 5000);
+  setInterval(chargerCameras, 20000);
 }
 
 init();

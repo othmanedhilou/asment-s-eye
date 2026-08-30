@@ -30,5 +30,9 @@
   "vehicles": {
     "detect": true,
     "alert": true
+  },
+  "fall": {
+    "detect": true,
+    "alert": true
   }
 }
