@@ -187,3 +187,12 @@ def test_camion_non_bache_est_haute_severite():
     """Risque routier et amende : ce n'est pas une observation de routine."""
     from app.storage import severity_for
     assert severity_for("load_control", "bache_absente") == "haute"
+
+
+def test_classes_du_jeu_de_chute_retenu(monkeypatch):
+    """Le jeu retenu nomme les postures up / bending / down."""
+    monkeypatch.setattr(rules_module, "_chute_dediee", True)
+    engine = AlertEngine()
+    assert engine.process(detection(model="fall", label="down")) is not None
+    assert engine.process(detection(model="fall", label="up")) is None
+    assert engine.process(detection(model="fall", label="bending")) is None

@@ -8,9 +8,13 @@ ALERT_LABELS = {
     "arc": {"Arc Flash", "Sparks"},
     "conveyor": {"crack"},
     "epi": {"NO-Hardhat", "NO-Mask", "NO-Safety Vest"},
-    # Modèle de chute dédié. « falling » (en train de tomber) alerte aussi :
-    # secourir pendant la chute vaut mieux qu'après.
-    "fall": {"fallen", "falling"},
+    # Modèle de chute dédié. « down » vient du jeu d'entraînement retenu, où les
+    # trois postures sont nommées up / bending / down. Seule la dernière alerte :
+    # « bending » (penché) est justement ce que le modèle actuel confond avec une
+    # chute, et c'est pour l'en distinguer qu'on l'entraîne.
+    # « falling » alerte aussi quand le modèle le distingue : secourir pendant la
+    # chute vaut mieux qu'après.
+    "fall": {"fallen", "falling", "down"},
     "fire_smoke": {"Fire", "Smoke"},
     "gloves_glasses": {"NO-Gloves", "NO-Goggles", "Fall-Detected"},
     # Contrôle de sortie des camions. Les deux premières classes viennent du
