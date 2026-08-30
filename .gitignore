@@ -16,10 +16,14 @@ build/
 # VS Code
 .vscode/
 
-# Modèles (trop lourds pour Git)
-models/
-*.pt
-*.onnx
+# Modèles : versionnés à la demande explicite du propriétaire du projet.
+# 142 Mo au total (48 Mo de .pt, 96 Mo d'exports OpenVINO), chaque fichier bien
+# sous la limite de 100 Mo par fichier de GitHub.
+#
+# Les dossiers *_openvino_model sont DÉRIVÉS des .pt : `scripts/export_openvino.py`
+# les régénère en quelques minutes. Ils sont inclus pour qu'un clone soit
+# immédiatement exécutable, mais ils sont aussi liés à la version d'OpenVINO
+# installée — après une mise à jour majeure, les réexporter.
 
 # Base de données
 *.db

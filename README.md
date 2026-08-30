@@ -162,6 +162,23 @@ sens de passage sur une ligne franchie, et surtout de n'alerter **qu'une fois pa
 personne** au lieu d'une fois par image — un deuxième ouvrier sans casque n'est
 plus masqué par l'alerte du premier.
 
+## Enregistrement et rapports
+
+**Clips d'alerte** — 5 s avant / 10 s après chaque alerte, liés à l'événement.
+
+**Enregistrement continu** — optionnel (`recording: true` sur une caméra), par
+segments de 5 minutes, avec rétention et **seuil d'espace libre** : sous 10 Go,
+l'enregistrement s'arrête de lui-même. Un disque plein empêcherait le système
+d'écrire ses alertes — la surveillance passe avant la conservation.
+
+**Frise chronologique** — écran Alertes : la journée d'une caméra sur une barre,
+chaque alerte marquée à son heure et colorée par gravité. Un clic affiche la
+photo et le clip. C'est le geste de base après un incident : remonter le temps.
+
+**Rapport PDF** — écran Rapports : gravité, localisation, fiabilité des
+détections, délai de prise en charge. Destiné au responsable HSE, là où le CSV
+s'adresse à qui veut retravailler les données.
+
 ## Sévérité des alertes
 
 | Niveau | Cas | Anti-répétition |
@@ -180,9 +197,10 @@ le suivi est actif. Chaque zone peut imposer son propre délai.
 .\venv\Scripts\python.exe -m pytest tests -q
 ```
 
-161 tests couvrent les sources vidéo, la géométrie des zones et leurs horaires,
+179 tests couvrent les sources vidéo, la géométrie des zones et leurs horaires,
 le suivi d'objets et le comptage, le moteur d'alerte, la persistance, les
-indicateurs de qualité, l'API et le banc de test. Ils s'exécutent aussi à chaque
+indicateurs de qualité, l'API, le banc de test, l'enregistrement continu et le
+rapport PDF. Ils s'exécutent aussi à chaque
 envoi sur GitHub (`.github/workflows/tests.yml`).
 
 ## Sauvegarde
@@ -208,7 +226,10 @@ exclu : une archive circule, un secret ne doit pas voyager avec.
 - `conveyor` n'a jamais été éprouvé sur une vraie bande transporteuse.
 - Lecture de plaques (cas d'usage 9) non réalisée.
 - Interface sans authentification : à réserver au réseau interne.
-- Pas d'enregistrement vidéo continu, seulement des clips autour des alertes.
+- Lecture de plaques non réalisée, volontairement : le modèle `vehicles` détecte
+  des véhicules, pas des plaques. Y brancher un moteur de reconnaissance de texte
+  donnerait de faux numéros — il faudrait d'abord un modèle de détection de
+  plaque.
 
 ## Maintenance
 

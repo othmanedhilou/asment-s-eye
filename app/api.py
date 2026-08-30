@@ -22,7 +22,9 @@ from app.usecases import usecases_with_status
 from app.zones import load_zones, save_zones
 from app.storage import (
     acknowledge_alert,
+    alerts_for_day,
     count_alerts,
+    days_with_alerts,
     export_csv,
     mark_false_positive,
     quality_stats,
@@ -166,6 +168,22 @@ def api_stats_summary():
     return stats_summary()
 
 
+@app.get("/api/timeline")
+def api_timeline(day: str | None = None, camera: str | None = None):
+    """Alertes d'une journée, positionnées sur 24 h.
+
+    Après un incident, on remonte le temps : c'est le geste de base d'un
+    opérateur de vidéosurveillance, qu'une liste paginée ne permet pas.
+    """
+    from datetime import date
+
+    jours = days_with_alerts(camera)
+    if day is None:
+        day = jours[0] if jours else date.today().isoformat()
+    return {"day": day, "camera": camera, "jours_disponibles": jours,
+            "alertes": alerts_for_day(camera, day)}
+
+
 @app.get("/api/stats/quality")
 def api_stats_quality(days: int = 30):
     """Qualité vue par les opérateurs : taux de fausses alertes, délai de prise
@@ -177,6 +195,25 @@ def api_stats_quality(days: int = 30):
 @app.get("/api/stats/timeline")
 def api_stats_timeline(hours: int = 24):
     return stats_timeline(hours=min(hours, 168))
+
+
+@app.get("/api/export/pdf")
+def api_export_pdf(days: int = 7):
+    """Rapport HSE en PDF.
+
+    Le CSV sert a qui veut retravailler les donnees ; ce rapport sert a qui doit
+    decider, presenter et classer.
+    """
+    from app.report import build_report
+
+    pdf = build_report(days=days)
+    from datetime import date
+    nom = f"smokewatch_rapport_{date.today():%Y%m%d}.pdf"
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename={nom}"},
+    )
 
 
 @app.get("/api/export/csv")

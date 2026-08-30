@@ -17,7 +17,7 @@ from app.detectors import ModelRegistry
 from app.health import forget_camera, update_camera
 from app.logging_setup import setup_logging
 from app.models import Detection
-from app.recorder import ClipRecorder
+from app.recorder import ClipRecorder, ContinuousRecorder
 from app.settings import is_detect_enabled
 from app.tracking import SimpleTracker, build_counters, occupation
 from app.zones import ZoneFilter
@@ -146,6 +146,19 @@ def run_camera(camera_name: str, cam_cfg: dict, config: dict, registry: ModelReg
     zone_filter = ZoneFilter(camera_name)
     recorder = ClipRecorder(camera_name, fps=fps)
 
+    # Enregistrement continu : desactive par defaut, car il consomme beaucoup de
+    # disque. L'enregistreur s'arrete de lui-meme si l'espace libre passe sous
+    # son seuil — la detection doit rester prioritaire sur la conservation.
+    enregistrement_continu = None
+    if cam_cfg.get("recording"):
+        enregistrement_continu = ContinuousRecorder(
+            camera_name, fps=fps,
+            segment_minutes=cam_cfg.get("segment_minutes", 5),
+            retention_days=cam_cfg.get("retention_days", 7),
+        )
+        log.info(f"[{camera_name}] enregistrement continu actif "
+                 f"(retention {enregistrement_continu.retention_days} j)")
+
     # Suivi des objets : desactive par defaut car il coute du temps de calcul.
     # A activer sur les cameras ou l'on veut compter, connaitre un sens de
     # passage, ou n'alerter qu'une fois par personne plutot qu'une fois par image.
@@ -236,6 +249,12 @@ def run_camera(camera_name: str, cam_cfg: dict, config: dict, registry: ModelReg
                                         recorder.trigger(alert.db_id)
 
                         recorder.add_frame(annotated)
+                        # L'enregistrement continu conserve l'image BRUTE : les
+                        # boites de detection sont une interpretation, pas une
+                        # preuve, et elles ne doivent pas figurer sur un
+                        # enregistrement qui peut servir de constat.
+                        if enregistrement_continu is not None:
+                            enregistrement_continu.add_frame(frame)
                         _save_live_frame(camera_name, annotated)
 
                         cycle_ms = (time.monotonic() - cycle_start) * 1000
@@ -259,6 +278,8 @@ def run_camera(camera_name: str, cam_cfg: dict, config: dict, registry: ModelReg
                             log.info(f"[{camera_name}] cycle {len(active_models)} modèles = {cycle_ms:.0f} ms")
                 finally:
                     stream.release()
+                    if enregistrement_continu is not None:
+                        enregistrement_continu.release()
             except ConnectionError as e:
                 log.warning(f"[{camera_name}] {e}")
                 update_camera(camera_name, state="hors ligne", error=str(e))

@@ -258,6 +258,56 @@ def count_alerts(**filters) -> int:
         return session.scalar(stmt) or 0
 
 
+def alerts_for_day(camera: str | None, day: str) -> list[dict]:
+    """Alertes d'une journée pour la frise chronologique.
+
+    Parcourir une journée d'un coup d'œil et sauter d'une alerte à l'autre est
+    le geste de base d'un opérateur de vidéosurveillance : après un incident, on
+    remonte le temps. Une simple liste paginée ne le permet pas.
+    """
+    debut = datetime.strptime(day, "%Y-%m-%d")
+    fin = debut + timedelta(days=1)
+
+    engine = _get_engine()
+    with Session(engine) as session:
+        stmt = select(AlertRecord).where(
+            AlertRecord.timestamp >= debut, AlertRecord.timestamp < fin)
+        if camera:
+            stmt = stmt.where(AlertRecord.camera == camera)
+        stmt = stmt.order_by(AlertRecord.timestamp)
+        records = session.scalars(stmt).all()
+
+    return [{
+        "id": r.id,
+        "camera": r.camera,
+        "label": r.label,
+        "model": r.model,
+        "severity": r.severity,
+        "zone": r.zone or "",
+        "timestamp": r.timestamp.isoformat(),
+        # Position sur la journée, de 0 à 1 : la frise n'a pas à refaire ce calcul.
+        "position": round((r.timestamp - debut).total_seconds() / 86400, 5),
+        "acknowledged": bool(r.acknowledged),
+        "false_positive": bool(r.false_positive),
+        "snapshot": r.snapshot,
+        "clip": r.clip,
+    } for r in records]
+
+
+def days_with_alerts(camera: str | None = None, limit: int = 30) -> list[str]:
+    """Journées ayant produit des alertes, la plus récente d'abord.
+
+    Évite de proposer un calendrier où la plupart des dates sont vides.
+    """
+    engine = _get_engine()
+    with Session(engine) as session:
+        stmt = select(func.strftime("%Y-%m-%d", AlertRecord.timestamp)).distinct()
+        if camera:
+            stmt = stmt.where(AlertRecord.camera == camera)
+        jours = session.scalars(stmt).all()
+    return sorted((j for j in jours if j), reverse=True)[:limit]
+
+
 def acknowledge_alert(alert_id: int, operator: str = "opérateur") -> bool:
     engine = _get_engine()
     with Session(engine) as session:

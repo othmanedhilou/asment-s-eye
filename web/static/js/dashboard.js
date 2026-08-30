@@ -32,7 +32,7 @@ function setupNav() {
       el(`page-${btn.dataset.page}`).classList.add("active");
       const loaders = {
         dashboard: loadDashboard,
-        alerts: loadAlertsTable,
+        alerts: () => { loadAlertsTable(); loadTimeline(); },
         reports: loadReports,
         usecases: loadUseCases,
         system: loadSystem,
@@ -803,10 +803,12 @@ async function populateFilters() {
     models.insertAdjacentHTML("beforeend", `<option value="${key}">${label}</option>`);
   }
   const cams = el("filter-camera");
+  const camsFrise = el("timeline-camera");
   const zonesSelect = el("filter-zone");
   const zones = new Set();
   for (const cam of cameras) {
     cams.insertAdjacentHTML("beforeend", `<option value="${cam.name}">${cam.name}</option>`);
+    camsFrise?.insertAdjacentHTML("beforeend", `<option value="${cam.name}">${cam.name}</option>`);
     cam.zones?.forEach((z) => zones.add(z));
   }
   for (const z of zones) {
@@ -820,6 +822,7 @@ async function init() {
   setupNav();
   setupFilters();
   setupZoneEditor();
+  setupTimeline();
   setupCameraForm();
   setupCameraWall();
 
@@ -837,3 +840,95 @@ async function init() {
 }
 
 init();
+
+/* ── Frise chronologique ── */
+
+let timelineDay = null;
+
+async function loadTimeline() {
+  const camera = el("timeline-camera")?.value || "";
+  const params = new URLSearchParams();
+  if (camera) params.set("camera", camera);
+  if (timelineDay) params.set("day", timelineDay);
+
+  const data = await (await fetch(`/api/timeline?${params}`)).json();
+  timelineDay = data.day;
+
+  // Liste des journées : n'afficher que celles qui ont produit des alertes,
+  // plutôt qu'un calendrier majoritairement vide.
+  const select = el("timeline-day");
+  const jours = data.jours_disponibles.length ? data.jours_disponibles : [data.day];
+  select.innerHTML = jours
+    .map((j) => `<option value="${j}" ${j === data.day ? "selected" : ""}>${formatDay(j)}</option>`)
+    .join("");
+
+  renderTimelineTrack(data.alertes);
+}
+
+function formatDay(iso) {
+  const d = new Date(`${iso}T12:00:00`);
+  return d.toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "long" });
+}
+
+function renderTimelineTrack(alertes) {
+  const track = el("timeline-track");
+  const hours = el("timeline-hours");
+
+  hours.innerHTML = [0, 3, 6, 9, 12, 15, 18, 21, 24]
+    .map((h) => `<span style="left:${(h / 24) * 100}%">${String(h).padStart(2, "0")}h</span>`)
+    .join("");
+
+  if (!alertes.length) {
+    track.innerHTML = '<div class="timeline-empty">Aucune alerte ce jour-là.</div>';
+    el("timeline-detail").innerHTML = "";
+    return;
+  }
+
+  track.innerHTML = alertes.map((a) => `
+    <button class="timeline-mark ${a.severity}${a.false_positive ? " is-false" : ""}"
+            style="left:${a.position * 100}%"
+            data-id="${a.id}"
+            title="${new Date(a.timestamp).toLocaleTimeString("fr-FR")} — ${a.label} (${a.camera})"></button>
+  `).join("");
+
+  track.querySelectorAll(".timeline-mark").forEach((mark) => {
+    mark.addEventListener("click", () => {
+      track.querySelectorAll(".timeline-mark").forEach((m) => m.classList.remove("selected"));
+      mark.classList.add("selected");
+      showTimelineDetail(alertes.find((a) => a.id === Number(mark.dataset.id)));
+    });
+  });
+}
+
+function showTimelineDetail(a) {
+  if (!a) return;
+  const heure = new Date(a.timestamp).toLocaleTimeString("fr-FR");
+  const thumb = a.snapshot
+    ? `<img src="/api/snapshot?path=${encodeURIComponent(a.snapshot)}" onerror="this.style.display='none'" />`
+    : "";
+  const clip = a.clip
+    ? `<a class="clip-link" href="/api/clip?path=${encodeURIComponent(a.clip)}" target="_blank">🎬 clip vidéo</a>`
+    : '<span class="muted">pas de clip</span>';
+  const etat = a.false_positive
+    ? '<span class="false-tag">fausse alerte</span>'
+    : a.acknowledged ? '<span class="muted">traitée</span>' : '<span class="muted">à traiter</span>';
+
+  el("timeline-detail").innerHTML = `
+    ${thumb}
+    <div>
+      <div class="l1">${heure} — ${a.label} <span class="sev ${a.severity}">${a.severity}</span></div>
+      <div class="l2 muted">${a.camera}${a.zone ? ` · ${a.zone}` : ""} · ${MODEL_LABELS[a.model] || a.model}</div>
+      <div class="l2">${clip} · ${etat}</div>
+    </div>`;
+}
+
+function setupTimeline() {
+  el("timeline-day").addEventListener("change", (e) => {
+    timelineDay = e.target.value;
+    loadTimeline();
+  });
+  el("timeline-camera").addEventListener("change", () => {
+    timelineDay = null;   // repartir du jour le plus récent de cette caméra
+    loadTimeline();
+  });
+}

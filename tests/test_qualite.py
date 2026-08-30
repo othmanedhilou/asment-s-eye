@@ -171,3 +171,57 @@ def test_export_csv_signale_les_fausses_alertes():
     mark_false_positive(faux)
     csv = export_csv()
     assert "Fausse alerte" in csv.splitlines()[0]
+
+
+# ── Frise chronologique ──────────────────────────────────────────────
+
+
+def test_alertes_d_une_journee():
+    from app.storage import alerts_for_day
+
+    hier = datetime.now().replace(hour=10) - timedelta(days=1)
+    log_alert(alerte(timestamp=hier))
+    log_alert(alerte(timestamp=datetime.now().replace(hour=14)))
+
+    aujourd_hui = datetime.now().strftime("%Y-%m-%d")
+    assert len(alerts_for_day(None, aujourd_hui)) == 1
+
+
+def test_position_sur_la_journee():
+    """La position (0 à 1) évite à la frise de recalculer les horaires."""
+    from app.storage import alerts_for_day
+
+    midi = datetime.now().replace(hour=12, minute=0, second=0, microsecond=0)
+    log_alert(alerte(timestamp=midi))
+    alertes = alerts_for_day(None, midi.strftime("%Y-%m-%d"))
+    assert abs(alertes[0]["position"] - 0.5) < 0.001
+
+
+def test_frise_filtree_par_camera():
+    from app.storage import alerts_for_day
+
+    log_alert(alerte(camera="atelier"))
+    log_alert(alerte(camera="quai"))
+    jour = datetime.now().strftime("%Y-%m-%d")
+    assert len(alerts_for_day("quai", jour)) == 1
+
+
+def test_frise_ordonnee_chronologiquement():
+    from app.storage import alerts_for_day
+
+    base = datetime.now().replace(hour=9, minute=0, second=0, microsecond=0)
+    log_alert(alerte(label="tard", timestamp=base + timedelta(hours=3)))
+    log_alert(alerte(label="tot", timestamp=base))
+    alertes = alerts_for_day(None, base.strftime("%Y-%m-%d"))
+    assert [a["label"] for a in alertes] == ["tot", "tard"]
+
+
+def test_journees_disponibles():
+    """Ne proposer que les jours ayant produit des alertes, pas un calendrier vide."""
+    from app.storage import days_with_alerts
+
+    log_alert(alerte(timestamp=datetime.now() - timedelta(days=2)))
+    log_alert(alerte())
+    jours = days_with_alerts()
+    assert len(jours) == 2
+    assert jours[0] > jours[1]   # la plus récente d'abord

@@ -136,6 +136,20 @@
       <!-- Alertes -->
       <section class="page" id="page-alerts">
         <h1>Alertes</h1>
+
+        <div class="card timeline-card">
+          <div class="timeline-head">
+            <h2>Frise chronologique</h2>
+            <div class="timeline-controls">
+              <select id="timeline-camera"><option value="">Toutes les caméras</option></select>
+              <select id="timeline-day"></select>
+            </div>
+          </div>
+          <div class="timeline-track" id="timeline-track"></div>
+          <div class="timeline-hours" id="timeline-hours"></div>
+          <div class="timeline-detail" id="timeline-detail"></div>
+        </div>
+
         <div class="filters">
           <select id="filter-model"><option value="">Tous les modèles</option></select>
           <select id="filter-camera"><option value="">Toutes les caméras</option></select>
@@ -272,9 +286,17 @@
             <div id="false-by-camera"></div>
           </div>
           <div class="card wide">
-            <h2>Export</h2>
-            <p class="muted">Historique complet des alertes pour le service HSE (CSV, compatible Excel).</p>
-            <a class="btn" href="/api/export/csv">⬇ Télécharger le rapport CSV</a>
+            <h2>Exports</h2>
+            <p class="muted">
+              Le PDF s'adresse au responsable HSE : gravité, localisation, fiabilité des
+              détections et délai de prise en charge. Le CSV s'adresse à qui veut
+              retravailler les données dans Excel.
+            </p>
+            <div class="export-actions">
+              <a class="btn" href="/api/export/pdf?days=7">📄 Rapport PDF — 7 jours</a>
+              <a class="btn" href="/api/export/pdf?days=30">📄 Rapport PDF — 30 jours</a>
+              <a class="btn ghost" href="/api/export/csv">⬇ Historique complet (CSV)</a>
+            </div>
           </div>
         </div>
       </section>

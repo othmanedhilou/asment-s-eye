@@ -501,3 +501,87 @@ h1 { font-size: 22px; margin: 0 0 20px; }
   z-index: 50;
   max-width: 420px;
 }
+
+/* ── Frise chronologique ── */
+.timeline-card { margin-bottom: 18px; }
+.timeline-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.timeline-head h2 { margin: 0; }
+.timeline-controls { display: flex; gap: 8px; }
+.timeline-controls select {
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+
+.timeline-track {
+  position: relative;
+  height: 46px;
+  margin-top: 16px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.timeline-mark {
+  position: absolute;
+  top: 6px;
+  width: 4px;
+  height: 34px;
+  margin-left: -2px;
+  padding: 0;
+  border: none;
+  border-radius: 2px;
+  background: var(--blue);
+  cursor: pointer;
+}
+.timeline-mark:hover { transform: scaleX(2.2); }
+.timeline-mark.selected { outline: 2px solid var(--text); outline-offset: 1px; }
+.timeline-mark.critique { background: var(--accent); }
+.timeline-mark.haute { background: var(--warn); }
+.timeline-mark.moyenne { background: var(--blue); }
+.timeline-mark.technique { background: var(--muted); }
+.timeline-mark.is-false { opacity: 0.35; }
+
+.timeline-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--muted);
+  font-size: 13px;
+}
+.timeline-hours {
+  position: relative;
+  height: 18px;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.timeline-hours span { position: absolute; transform: translateX(-50%); }
+
+.timeline-detail {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  margin-top: 14px;
+  min-height: 0;
+}
+.timeline-detail:empty { display: none; }
+.timeline-detail img {
+  width: 150px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+.timeline-detail .l1 { font-weight: 600; margin-bottom: 4px; }
+.timeline-detail .l2 { font-size: 13px; margin-top: 2px; }
+
+.export-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }

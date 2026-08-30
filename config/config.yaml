@@ -58,10 +58,20 @@ models:
   # aux autres.
   #
   # quai_chargement:
-  #   rtsp_url: "rtsp://user:motdepasse@192.168.1.42:554/stream1"
+  #   source: "rtsp://user:motdepasse@192.168.1.42:554/stream1"
   #   models: [vehicles, person_animal, epi]
-  #   fps: 2        # surcharge inference.fps pour cette caméra
-  #   workers: 2    # threads d'inférence dédiés à cette caméra
+  #   fps: 2                # surcharge inference.fps pour cette caméra
+  #   workers: 2            # threads d'inférence dédiés à cette caméra
+  #   tracking: true        # suivi des objets : comptage, sens de passage,
+  #                         # et une alerte par personne au lieu d'une par image
+  #   recording: true       # enregistrement vidéo continu (gourmand en disque)
+  #   segment_minutes: 5    # durée d'un segment d'enregistrement
+  #   retention_days: 7     # au-delà, les segments sont purgés
+  #   enabled: true         # false met la caméra en pause sans perdre ses zones
+
+  # Les caméras se gèrent normalement depuis l'interface (page Caméras), qui
+  # écrit dans config/cameras.json. Ce fichier sert d'amorçage au premier
+  # démarrage et de référence pour les modèles.
 
 inference:
   fps: 4          # images analysées par seconde et par caméra (valeur par défaut)

@@ -30,6 +30,9 @@ requests==2.34.2
 # Supervision machine (CPU, memoire, disque)
 psutil==7.2.2
 
+# Rapport PDF pour le service HSE
+reportlab==5.0.1
+
 # Utilitaires
 python-dotenv==1.2.3
 loguru==0.7.3

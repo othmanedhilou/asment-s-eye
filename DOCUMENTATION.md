@@ -489,6 +489,42 @@ un MP4 (codec `mp4v`), puis lie le fichier à l'alerte en base.
 Un seul clip à la fois : `trigger()` sort immédiatement si un enregistrement est
 en cours, sinon des dizaines de vidéos se chevaucheraient.
 
+### 2.12b `app/recorder.py` — enregistrement continu
+
+Les clips d'alerte montrent ce que le système a **vu**. L'enregistrement continu
+montre ce qui s'est **passé**, y compris ce que le système a manqué — et c'est
+souvent la seule preuve disponible après un incident.
+
+C'est aussi la fonction qui peut mettre le serveur à genoux, puisqu'elle écrit
+en permanence. Trois précautions l'encadrent :
+
+- **des segments de 5 minutes** plutôt qu'un fichier par jour : un fichier
+  corrompu ne fait perdre que quelques minutes, et une journée se consulte sans
+  télécharger des dizaines de Go ;
+- **une rétention automatique** (7 jours par défaut), appliquée à chaque
+  rotation de segment ;
+- **un seuil d'espace libre** (10 Go) sous lequel l'enregistrement s'arrête de
+  lui-même. Un disque plein empêcherait le système d'écrire ses snapshots et sa
+  base : la surveillance s'arrêterait pour conserver des vidéos, ce qui est
+  l'inverse de la priorité.
+
+L'enregistrement conserve l'image **brute**, sans les boîtes de détection :
+celles-ci sont une interprétation du système, pas un constat, et n'ont pas leur
+place sur un enregistrement qui peut servir de preuve.
+
+Désactivé par défaut, activable par caméra (`recording: true`).
+
+### 2.12c `app/report.py` — rapport PDF pour le HSE
+
+L'export CSV sert à qui veut retravailler les données. Un responsable HSE, lui,
+veut un document qu'il peut lire, classer et présenter — avec les chiffres qui
+engagent une décision, pas la liste de tous les événements.
+
+Le rapport répond à quatre questions, dans cet ordre : combien d'alertes et de
+quelle gravité, où (caméra et zone), le système est-il crédible (part de fausses
+alertes par détection), et les alertes atteignent-elles quelqu'un (délai moyen de
+prise en charge).
+
 ### 2.13 `app/settings.py` — réglages en direct
 
 `data/settings.json` porte, pour chaque modèle, deux booléens : `detect`
@@ -880,6 +916,16 @@ selon la rétention : clips et snapshots sont purgés à 30 jours par défaut.
 10. **Suivi d'objets peu éprouvé** : validé par les tests et actif sans
    incident, mais jamais confronté à une scène chargée où plusieurs personnes se
    croisent — le cas où une association par proximité peut se tromper.
+11. **Enregistrement continu jamais laissé tourner longtemps** : les garde-fous
+   (rotation, rétention, seuil disque) sont testés unitairement, mais la machine
+   de développement n'a que quelques Go libres — le comportement sur plusieurs
+   jours reste à observer sur le serveur.
+12. **Lecture de plaques non réalisée**, et volontairement. Le modèle
+   `vehicles` détecte des véhicules, pas des plaques : y brancher un moteur de
+   reconnaissance de texte produirait des lectures fantaisistes sur des images
+   entières de camions. Il faudrait d'abord un modèle de détection de plaque,
+   puis un moteur de lecture — deux briques qui n'existent pas dans le projet.
+   Mieux vaut une fonction absente qu'une fonction qui donne de faux numéros.
 
 ---
 
@@ -921,18 +967,20 @@ pour éviter de les redécouvrir.
 
 **Améliorations restantes**
 
-5. Groupe Telegram dédié plutôt que des `chat_id` individuels.
-6. Frise chronologique par caméra : parcourir une journée d'un coup d'œil et
-   sauter d'une alerte à l'autre.
-7. Rapport PDF hebdomadaire automatique au responsable HSE.
-8. Enregistrement vidéo continu, en complément des clips d'alerte.
-9. Lecture de plaques (OCR) pour compléter le cas d'usage 9.
-10. Authentification, si l'interface doit un jour sortir du réseau interne.
+5. Envoi automatique du rapport PDF chaque semaine (il se télécharge aujourd'hui
+   à la demande depuis l'écran Rapports).
+6. Lecture de plaques : demande d'abord un modèle de détection de plaque, puis
+   un moteur de reconnaissance de texte. Voir la limite 12.
+7. Authentification, si l'interface doit un jour sortir du réseau interne.
+
+Le groupe Telegram ne demande aucun développement : il suffit d'indiquer l'id du
+groupe (négatif, de la forme `-100…`) dans `TELEGRAM_CHAT_IDS`.
 
 **Déjà traité** (rappel, pour ne pas le rouvrir par erreur) : sources vidéo
 unifiées, gestion des caméras sans fichier de configuration, supervision et
 alertes techniques, zones avec exclusions et horaires, suivi d'objets et
 comptage, retour opérateur sur les fausses alertes, indicateurs de qualité,
-banc de test, export du jeu de données, recherche et pagination, mur de caméras
-configurable, journalisation, sauvegarde, intégration continue, guides
-opérateur et installation.
+banc de test, export du jeu de données, recherche croisée et pagination, frise
+chronologique, mur de caméras configurable, enregistrement continu, rapport PDF,
+journalisation, sauvegarde, intégration continue, guides opérateur et
+installation.

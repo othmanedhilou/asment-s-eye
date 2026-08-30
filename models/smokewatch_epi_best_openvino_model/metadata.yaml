@@ -1,0 +1,33 @@
+description: Ultralytics smokewatch_epi_best model trained on /kaggle/working/epi_data.yaml
+author: Ultralytics
+date: '2026-08-26T17:09:05.257517+01:00'
+version: 8.4.129
+license: AGPL-3.0 License (https://ultralytics.com/license)
+docs: https://docs.ultralytics.com
+stride: 32
+task: detect
+head: Detect
+batch: 1
+imgsz:
+- 640
+- 640
+names:
+  0: Hardhat
+  1: Mask
+  2: NO-Hardhat
+  3: NO-Mask
+  4: NO-Safety Vest
+  5: Person
+  6: Safety Cone
+  7: Safety Vest
+  8: machinery
+  9: vehicle
+args:
+  data: null
+  batch: 1
+  fraction: 1.0
+  quantize: null
+  dynamic: false
+  nms: false
+channels: 3
+end2end: false
