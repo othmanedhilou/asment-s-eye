@@ -219,3 +219,78 @@ def test_zone_trop_petite_refusee(client):
 def test_zone_sur_camera_inconnue(client):
     r = client.post("/api/zones/fantome", json={"zones": []})
     assert r.status_code == 404
+
+
+# ── Import de fichiers de test ───────────────────────────────────────
+
+
+@pytest.fixture
+def dossier_uploads(tmp_path, monkeypatch):
+    dossier = tmp_path / "videos"
+    dossier.mkdir()
+    monkeypatch.setattr(api_module, "UPLOADS_DIR", dossier)
+    return dossier
+
+
+def test_import_d_une_video(client, dossier_uploads, video_file):
+    r = client.post("/api/uploads",
+                    files={"file": ("essai.mp4", video_file.read_bytes(), "video/mp4")})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["source"] == "videos/essai.mp4"
+    assert (dossier_uploads / "essai.mp4").exists()
+
+
+def test_format_refuse(client, dossier_uploads):
+    """Liste blanche : un fichier déposé ne doit jamais être autre chose qu'une
+    vidéo ou une image."""
+    r = client.post("/api/uploads",
+                    files={"file": ("script.exe", b"MZ...", "application/octet-stream")})
+    assert r.status_code == 400
+    assert "Format non accepte" in r.json()["detail"]
+
+
+def test_fichier_illisible_refuse(client, dossier_uploads):
+    """Un envoi tronqué se découvrirait sinon au démarrage de la caméra."""
+    r = client.post("/api/uploads",
+                    files={"file": ("casse.mp4", b"ceci n'est pas une video", "video/mp4")})
+    assert r.status_code == 400
+    assert not list(dossier_uploads.iterdir())   # rien ne reste sur le disque
+
+
+def test_nom_de_fichier_assaini(client, dossier_uploads, video_file):
+    """Un nom venu du navigateur ne doit pas pouvoir écrire hors du dossier."""
+    r = client.post("/api/uploads",
+                    files={"file": ("../../evasion.mp4", video_file.read_bytes(), "video/mp4")})
+    assert r.status_code == 200
+    assert (dossier_uploads / "evasion.mp4").exists()
+
+
+def test_pas_d_ecrasement(client, dossier_uploads, video_file):
+    """Une caméra peut déjà utiliser le fichier existant."""
+    contenu = video_file.read_bytes()
+    client.post("/api/uploads", files={"file": ("essai.mp4", contenu, "video/mp4")})
+    r = client.post("/api/uploads", files={"file": ("essai.mp4", contenu, "video/mp4")})
+    assert r.json()["nom"] == "essai_1.mp4"
+
+
+def test_liste_des_fichiers(client, dossier_uploads, video_file):
+    client.post("/api/uploads", files={"file": ("essai.mp4", video_file.read_bytes(), "video/mp4")})
+    fichiers = client.get("/api/uploads").json()["fichiers"]
+    assert fichiers[0]["type"] == "video"
+    assert fichiers[0]["source"] == "videos/essai.mp4"
+
+
+def test_suppression(client, dossier_uploads, video_file):
+    client.post("/api/uploads", files={"file": ("essai.mp4", video_file.read_bytes(), "video/mp4")})
+    assert client.delete("/api/uploads/essai.mp4").status_code == 200
+    assert client.get("/api/uploads").json()["fichiers"] == []
+
+
+def test_suppression_refusee_si_utilise(client, dossier_uploads, video_file):
+    """Supprimer un fichier utilisé par une caméra la rendrait aveugle."""
+    client.post("/api/uploads", files={"file": ("essai.mp4", video_file.read_bytes(), "video/mp4")})
+    client.post("/api/cameras/rejeu", json={"source": "videos/essai.mp4", "models": []})
+    r = client.delete("/api/uploads/essai.mp4")
+    assert r.status_code == 409
+    assert "rejeu" in r.json()["detail"]

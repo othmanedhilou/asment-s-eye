@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -38,6 +38,18 @@ WEB_DIR = PROJECT_ROOT / "web"
 LIVE_DIR = PROJECT_ROOT / "data" / "live"
 SNAPSHOTS_DIR = PROJECT_ROOT / "clips" / "snapshots"
 VIDEOS_DIR = PROJECT_ROOT / "clips" / "videos"
+UPLOADS_DIR = PROJECT_ROOT / "videos"
+
+# Extensions acceptees a l'import. Liste blanche plutot que liste noire : un
+# fichier depose sur le serveur ne doit jamais pouvoir etre autre chose qu'une
+# video ou une image.
+EXTENSIONS_VIDEO = {".mp4", ".avi", ".mov", ".mkv", ".webm", ".m4v"}
+EXTENSIONS_IMAGE = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
+
+# 1 Go : au-dela, un import par navigateur devient hasardeux, et le disque du
+# serveur se remplit vite. Les gros volumes se deposent directement sur le
+# serveur, dans videos/.
+TAILLE_MAX_OCTETS = 1024 * 1024 * 1024
 
 app = FastAPI(title="SmokeWatch VMS")
 
@@ -66,6 +78,11 @@ class CameraBody(BaseModel):
     imgsz: int | None = None
     workers: int | None = None
     enabled: bool = True
+    # Suivi des objets et enregistrement continu : couteux, donc explicites.
+    tracking: bool = False
+    recording: bool = False
+    segment_minutes: int | None = None
+    retention_days: int | None = None
 
 
 class SourceBody(BaseModel):
@@ -287,6 +304,8 @@ def api_cameras():
             "models": cfg.get("models", []),
             "enabled": cfg.get("enabled", True),
             "fps": cfg.get("fps"),
+            "tracking": cfg.get("tracking", False),
+            "recording": cfg.get("recording", False),
             "online": online,
             "age_seconds": round(age, 1) if age is not None else None,
             "zones": [z.get("name") for z in all_zones.get(name, [])],
@@ -393,6 +412,106 @@ def api_save_zones(camera: str, body: ZonesBody):
     data[camera] = [z.model_dump() for z in body.zones]
     save_zones(data)
     return {"ok": True, "camera": camera, "zones": len(body.zones)}
+
+
+# ── Import de fichiers de test ───────────────────────────────────────
+
+
+def _nom_sur(nom: str) -> str:
+    """Nettoie un nom de fichier venu du navigateur.
+
+    Un nom peut contenir des separateurs de chemin ou des `..` : sans ce
+    nettoyage, un import pourrait ecrire n'importe ou sur le serveur.
+    """
+    base = Path(nom).name
+    autorises = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._- "
+    propre = "".join(c if c in autorises else "_" for c in base).strip()
+    return propre or "fichier"
+
+
+@app.get("/api/uploads")
+def api_list_uploads():
+    """Fichiers deposes, utilisables comme source de camera."""
+    UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+    fichiers = []
+    for chemin in sorted(UPLOADS_DIR.iterdir()):
+        if not chemin.is_file():
+            continue
+        suffixe = chemin.suffix.lower()
+        if suffixe not in EXTENSIONS_VIDEO | EXTENSIONS_IMAGE:
+            continue
+        fichiers.append({
+            "nom": chemin.name,
+            "source": f"videos/{chemin.name}",
+            "type": "video" if suffixe in EXTENSIONS_VIDEO else "image",
+            "taille_mo": round(chemin.stat().st_size / 1024 / 1024, 1),
+        })
+    return {"fichiers": fichiers}
+
+
+@app.post("/api/uploads")
+async def api_upload(file: UploadFile = File(...)):
+    suffixe = Path(file.filename or "").suffix.lower()
+    if suffixe not in EXTENSIONS_VIDEO | EXTENSIONS_IMAGE:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Format non accepte ({suffixe or 'sans extension'}). "
+                   "Videos : mp4, avi, mov, mkv, webm. Images : jpg, png, bmp, webp.")
+
+    UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+    nom = _nom_sur(file.filename or "fichier")
+    destination = UPLOADS_DIR / nom
+
+    # Ne jamais ecraser un fichier existant : une camera peut deja s'en servir.
+    tige, index = destination.stem, 1
+    while destination.exists():
+        destination = UPLOADS_DIR / f"{tige}_{index}{suffixe}"
+        index += 1
+
+    ecrits = 0
+    try:
+        with open(destination, "wb") as sortie:
+            while morceau := await file.read(1024 * 1024):
+                ecrits += len(morceau)
+                if ecrits > TAILLE_MAX_OCTETS:
+                    raise HTTPException(status_code=413,
+                                        detail="Fichier trop volumineux (1 Go maximum)")
+                sortie.write(morceau)
+    except HTTPException:
+        destination.unlink(missing_ok=True)
+        raise
+    except Exception as e:
+        destination.unlink(missing_ok=True)
+        raise HTTPException(status_code=500, detail=f"Echec de l'import : {e}")
+
+    # Verifier que le fichier est reellement lisible : un envoi tronque ou un
+    # fichier renomme se decouvrirait sinon au demarrage de la camera.
+    # On sonde le chemin reellement ecrit, pas une forme relative : c'est le
+    # fichier qu'on vient de recevoir qui doit etre lisible.
+    sonde = probe_source(str(destination))
+    if not sonde.get("ok"):
+        destination.unlink(missing_ok=True)
+        raise HTTPException(status_code=400,
+                            detail=f"Fichier illisible : {sonde.get('error', 'format non reconnu')}")
+
+    return {"ok": True, "nom": destination.name, "source": f"videos/{destination.name}",
+            "taille_mo": round(ecrits / 1024 / 1024, 1), "apercu": sonde}
+
+
+@app.delete("/api/uploads/{nom}")
+def api_delete_upload(nom: str):
+    chemin = UPLOADS_DIR / _nom_sur(nom)
+    if not chemin.exists() or not chemin.is_file():
+        raise HTTPException(status_code=404, detail="Fichier introuvable")
+
+    utilise = [n for n, cfg in load_cameras().items()
+               if str(camera_source(cfg)).endswith(chemin.name)]
+    if utilise:
+        raise HTTPException(status_code=409,
+                            detail=f"Utilise par la camera : {', '.join(utilise)}")
+
+    chemin.unlink()
+    return {"ok": True, "nom": chemin.name}
 
 
 # ── Médias ───────────────────────────────────────────────────────────
