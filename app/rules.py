@@ -96,6 +96,7 @@ class AlertEngine:
             zone=detection.zone,
             bbox=detection.bbox,
             frame_size=detection.frame_size,
+            plaque=detection.plaque,
             message=f"{detection.label} détecté sur {detection.camera}{where} "
                     f"(confiance {detection.confidence:.2f})",
         )

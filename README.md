@@ -162,6 +162,29 @@ sens de passage sur une ligne franchie, et surtout de n'alerter **qu'une fois pa
 personne** au lieu d'une fois par image — un deuxième ouvrier sans casque n'est
 plus masqué par l'alerte du premier.
 
+## Plaques et suivi entre caméras
+
+**Lecture de plaques** (`plates: true`, suivi requis). Le module localise la
+plaque dans le véhicule — par un modèle dédié s'il existe, sinon par vision
+classique — puis lit et **vote sur plusieurs images du même véhicule**. C'est le
+vote qui rend la lecture exploitable : une image isolée se trompe, dix images
+concordantes ne se trompent pas. Rien n'est affirmé sous deux lectures qui
+s'accordent, et sans moteur de lecture installé, le système signale une plaque
+non lue plutôt que d'inventer un numéro.
+
+Le moteur (easyocr) est **optionnel** et s'installe à part — voir
+`requirements.txt`, la méthode compte : installé normalement, il remplacerait
+OpenCV par sa variante *headless* et casserait la capture vidéo.
+
+**Suivi d'une caméra à l'autre.** Le rapprochement s'appuie sur la classe,
+l'apparence (histogramme de teintes), le délai, la topologie déclarée
+(`voisins`) et, quand elle est connue, la plaque.
+
+> Ce n'est **pas** une ré-identification au sens strict : il n'y a pas de modèle
+> d'apparence. Deux ouvriers en tenue identique seront confondus. Seule une
+> correspondance par plaque est certaine — l'interface distingue « certain »
+> de « probable », et cette nuance ne doit pas disparaître.
+
 ## Enregistrement et rapports
 
 **Clips d'alerte** — 5 s avant / 10 s après chaque alerte, liés à l'événement.
@@ -226,10 +249,11 @@ exclu : une archive circule, un secret ne doit pas voyager avec.
 - `conveyor` n'a jamais été éprouvé sur une vraie bande transporteuse.
 - Lecture de plaques (cas d'usage 9) non réalisée.
 - Interface sans authentification : à réserver au réseau interne.
-- Lecture de plaques non réalisée, volontairement : le modèle `vehicles` détecte
-  des véhicules, pas des plaques. Y brancher un moteur de reconnaissance de texte
-  donnerait de faux numéros — il faudrait d'abord un modèle de détection de
-  plaque.
+- Lecture de plaques sans modèle dédié : la localisation par vision classique
+  tient sur une vue frontale nette, pas sur un angle marqué. Entraîner un modèle
+  `plate` améliorerait nettement le résultat.
+- Le rapprochement entre caméras n'est pas une ré-identification : sans modèle
+  d'apparence, deux personnes habillées pareil sont confondues.
 
 ## Maintenance
 

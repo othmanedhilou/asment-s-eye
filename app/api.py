@@ -81,6 +81,8 @@ class CameraBody(BaseModel):
     # Suivi des objets et enregistrement continu : couteux, donc explicites.
     tracking: bool = False
     recording: bool = False
+    plates: bool = False          # lecture des plaques (véhicules, suivi requis)
+    voisins: list[str] = []       # caméras pouvant recevoir un objet venu d'ici
     segment_minutes: int | None = None
     retention_days: int | None = None
 
@@ -136,6 +138,7 @@ def api_alerts(
     severity: str | None = None,
     zone: str | None = None,
     label: str | None = None,
+    plaque: str | None = None,
     acknowledged: bool | None = None,
     false_positive: bool | None = None,
     since_hours: int | None = None,
@@ -152,7 +155,7 @@ def api_alerts(
         "acknowledged": acknowledged, "false_positive": false_positive,
         "since_hours": since_hours,
     }
-    items = read_alerts(limit=limit, offset=offset, label=label,
+    items = read_alerts(limit=limit, offset=offset, label=label, plaque=plaque,
                         hour_from=hour_from, hour_to=hour_to, **filtres)
     return {"items": items, "total": count_alerts(**filtres),
             "limit": limit, "offset": offset}
@@ -306,6 +309,8 @@ def api_cameras():
             "fps": cfg.get("fps"),
             "tracking": cfg.get("tracking", False),
             "recording": cfg.get("recording", False),
+            "plates": cfg.get("plates", False),
+            "voisins": cfg.get("voisins", []),
             "online": online,
             "age_seconds": round(age, 1) if age is not None else None,
             "zones": [z.get("name") for z in all_zones.get(name, [])],
@@ -338,6 +343,8 @@ def api_upsert_camera(name: str, body: CameraBody):
         raise HTTPException(status_code=400, detail=f"Modèles inconnus : {', '.join(inconnus)}")
 
     cfg = {k: v for k, v in body.model_dump().items() if v is not None}
+    if not cfg.get("voisins"):
+        cfg.pop("voisins", None)   # ne pas écraser une topologie déjà déclarée
     return {"ok": True, "name": name, "camera": upsert_camera(name, cfg)}
 
 
@@ -356,6 +363,23 @@ def api_delete_camera(name: str):
 
 
 # ── Santé du système ─────────────────────────────────────────────────
+
+
+@app.get("/api/handoffs")
+def api_handoffs():
+    """Objets rapprochés d'une caméra à l'autre.
+
+    Le champ `certain` distingue ce qui est établi — une plaque identique — de
+    ce qui n'est qu'une ressemblance d'apparence. Cette nuance doit rester
+    visible : un rapprochement présenté comme certain raconte une histoire que
+    les données ne soutiennent pas.
+    """
+    sante = read_health()
+    return {
+        "correspondances": sante.get("correspondances", []),
+        "objets_suivis": sante.get("objets_inter_cameras", 0),
+        "pipeline_actif": sante.get("running", False),
+    }
 
 
 @app.get("/api/health")

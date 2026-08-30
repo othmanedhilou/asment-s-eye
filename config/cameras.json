@@ -3,12 +3,17 @@
     "source": "0",
     "rtsp_url": "rtsp://localhost:8554/webcam",
     "models": [
-      "person_animal",
-      "epi"
+      "vehicles",
+      "person_animal"
     ],
     "fps": 2.0,
     "enabled": true,
-    "tracking": true
+    "tracking": true,
+    "recording": false,
+    "plates": true,
+    "voisins": [
+      "essai_video"
+    ]
   },
   "essai_video": {
     "source": "videos/mire_test.mp4",

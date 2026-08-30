@@ -23,7 +23,7 @@ HEALTH_PATH = Path(__file__).resolve().parent.parent / "data" / "health.json"
 STALE_SECONDS = 20
 
 _lock = threading.Lock()
-_state: dict = {"cameras": {}}
+_state: dict = {"cameras": {}, "global": {}}
 _last_write = 0.0
 _WRITE_INTERVAL = 2.0  # écrire à chaque image saturerait le disque pour rien
 
@@ -39,6 +39,7 @@ def _write(force: bool = False):
         "pid": os.getpid(),
         "updated_at": datetime.now().isoformat(),
         "cameras": _state["cameras"],
+        **_state["global"],
     }
     try:
         HEALTH_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -57,6 +58,14 @@ def update_camera(name: str, **fields):
         entry.update(fields)
         entry["updated_at"] = datetime.now().isoformat()
         _write(force=fields.get("state") is not None)
+
+
+def set_global(**fields):
+    """Informations qui ne relèvent pas d'une caméra en particulier —
+    rapprochements entre caméras, par exemple."""
+    with _lock:
+        _state["global"].update(fields)
+        _write(force=True)
 
 
 def forget_camera(name: str):

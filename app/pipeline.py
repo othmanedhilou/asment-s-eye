@@ -14,10 +14,12 @@ from app.cameras import active_cameras, camera_source
 from app.capture import FrameSource
 from app.config import load_config
 from app.detectors import ModelRegistry
-from app.health import forget_camera, update_camera
+from app.health import forget_camera, set_global, update_camera
 from app.logging_setup import setup_logging
 from app.models import Detection
 from app.recorder import ClipRecorder, ContinuousRecorder
+from app.plates import PlateReader
+from app.reid import TrackRegistry
 from app.settings import is_detect_enabled
 from app.tracking import SimpleTracker, build_counters, occupation
 from app.zones import ZoneFilter
@@ -28,6 +30,9 @@ log = setup_logging("pipeline")
 
 # Délai sans image au-delà duquel une caméra est déclarée hors ligne et signalée.
 OFFLINE_ALERT_AFTER = 30.0
+
+# Registre partagé des objets vus, renseigné au démarrage.
+TRACKS: TrackRegistry | None = None
 
 
 def _run_one_model(registry: ModelRegistry, model_name: str, frame, imgsz: int) -> list[Detection]:
@@ -63,6 +68,8 @@ def _draw_detection(frame, detection: Detection):
     x1, y1, x2, y2 = [int(v) for v in detection.bbox]
     cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
     label = f"{detection.label} {detection.confidence:.2f}"
+    if detection.plaque:
+        label += f" · {detection.plaque}"
     if detection.zone:
         label += f" [{detection.zone}]"
     cv2.putText(frame, label, (x1, max(y1 - 8, 0)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
@@ -120,9 +127,35 @@ def _save_live_frame(camera_name: str, frame, attempts: int = 5, delay: float = 
         log.warning(f"[{camera_name}] échec sauvegarde frame live : {e}")
 
 
+def _suivre_entre_cameras(camera_name, detection, frame, tracks, lecteur_plaques):
+    """Lit la plaque d'un véhicule, puis cherche s'il vient d'une autre caméra.
+
+    L'ordre compte : la plaque, quand elle est connue, tranche un rapprochement
+    que l'apparence seule laisserait incertain.
+    """
+    if detection.track_id is None:
+        return
+
+    x1, y1, x2, y2 = [int(v) for v in detection.bbox]
+    h, w = frame.shape[:2]
+    crop = frame[max(y1, 0):min(y2, h), max(x1, 0):min(x2, w)]
+    if crop.size == 0:
+        return
+
+    if lecteur_plaques is not None:
+        etat = lecteur_plaques.observer(camera_name, detection.track_id, crop)
+        if etat and etat.get("texte"):
+            detection.plaque = etat["texte"]
+
+    if tracks is not None:
+        resultat = tracks.observer(camera_name, detection.track_id,
+                                   detection.label, crop, detection.plaque)
+        detection.global_id = resultat["global_id"]
+
+
 def run_camera(camera_name: str, cam_cfg: dict, config: dict, registry: ModelRegistry,
                on_detection=None, stop_event: threading.Event | None = None,
-               on_incident=None):
+               on_incident=None, tracks: TrackRegistry | None = None):
     """Boucle de traitement d'une caméra. Bloquante : à lancer dans un thread.
 
     on_detection(detection, frame) est appelé pour chaque détection retenue.
@@ -168,6 +201,18 @@ def run_camera(camera_name: str, cam_cfg: dict, config: dict, registry: ModelReg
     if suivi_actif:
         log.info(f"[{camera_name}] suivi d'objets actif"
                  + (f", {len(compteurs)} ligne(s) de comptage" if compteurs else ""))
+
+    # Lecture de plaques : n'a de sens qu'avec le suivi, puisque la fiabilité
+    # vient du vote sur plusieurs images du MEME vehicule.
+    lecteur_plaques = None
+    if cam_cfg.get("plates") and suivi_actif:
+        lecteur_plaques = PlateReader(
+            registry=registry,
+            plate_model="plate" if "plate" in models_cfg else None)
+        log.info(f"[{camera_name}] lecture de plaques active")
+    elif cam_cfg.get("plates"):
+        log.warning(f"[{camera_name}] lecture de plaques demandée mais suivi désactivé : "
+                    "sans suivi, aucun vote possible, la lecture serait peu fiable")
 
     log.info(f"[{camera_name}] modèles : {available_models} | fps={fps} imgsz={imgsz} workers={max_workers}")
     update_camera(camera_name, state="demarrage", models=available_models, fps_cible=fps)
@@ -223,6 +268,9 @@ def run_camera(camera_name: str, cam_cfg: dict, config: dict, registry: ModelReg
                                 detections = tracker.update(detections)
                                 for detection in detections:
                                     detection.model = model_name
+                                    _suivre_entre_cameras(
+                                        camera_name, detection, frame, tracks,
+                                        lecteur_plaques if model_name == "vehicles" else None)
                                 for compteur in compteurs:
                                     for passage in compteur.update(model_name, detections, w, h):
                                         log.info(f"[{camera_name}] franchissement "
@@ -239,8 +287,9 @@ def run_camera(camera_name: str, cam_cfg: dict, config: dict, registry: ModelReg
                                 detection.zone_cooldown = matched.get("cooldown")
                                 detection.frame_size = (w, h)
                                 where = f" dans {detection.zone}" if detection.zone else ""
+                                plaque = f" [{detection.plaque}]" if detection.plaque else ""
                                 log.debug(f"[{camera_name}] {detection.model} -> {detection.label} "
-                                          f"({detection.confidence:.2f}){where}")
+                                          f"({detection.confidence:.2f}){where}{plaque}")
                                 _draw_detection(annotated, detection)
                                 retenues.append(detection)
                                 if on_detection:
@@ -273,6 +322,9 @@ def run_camera(camera_name: str, cam_cfg: dict, config: dict, registry: ModelReg
                             presents = occupation(zone_filter.zones(), retenues, w, h)
                             if presents:
                                 etat["occupation"] = presents
+                            plaques = [d.plaque for d in retenues if d.plaque]
+                            if plaques:
+                                etat["plaques"] = sorted(set(plaques))
                         update_camera(camera_name, **etat)
                         if frame_count % 10 == 0:
                             log.info(f"[{camera_name}] cycle {len(active_models)} modèles = {cycle_ms:.0f} ms")
@@ -322,12 +374,13 @@ class CameraSupervisor:
     """
 
     def __init__(self, config: dict, registry: ModelRegistry, on_detection, on_incident,
-                 interval: float = 5.0):
+                 interval: float = 5.0, tracks: TrackRegistry | None = None):
         self.config = config
         self.registry = registry
         self.on_detection = on_detection
         self.on_incident = on_incident
         self.interval = interval
+        self.tracks = tracks
         self._threads: dict[str, tuple[threading.Thread, threading.Event]] = {}
         self._configs: dict[str, dict] = {}
         self._shutdown = threading.Event()
@@ -337,7 +390,7 @@ class CameraSupervisor:
         thread = threading.Thread(
             target=run_camera,
             args=(name, cfg, self.config, self.registry, self.on_detection, stop_event,
-                  self.on_incident),
+                  self.on_incident, self.tracks),
             name=f"cam-{name}",
             daemon=True,
         )
@@ -382,6 +435,9 @@ class CameraSupervisor:
         try:
             while not self._shutdown.is_set():
                 self.reconcile()
+                if self.tracks is not None:
+                    set_global(correspondances=self.tracks.recentes(20),
+                               objets_inter_cameras=self.tracks.objets_suivis)
                 self._shutdown.wait(self.interval)
         except KeyboardInterrupt:
             pass
@@ -425,7 +481,18 @@ def main():
     else:
         log.info(f"caméras actives : {list(cameras)}")
 
-    CameraSupervisor(config, registry, engine.process, on_incident).run()
+    # Topologie déclarée : quelles caméras peuvent se passer un objet. Sans
+    # elle, on n'exclut aucun rapprochement — ce qui produit plus de faux
+    # rapprochements sur un grand site.
+    voisins = {nom: cfg.get("voisins", []) for nom, cfg in cameras.items() if cfg.get("voisins")}
+    tracks = TrackRegistry(voisins=voisins)
+    if voisins:
+        log.info(f"topologie des caméras : {voisins}")
+
+    global TRACKS
+    TRACKS = tracks
+
+    CameraSupervisor(config, registry, engine.process, on_incident, tracks=tracks).run()
 
 
 if __name__ == "__main__":

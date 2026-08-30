@@ -80,7 +80,9 @@ USE_CASES = [
         "model": "vehicles",
         "classes": ["car", "truck", "bus", "motorcycle", "bicycle"],
         "etat": "partiel",
-        "note": "Détection véhicules OK — lecture de plaque (OCR) à intégrer",
+        "note": "Véhicules détectés ; plaques lues par vote sur plusieurs images "
+                "(suivi requis). Localisation par vision classique : un modèle de "
+                "plaque dédié améliorerait nettement le taux de lecture.",
     },
     {
         "num": 10,

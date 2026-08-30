@@ -175,6 +175,21 @@
               <small>Coûte du temps de calcul. Utile là où l'on compte ou l'on suit un passage.</small>
             </label>
             <label class="field">
+              <span>Lecture des plaques</span>
+              <select id="cam-plates">
+                <option value="false">Désactivée</option>
+                <option value="true">Activée — véhicules, suivi requis</option>
+              </select>
+              <small>Le numéro est établi par vote sur plusieurs images du même véhicule.</small>
+            </label>
+            <label class="field wide">
+              <span>Caméras voisines</span>
+              <input type="text" id="cam-voisins" placeholder="quai_sortie, portail_nord" autocomplete="off" />
+              <small>Caméras vers lesquelles un objet peut se diriger, séparées par des virgules.
+                     Sert à écarter les rapprochements géographiquement impossibles ;
+                     laissez vide si la topologie n'est pas connue.</small>
+            </label>
+            <label class="field">
               <span>Enregistrement continu</span>
               <select id="cam-recording">
                 <option value="false">Désactivé</option>
@@ -250,6 +265,7 @@
             <option value="22-6">Poste de nuit — 22 h à 6 h</option>
           </select>
           <input type="search" id="filter-label" placeholder="Rechercher une classe…" />
+          <input type="search" id="filter-plaque" placeholder="Rechercher une plaque…" />
         </div>
 
         <div class="alerts-table" id="alerts-table"></div>
@@ -411,6 +427,16 @@
         <div class="card">
           <h3>Caméras</h3>
           <div id="system-cameras"></div>
+        </div>
+
+        <div class="card">
+          <h3>Objets suivis d'une caméra à l'autre</h3>
+          <p class="card-lede">
+            Rapprochements récents. Une correspondance établie par la plaque est certaine ;
+            une correspondance fondée sur l'apparence reste <b>probable</b> — deux ouvriers
+            en tenue identique produisent la même signature.
+          </p>
+          <div id="handoffs-list"></div>
         </div>
       </section>
 

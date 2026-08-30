@@ -297,6 +297,81 @@ Ce que le suivi apporte concrètement :
 
 Le suivi coûte du temps de calcul : il s'active par caméra (`tracking: true`).
 
+### 2.6b `app/plates.py` — lecture des plaques
+
+Le modèle `vehicles` détecte des véhicules, **pas des plaques**. Lire du texte
+sur l'image entière d'un camion produirait des numéros fantaisistes : il faut
+d'abord localiser la plaque, ensuite seulement lire.
+
+**Localisation**, dans cet ordre de préférence : un modèle dédié s'il est
+déclaré sous le nom `plate` — la voie fiable, utilisée automatiquement le jour
+où vous en entraînez un ; sinon une recherche par vision classique (contraste
+local, contours verticaux, rapport largeur/hauteur entre 2:1 et 6:1, position
+basse dans le véhicule). Cette seconde voie fonctionne sur une prise de vue
+frontale nette et échoue sur un angle marqué ou une image floue. C'est une
+limite assumée, pas un réglage à trouver.
+
+**Le vote est ce qui rend la lecture exploitable.** Une image isolée donne un
+résultat médiocre — un caractère mal lu suffit à rendre le numéro faux. Mais le
+suivi d'objets fournit plusieurs images du *même* véhicule : on lit à chaque
+fois et on retient la lecture majoritaire. La confiance rendue reflète l'accord
+entre lectures, et rien n'est affirmé sous deux lectures concordantes.
+
+C'est pourquoi la lecture de plaques **exige le suivi** : sans lui, il n'y a
+rien sur quoi voter. L'interface active le suivi automatiquement si on demande
+les plaques sans lui.
+
+**Deux contraintes de performance**, mesurées sur ce processeur :
+
+- une lecture coûte environ **1,4 seconde**. Exécutée dans la boucle vidéo,
+  elle figerait la caméra : elle tourne donc dans un fil séparé, et l'image est
+  abandonnée si le lecteur est occupé — un véhicule reste visible plusieurs
+  images, la suivante fera l'affaire ;
+- la lecture s'arrête dès que le numéro est établi, et au plus tard après huit
+  tentatives. Un camion à l'arrêt ne doit pas monopoliser le lecteur.
+
+**Le filtre de plausibilité** (longueur 4 à 10, au moins trois chiffres) écarte
+l'essentiel du bruit : un lecteur de texte trouve des mots partout — sur une
+calandre, un autocollant, un reflet.
+
+Le moteur de lecture est **optionnel**. Sans lui, le système signale une plaque
+localisée mais non lue, plutôt que d'inventer un numéro.
+
+### 2.6c `app/reid.py` — un objet vu sur plusieurs caméras
+
+Suivre une personne ou un véhicule d'une caméra à l'autre s'appelle la
+ré-identification. Faite correctement, elle repose sur un réseau d'apparence
+dédié (type OSNet) produisant une signature apprise, robuste au changement
+d'angle et d'éclairage. **Ce n'est pas ce qui est implémenté ici**, et le dire
+importe autant que le code.
+
+Ce module produit une **correspondance probable**, fondée sur cinq éléments
+quasi gratuits :
+
+| Critère | Ce qu'il écarte |
+|---|---|
+| La classe | une personne ne devient pas un camion |
+| L'apparence (histogramme HSV) | ce qui ne se ressemble pas |
+| Le temps | une réapparition trop rapide ou trop tardive |
+| La topologie déclarée | deux caméras qui ne se voient pas |
+| **La plaque** | tout le reste, quand elle est connue |
+
+La teinte est préférée au RVB parce qu'elle résiste bien mieux aux différences
+d'éclairage entre deux caméras — précisément le problème posé.
+
+**La plaque est un identifiant, pas une ressemblance.** Deux véhicules au même
+numéro sont le même véhicule ; deux numéros différents excluent le
+rapprochement, même si les camions se ressemblent à s'y méprendre. C'est
+exactement le cas que l'apparence seule confondrait, et les tests le vérifient.
+
+Le drapeau `certain` n'est vrai **que** par la plaque. Une ressemblance
+visuelle, même parfaite, reste une ressemblance : deux ouvriers en tenue
+identique produisent la même signature. Un rapprochement présenté comme certain
+raconterait une histoire que les données ne soutiennent pas.
+
+Le jour où un modèle d'apparence est disponible, il remplace `signature()` sans
+rien changer au reste.
+
 ### 2.7 `app/benchmark.py` — banc de test
 
 Sans mesure, tout changement — relever un seuil, ré-entraîner un modèle — se
@@ -920,12 +995,17 @@ selon la rétention : clips et snapshots sont purgés à 30 jours par défaut.
    (rotation, rétention, seuil disque) sont testés unitairement, mais la machine
    de développement n'a que quelques Go libres — le comportement sur plusieurs
    jours reste à observer sur le serveur.
-12. **Lecture de plaques non réalisée**, et volontairement. Le modèle
-   `vehicles` détecte des véhicules, pas des plaques : y brancher un moteur de
-   reconnaissance de texte produirait des lectures fantaisistes sur des images
-   entières de camions. Il faudrait d'abord un modèle de détection de plaque,
-   puis un moteur de lecture — deux briques qui n'existent pas dans le projet.
-   Mieux vaut une fonction absente qu'une fonction qui donne de faux numéros.
+12. **Lecture de plaques sans modèle dédié.** La localisation repose sur de
+   la vision classique : elle tient sur une prise de vue frontale nette, et
+   échoue sur un angle marqué, une plaque sale ou une image floue. Entraîner un
+   modèle `plate` améliorerait nettement le taux de lecture — le code l'utilise
+   automatiquement dès qu'il est déclaré. Le vote sur plusieurs images
+   compense partiellement, sans faire de miracle.
+13. **La ré-identification n'en est pas une.** Le rapprochement entre caméras
+   repose sur la couleur, le temps et la topologie, pas sur un modèle
+   d'apparence. Deux ouvriers en tenue identique seront confondus. Seule une
+   correspondance par plaque est certaine, et l'interface le distingue
+   explicitement.
 
 ---
 
@@ -969,8 +1049,10 @@ pour éviter de les redécouvrir.
 
 5. Envoi automatique du rapport PDF chaque semaine (il se télécharge aujourd'hui
    à la demande depuis l'écran Rapports).
-6. Lecture de plaques : demande d'abord un modèle de détection de plaque, puis
-   un moteur de reconnaissance de texte. Voir la limite 12.
+6. Entraîner un modèle de détection de plaque, pour remplacer la localisation
+   par vision classique. Voir la limite 12.
+7. Modèle d'apparence pour une vraie ré-identification entre caméras, si le
+   serveur final en a les moyens. Voir la limite 13.
 7. Authentification, si l'interface doit un jour sortir du réseau interne.
 
 Le groupe Telegram ne demande aucun développement : il suffit d'indiquer l'id du

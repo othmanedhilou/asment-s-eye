@@ -118,7 +118,7 @@ function setupNav() {
         sources: loadUploads,
         usecases: loadUseCases,
         reports: loadReports,
-        system: loadSystem,
+        system: () => { loadSystem(); loadHandoffs(); },
       })[btn.dataset.page]?.();
     });
   });
@@ -276,6 +276,8 @@ function openCameraForm(name = null) {
   el("cam-enabled").value = String(cam?.enabled ?? true);
   el("cam-tracking").value = String(cam?.tracking ?? false);
   el("cam-recording").value = String(cam?.recording ?? false);
+  el("cam-plates").value = String(cam?.plates ?? false);
+  el("cam-voisins").value = (cam?.voisins || []).join(", ");
   cam?.models.forEach((m) => {
     const box = models.querySelector(`input[value="${m}"]`);
     if (box) box.checked = true;
@@ -310,11 +312,22 @@ function cameraFormPayload() {
     enabled: el("cam-enabled").value === "true",
     tracking: el("cam-tracking").value === "true",
     recording: el("cam-recording").value === "true",
+    plates: el("cam-plates").value === "true",
+    voisins: el("cam-voisins").value.split(",").map((v) => v.trim()).filter(Boolean),
   };
 }
 
 function setupCameraForm() {
   el("btn-add-camera").addEventListener("click", () => openCameraForm());
+
+  // La lecture de plaques repose sur le vote entre plusieurs images du meme
+  // vehicule : sans suivi, elle n'aurait rien sur quoi voter.
+  el("cam-plates").addEventListener("change", (e) => {
+    if (e.target.value === "true" && el("cam-tracking").value !== "true") {
+      el("cam-tracking").value = "true";
+      toast("Suivi activé", "La lecture de plaques repose sur le suivi des objets.");
+    }
+  });
   el("cam-cancel").addEventListener("click", () => (el("camera-form").hidden = true));
 
   el("cam-test").addEventListener("click", async () => {
@@ -593,6 +606,8 @@ function alertFilters() {
   }
   const label = el("filter-label")?.value.trim();
   if (label) params.set("label", label);
+  const plaque = el("filter-plaque")?.value.trim();
+  if (plaque) params.set("plaque", plaque);
   const poste = el("filter-hours")?.value;
   if (poste) {
     const [de, a] = poste.split("-");
@@ -649,6 +664,7 @@ function alertRow(a, avecActions) {
     ? `<a class="clip-link" href="/api/clip?path=${encodeURIComponent(a.clip)}" target="_blank">🎬 clip</a>`
     : "";
   const zone = a.zone ? `<span class="chip zone">◫ ${esc(a.zone)}</span>` : "";
+  const plaque = a.plaque ? `<span class="chip accent">▭ ${esc(a.plaque)}</span>` : "";
   const faux = a.false_positive ? '<span class="tag-false">fausse</span>' : "";
 
   let actions = "";
@@ -667,7 +683,7 @@ function alertRow(a, avecActions) {
     <div class="alert-main">
       <div class="alert-l1">${esc(a.label)} ${faux}</div>
       <div class="alert-l2">
-        <span>${esc(a.camera)}</span>${zone}
+        <span>${esc(a.camera)}</span>${zone}${plaque}
         <span>${modelName(a.model)}</span>${clip}
       </div>
     </div>
@@ -871,6 +887,37 @@ async function loadSystem() {
       </div>
       <div class="muted">${esc(c.error || "")}</div>
     </div>`).join("");
+}
+
+async function loadHandoffs() {
+  let data;
+  try {
+    data = await api("/api/handoffs");
+  } catch {
+    return;
+  }
+
+  if (!data.correspondances.length) {
+    vide("handoffs-list", "⇄", "Aucun rapprochement",
+      "Aucun objet n'a encore été retrouvé d'une caméra à l'autre. Cela demande au moins deux caméras avec le suivi activé.");
+    return;
+  }
+
+  el("handoffs-list").innerHTML = data.correspondances.map((c) => {
+    const heure = new Date(c.horodatage * 1000).toLocaleTimeString("fr-FR");
+    const certitude = c.certain
+      ? '<span class="chip accent">plaque — certain</span>'
+      : `<span class="chip">apparence — probable (${c.score})</span>`;
+    return `
+      <div class="file-row">
+        <div class="file-icon">⇄</div>
+        <div class="file-main">
+          <div class="file-name">${esc(c.de)} → ${esc(c.vers)}</div>
+          <div class="file-sub">${heure} · ${esc(c.classe)}${c.plaque ? ` · ${esc(c.plaque)}` : ""}</div>
+        </div>
+        ${certitude}
+      </div>`;
+  }).join("");
 }
 
 async function refreshPipelineState() {
@@ -1159,8 +1206,9 @@ function setupFilters() {
   const ids = ["filter-model", "filter-camera", "filter-zone", "filter-severity",
     "filter-ack", "filter-false", "filter-period", "filter-hours"];
   ids.forEach((id) => el(id)?.addEventListener("change", () => { alertsPage = 0; loadAlertsTable(); }));
-  el("filter-label")?.addEventListener("input",
-    debounce(() => { alertsPage = 0; loadAlertsTable(); }, 350));
+  const recherche = debounce(() => { alertsPage = 0; loadAlertsTable(); }, 350);
+  el("filter-label")?.addEventListener("input", recherche);
+  el("filter-plaque")?.addEventListener("input", recherche);
 }
 
 function debounce(fn, delai) {

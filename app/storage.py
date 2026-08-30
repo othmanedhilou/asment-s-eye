@@ -73,6 +73,9 @@ class AlertRecord(Base):
     # "x1,y1,x2,y2,largeur,hauteur" en pixels : sert de pre-annotation lors de
     # l'export du jeu de donnees pour le re-entrainement.
     bbox: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    # Numéro de plaque lu, quand la caméra le permet. Conservé parce que c'est
+    # la donnée qu'on recherchera après un incident impliquant un véhicule.
+    plaque: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
 
 _engine = None
@@ -91,6 +94,7 @@ def _migrate(engine):
             "zone": "ALTER TABLE alerts ADD COLUMN zone VARCHAR(100)",
             "false_positive": "ALTER TABLE alerts ADD COLUMN false_positive BOOLEAN DEFAULT 0",
             "bbox": "ALTER TABLE alerts ADD COLUMN bbox VARCHAR(120)",
+            "plaque": "ALTER TABLE alerts ADD COLUMN plaque VARCHAR(20)",
         }
         for col, ddl in migrations.items():
             if col not in cols:
@@ -126,6 +130,7 @@ def _to_dict(r: AlertRecord) -> dict:
         "zone": r.zone or "",
         "false_positive": bool(r.false_positive),
         "bbox": [float(v) for v in r.bbox.split(",")] if r.bbox else None,
+        "plaque": r.plaque,
     }
 
 
@@ -149,6 +154,7 @@ def log_alert(alert: Alert, snapshot_path: str | None = None) -> int:
             severity=severity_for(alert.model, alert.label),
             zone=alert.zone or None,
             bbox=_bbox_to_text(alert),
+            plaque=alert.plaque,
         )
         session.add(record)
         session.commit()
@@ -199,6 +205,7 @@ def read_alerts(
     since_hours: int | None = None,
     offset: int = 0,
     label: str | None = None,
+    plaque: str | None = None,
     hour_from: int | None = None,
     hour_to: int | None = None,
 ) -> list[dict]:
@@ -222,6 +229,10 @@ def read_alerts(
             stmt = stmt.where(AlertRecord.timestamp >= cutoff)
         if label:
             stmt = stmt.where(AlertRecord.label.like(f"%{label}%"))
+        if plaque:
+            # Recherche partielle : après un incident, on se souvient souvent
+            # de quelques caractères, rarement du numéro complet.
+            stmt = stmt.where(AlertRecord.plaque.like(f"%{plaque.upper()}%"))
         # Plage horaire : « toutes les alertes EPI entre 22 h et 6 h » est une
         # question d'exploitation courante, impossible à poser sans cela.
         if hour_from is not None and hour_to is not None:

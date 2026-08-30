@@ -33,6 +33,18 @@ psutil==7.2.2
 # Rapport PDF pour le service HSE
 reportlab==5.0.1
 
+# Lecture des plaques d'immatriculation — OPTIONNEL.
+# Sans ce moteur, les plaques sont localisees mais non lues : le systeme le
+# signale plutot que d'inventer un numero.
+#
+# ATTENTION a la methode d'installation : easyocr tire opencv-python-headless,
+# qui REMPLACE opencv-python et casserait la capture video. Installer ainsi :
+#
+#   pip install scipy scikit-image python-bidi pyclipper shapely ninja
+#   pip install --no-deps easyocr
+#
+# easyocr==1.7.2
+
 # Utilitaires
 python-dotenv==1.2.3
 loguru==0.7.3

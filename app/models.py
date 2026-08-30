@@ -17,6 +17,8 @@ class Detection:
     zone_cooldown: float | None = None
     frame_size: tuple[int, int] | None = None  # (largeur, hauteur) de l'image source
     track_id: int | None = None  # identifiant de suivi, quand la caméra l'active
+    plaque: str | None = None    # numéro lu, pour les véhicules
+    global_id: int | None = None  # identifiant partagé entre caméras
 
 
 @dataclass
@@ -32,4 +34,5 @@ class Alert:
     # deja pre-annotee demande une correction, pas une annotation complete.
     bbox: tuple[float, float, float, float] | None = None
     frame_size: tuple[int, int] | None = None
+    plaque: str | None = None
     db_id: int | None = None  # rempli après insertion en base
