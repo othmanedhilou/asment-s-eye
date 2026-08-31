@@ -229,7 +229,22 @@ def run_camera(camera_name: str, cam_cfg: dict, config: dict, registry: ModelReg
     all_models = cam_cfg.get("models", [])
 
     # Modèles désactivés en dur dans config.yaml (ex: modèle pas fiable) : jamais chargés.
-    available_models = [m for m in all_models if models_cfg.get(m, {}).get("enabled", True)]
+    # Un modele declare mais dont le fichier n'existe pas encore — la chute et
+    # les plaques restent a entrainer — ne doit pas emporter la camera au
+    # demarrage. On l'ecarte, et on le dit : un modele silencieux qu'on croit
+    # actif est pire qu'un modele absent qu'on sait absent.
+    racine = Path(__file__).resolve().parent.parent
+    available_models = []
+    for m in all_models:
+        cfg_modele = models_cfg.get(m, {})
+        if not cfg_modele.get("enabled", True):
+            continue
+        fichier = cfg_modele.get("file")
+        if fichier and not (racine / fichier).exists():
+            log.warning(f"[{camera_name}] modele '{m}' demande mais absent "
+                        f"({fichier}) — ignore")
+            continue
+        available_models.append(m)
 
     # Cadence et résolution réglables par caméra : sur une machine contrainte, on
     # peut ralentir une caméra secondaire sans toucher aux autres.
