@@ -1289,7 +1289,7 @@ function interrupteur(modele, cle, valeur, texte) {
 
 /* ═══ Zones ═══ */
 
-const zones = { camera: null, liste: [], trace: [] };
+const zones = { camera: null, liste: [], trace: [], mode: "rectangle", depart: null };
 
 async function chargerZones() {
   const s = el("zone-camera");
@@ -1313,6 +1313,11 @@ async function choisirCameraZone(cam) {
   el("zone-camera").value = cam;
   el("zone-image").src = `/video/${encodeURIComponent(cam)}.jpg?t=${Date.now()}`;
   zones.liste = (await api(`/api/zones/${encodeURIComponent(cam)}`)).zones || [];
+  // Un nom pret a l'emploi : personne ne veut taper « Zone 1 » a la main, et
+  // un champ vide bloque l'ajout sans qu'on comprenne pourquoi.
+  zones.depart = null;
+  el("zone-nom").value = `Zone ${zones.liste.length + 1}`;
+  aideTrace();
   listerZones();
   dessinerZones();
 }
@@ -1407,29 +1412,109 @@ function listerZones() {
   });
 }
 
+/* Coordonnées normalisées : indépendantes de la taille d'affichage et de la
+   résolution de la caméra. */
+function pointSurToile(e) {
+  const r = el("zone-canvas").getBoundingClientRect();
+  return [
+    +Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)).toFixed(4),
+    +Math.min(1, Math.max(0, (e.clientY - r.top) / r.height)).toFixed(4),
+  ];
+}
+
+function rectangle(a, b) {
+  const [x1, y1] = a, [x2, y2] = b;
+  const g = Math.min(x1, x2), d = Math.max(x1, x2);
+  const h = Math.min(y1, y2), b2 = Math.max(y1, y2);
+  return [[g, h], [d, h], [d, b2], [g, b2]];
+}
+
+function aideTrace() {
+  const a = el("zone-aide");
+  if (zones.mode === "rectangle") {
+    a.textContent = zones.trace.length
+      ? "Zone encadrée — nommez-la puis « Ajouter »."
+      : "Glissez la souris sur l'image pour encadrer la zone à surveiller.";
+  } else {
+    a.textContent = zones.trace.length
+      ? `${zones.trace.length} sommet(s)`
+        + (zones.trace.length >= 3 ? " — nommez la zone puis « Ajouter »." : " — 3 minimum.")
+      : "Cliquez pour poser les sommets — 3 minimum.";
+  }
+}
+
+/* Un rectangle glissé couvre l'immense majorité des cas — un quai, un portail,
+   une allée. Poser quatre sommets un par un pour obtenir un rectangle etait un
+   travail que la machine peut faire. Le polygone reste la pour les formes que
+   le rectangle trahit. */
 function brancherZones() {
   const c = el("zone-canvas");
 
-  c.addEventListener("click", (e) => {
-    const r = c.getBoundingClientRect();
-    // Coordonnées normalisées : indépendantes de la taille d'affichage et de la
-    // résolution de la caméra.
-    zones.trace.push([
-      +((e.clientX - r.left) / r.width).toFixed(4),
-      +((e.clientY - r.top) / r.height).toFixed(4),
-    ]);
-    el("zone-aide").textContent = `${zones.trace.length} sommet(s)`
-      + (zones.trace.length >= 3 ? " — nommez la zone puis « Ajouter »." : " — 3 minimum.");
+  el("zone-mode").addEventListener("click", (e) => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    zones.mode = b.dataset.mode;
+    document.querySelectorAll("#zone-mode .bouton").forEach((x) =>
+      x.classList.toggle("actif", x === b));
+    el("zone-annuler-point").hidden = zones.mode !== "polygone";
+    zones.trace = [];
+    zones.depart = null;
+    aideTrace();
     dessinerZones();
   });
 
-  el("zone-annuler-point").addEventListener("click", () => { zones.trace.pop(); dessinerZones(); });
-  el("zone-effacer").addEventListener("click", () => { zones.trace = []; dessinerZones(); });
+  c.addEventListener("mousedown", (e) => {
+    if (zones.mode !== "rectangle") return;
+    zones.depart = pointSurToile(e);
+    zones.trace = [];
+    dessinerZones();
+  });
+
+  c.addEventListener("mousemove", (e) => {
+    if (zones.mode !== "rectangle" || !zones.depart) return;
+    zones.trace = rectangle(zones.depart, pointSurToile(e));
+    dessinerZones();
+  });
+
+  const finir = (e) => {
+    if (zones.mode !== "rectangle" || !zones.depart) return;
+    const fin = pointSurToile(e);
+    // Un simple clic ne fait pas une zone : sans ce garde-fou, on obtiendrait
+    // un rectangle plat impossible a voir et impossible a supprimer.
+    const assez = Math.abs(fin[0] - zones.depart[0]) > 0.03
+                  && Math.abs(fin[1] - zones.depart[1]) > 0.03;
+    zones.trace = assez ? rectangle(zones.depart, fin) : [];
+    zones.depart = null;
+    aideTrace();
+    dessinerZones();
+  };
+  c.addEventListener("mouseup", finir);
+  c.addEventListener("mouseleave", finir);
+
+  c.addEventListener("click", (e) => {
+    if (zones.mode !== "polygone") return;
+    zones.trace.push(pointSurToile(e));
+    aideTrace();
+    dessinerZones();
+  });
+
+  el("zone-annuler-point").addEventListener("click", () => {
+    zones.trace.pop(); aideTrace(); dessinerZones();
+  });
+  el("zone-effacer").addEventListener("click", () => {
+    zones.trace = []; zones.depart = null; aideTrace(); dessinerZones();
+  });
 
   el("zone-ajouter").addEventListener("click", () => {
     const m = el("zone-msg");
     const nom = el("zone-nom").value.trim();
-    if (zones.trace.length < 3) { m.className = "msg err"; m.textContent = "Tracez au moins 3 sommets."; return; }
+    if (zones.trace.length < 3) {
+      m.className = "msg err";
+      m.textContent = zones.mode === "rectangle"
+        ? "Glissez la souris sur l'image pour encadrer la zone."
+        : "Posez au moins 3 sommets.";
+      return;
+    }
     if (!nom) { m.className = "msg err"; m.textContent = "Donnez un nom à la zone."; return; }
 
     const z = {
@@ -1438,17 +1523,15 @@ function brancherZones() {
     };
     const d = el("zone-debut").value, f = el("zone-fin").value;
     if (d && f) z.schedule = { start: d, end: f };
-    if (el("zone-seuil").value) z.conf = Number(el("zone-seuil").value);
-    if (el("zone-delai").value) z.cooldown = Number(el("zone-delai").value);
 
     zones.liste.push(z);
     zones.trace = [];
-    el("zone-nom").value = "";
-    el("zone-seuil").value = "";
-    el("zone-delai").value = "";
+    zones.depart = null;
+    el("zone-nom").value = `Zone ${zones.liste.length + 1}`;
     el("zone-modeles").querySelectorAll("input:checked").forEach((x) => (x.checked = false));
     m.className = "msg";
     m.textContent = "Zone ajoutée — pensez à enregistrer.";
+    aideTrace();
     listerZones();
     dessinerZones();
   });

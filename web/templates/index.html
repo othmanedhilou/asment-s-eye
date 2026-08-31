@@ -327,7 +327,11 @@
               <div class="bloc-tete">TRACÉ
                 <span class="bloc-tete-fin">
                   <select id="zone-camera"></select>
-                  <button class="bouton" id="zone-annuler-point">Dernier point</button>
+                  <span class="groupe" id="zone-mode">
+                    <button class="bouton actif" data-mode="rectangle">Rectangle</button>
+                    <button class="bouton" data-mode="polygone">Polygone</button>
+                  </span>
+                  <button class="bouton" id="zone-annuler-point" hidden>Dernier point</button>
                   <button class="bouton" id="zone-effacer">Effacer</button>
                 </span>
               </div>
@@ -337,7 +341,7 @@
                   <canvas id="zone-canvas"></canvas>
                 </div>
                 <p class="msg" id="zone-aide" style="margin:8px 0 0">
-                  Tracer à la souris — 3 sommets minimum, double-clic pour fermer.
+                  Glissez la souris sur l'image pour encadrer la zone à surveiller.
                 </p>
               </div>
             </div>
@@ -358,11 +362,6 @@
                   <div class="champ"><span>HORAIRE</span>
                     <div class="enligne">
                       <input type="time" id="zone-debut" /><span class="msg">→</span><input type="time" id="zone-fin" />
-                    </div></div>
-                  <div class="champ"><span>SEUIL ET DÉLAI PROPRES</span>
-                    <div class="enligne">
-                      <input type="number" id="zone-seuil" step="0.05" min="0" max="1" placeholder="seuil" />
-                      <input type="number" id="zone-delai" step="30" min="0" placeholder="délai (s)" />
                     </div></div>
                 </div>
                 <div class="actions"><button class="bouton" id="zone-ajouter">Ajouter la zone</button></div>
@@ -471,7 +470,8 @@
 
     <div class="aide-section">PARAMÈTRES</div>
     <div class="aide-item"><b>Source d'une caméra</b><span>Un numéro pour une webcam, une adresse <code>rtsp://</code> pour une caméra IP, un chemin pour un fichier vidéo ou un dossier d'images.</span></div>
-    <div class="aide-item"><b>Zones d'intérêt</b><span>Hors zone, les détections sont ignorées : c'est le principal levier contre les fausses alertes. Une zone d'exclusion fait l'inverse — elle masque ce qui gêne, comme la route au fond du champ. Sans aucune zone, l'image est analysée en entier.</span></div>
+    <div class="aide-item"><b>Zones d'intérêt</b><span>Hors zone, les détections sont ignorées : c'est le principal levier contre les fausses alertes — bien plus efficace qu'un réglage de seuil. Une zone d'exclusion fait l'inverse : elle masque ce qui gêne, comme la route au fond du champ. Sans aucune zone, l'image est analysée en entier.</span></div>
+    <div class="aide-item"><b>Tracer une zone</b><span>Glissez la souris sur l'image pour encadrer la zone : un rectangle suffit dans la plupart des cas. Le bouton « Polygone » permet de suivre une forme irrégulière, point par point. Ce qui compte pour l'appartenance est le bas de l'objet — les pieds d'une personne, le contact au sol d'un véhicule.</span></div>
     <div class="aide-item"><b>Fichiers de test</b><span>Glisser une vidéo ou une image lance l'analyse immédiatement, sans rien créer. Le résultat s'affiche en Direct sous le nom « essai ». C'est ce qui permet d'éprouver le système sans attendre l'accès au réseau du site : une webcam de bureau ne montre jamais de départ de feu.</span></div>
     <div class="aide-item"><b>Lecture des plaques</b><span>Une plaque doit faire au moins 90 pixels de large pour être lisible — environ 120 en pratique. En dessous, aucun moteur ne rend autre chose que du bruit, et le système le dit plutôt que de rester muet : c'est un problème de cadrage de caméra, pas de logiciel. Paramètres → État du système donne la largeur réellement vue.</span></div>
     <div class="aide-item"><b>Suivi des objets</b><span>Chaque objet reçoit un numéro et une couleur, et laisse derrière lui la trace de son parcours. C'est ce qui permet de n'alerter qu'une fois par personne : sans suivi, la même personne sans casque déclencherait une alerte à chaque image.</span></div>
