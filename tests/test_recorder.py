@@ -129,3 +129,41 @@ def test_un_clip_en_cours_est_ecrit_quand_la_camera_s_arrete(tmp_path, monkeypat
     r.release()
     assert 42 in enregistres
     assert Path(enregistres[42]).exists()
+
+
+def test_le_clip_est_ecrit_dans_un_format_lisible_par_un_navigateur(tmp_path, monkeypatch):
+    """Les clips sortaient en FMP4 (MPEG-4 Part 2) : fichier valide, décodable
+    par OpenCV, et qu'aucun navigateur n'affiche. Tout fonctionnait sauf la
+    dernière étape, celle qui compte pour l'opérateur."""
+    from pathlib import Path
+
+    import numpy as np
+
+    from app import recorder as recorder_module
+
+    monkeypatch.setattr(recorder_module, "CLIPS_DIR", tmp_path)
+    ecrits = {}
+    monkeypatch.setattr(recorder_module, "update_alert_clip",
+                        lambda alert_id, chemin: ecrits.update({alert_id: chemin}))
+
+    r = recorder_module.ClipRecorder("cam", fps=2, pre_seconds=1, post_seconds=1)
+    for _ in range(3):
+        r.add_frame(np.zeros((48, 64, 3), dtype=np.uint8))
+    r.trigger(7)
+    for _ in range(6):
+        r.add_frame(np.zeros((48, 64, 3), dtype=np.uint8))
+
+    assert 7 in ecrits, "le clip aurait dû être écrit"
+    chemin = Path(ecrits[7])
+    assert chemin.suffix == ".webm", f"format inattendu : {chemin.suffix}"
+    # En-tête EBML : c'est ce qui fait qu'un navigateur reconnaît un WebM.
+    assert chemin.read_bytes()[:4] == b"\x1aE\xdf\xa3"
+
+
+def test_le_type_mime_suit_l_extension():
+    """Annoncer video/mp4 pour un fichier WebM empêche certains navigateurs de
+    le lire — l'erreur est silencieuse côté utilisateur."""
+    from app.api import app as application
+
+    routes = {r.path: r for r in application.routes}
+    assert "/api/clip" in routes

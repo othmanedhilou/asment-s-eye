@@ -348,7 +348,11 @@ def api_clip(path: str):
         raise HTTPException(status_code=400, detail="Chemin invalide")
     if not candidate.exists():
         raise HTTPException(status_code=404, detail="Clip introuvable")
-    return FileResponse(str(candidate), media_type="video/mp4")
+    # Le type suit l'extension : annoncer video/mp4 pour un fichier WebM
+    # empeche certains navigateurs de le lire.
+    types = {".webm": "video/webm", ".mp4": "video/mp4", ".avi": "video/x-msvideo"}
+    return FileResponse(str(candidate),
+                        media_type=types.get(candidate.suffix.lower(), "video/mp4"))
 
 
 @app.get("/api/cameras")

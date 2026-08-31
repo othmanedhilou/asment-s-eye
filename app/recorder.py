@@ -20,6 +20,35 @@ CLIPS_DIR = Path(__file__).resolve().parent.parent / "clips" / "videos"
 log = setup_logging()
 
 
+# Le clip doit se lire DANS UN NAVIGATEUR, ce qui elimine la plupart des codecs
+# qu'OpenCV sait ecrire.
+#
+# Constat sur cette machine : les clips sortaient en FMP4 (MPEG-4 Part 2).
+# Le fichier etait valide, decodable par OpenCV, et aucun navigateur ne
+# l'affichait — donc « le clip ne marche pas », alors que tout fonctionnait
+# sauf la derniere etape. H.264 exige la bibliotheque OpenH264, absente ici et
+# qu'on ne peut pas supposer presente sur un site coupe d'Internet.
+#
+# VP8 dans un conteneur WebM est lu nativement par Chrome, Edge et Firefox, et
+# n'exige aucune bibliotheque supplementaire. On retombe sur MPEG-4 si
+# l'encodeur manque : un clip illisible dans le navigateur vaut mieux qu'aucun
+# clip, il reste ouvrable avec un lecteur video.
+ENCODEURS = [("VP80", ".webm"), ("VP90", ".webm"), ("mp4v", ".mp4")]
+
+
+def _ouvrir_video(base: Path, fps: float, largeur: int, hauteur: int):
+    """Ouvre un writer avec le premier encodeur disponible. (chemin, writer)."""
+    for code, extension in ENCODEURS:
+        chemin = base.with_suffix(extension)
+        writer = cv2.VideoWriter(str(chemin), cv2.VideoWriter_fourcc(*code),
+                                 fps, (largeur, hauteur))
+        if writer.isOpened():
+            return chemin, writer
+        writer.release()
+        chemin.unlink(missing_ok=True)
+    return base, None
+
+
 class ClipRecorder:
     def __init__(self, camera: str, fps: float = 4, pre_seconds: int = 5, post_seconds: int = 10):
         self.camera = camera
@@ -81,8 +110,11 @@ class ClipRecorder:
             h, w = frames[0].shape[:2]
             ts = datetime.now().strftime("%Y%m%d_%H%M%S")
             premiere = active["alert_ids"][0]
-            path = CLIPS_DIR / f"{self.camera}_alerte{premiere}_{ts}.mp4"
-            writer = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"mp4v"), self.fps, (w, h))
+            path, writer = _ouvrir_video(
+                CLIPS_DIR / f"{self.camera}_alerte{premiere}_{ts}", self.fps, w, h)
+            if writer is None:
+                log.error(f"[{self.camera}] aucun encodeur video disponible")
+                return
             for f in frames:
                 writer.write(f)
             writer.release()
