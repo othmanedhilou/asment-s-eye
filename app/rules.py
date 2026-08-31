@@ -54,12 +54,12 @@ ALERT_LABELS = {
 # verrou anti-répétition ne s'applique pas de l'un à l'autre : UNE flamme a
 # produit QUATRE alertes.
 #
-# On fusionne. La distinction n'a de toute façon aucune consequence pratique :
-# feu ou fumée, quelqu'un va voir immédiatement. Mieux vaut dire vrai et large
-# que precis et faux.
+# On fusionne sous « fumée », le terme d'usage sur le site. La distinction n'a
+# de toute façon aucune consequence pratique : flamme ou fumée, quelqu'un va
+# voir immédiatement. Mieux vaut un seul mot juste qu'une precision fausse.
 LABELS_FUSIONNES = {
-    ("fire_smoke", "Fire"): "feu ou fumée",
-    ("fire_smoke", "Smoke"): "feu ou fumée",
+    ("fire_smoke", "Fire"): "fumée",
+    ("fire_smoke", "Smoke"): "fumée",
 }
 
 

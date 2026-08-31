@@ -326,7 +326,7 @@ def test_feu_et_fumee_ne_font_qu_une_alerte():
     feu.track_id, feu.track_hits = 1, 5
     premiere = moteur.process(feu)
     assert premiere is not None
-    assert premiere.label == "feu ou fumée"
+    assert premiere.label == "fumée"
 
     from app.storage import severity_for
     assert severity_for("fire_smoke", premiere.label) == "critique"
@@ -340,4 +340,4 @@ def test_le_message_reprend_le_libelle_fusionne():
     moteur = AlertEngine()
     d = detection(model="fire_smoke", label="Smoke")
     d.track_id, d.track_hits = 1, 5
-    assert "feu ou fumée" in moteur.process(d).message
+    assert "fumée" in moteur.process(d).message
