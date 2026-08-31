@@ -646,6 +646,16 @@ function resumerFiltres() {
   ].join(" · ");
 }
 
+function majBoutonEffacer(total, filtre) {
+  const b = el("btn-effacer");
+  if (!b) return;
+  b.disabled = !total;
+  b.textContent = total ? `Effacer (${total})` : "Effacer";
+  b.title = !total ? "Aucune alerte à effacer"
+    : filtre ? `Efface les ${total} alertes affichées, avec leurs captures et leurs clips`
+      : `Efface TOUT l'historique — ${total} alertes, captures et clips compris`;
+}
+
 async function chargerAlertes() {
   resumerFiltres();
   const p = filtres();
@@ -692,6 +702,7 @@ async function chargerAlertes() {
     n.addEventListener("click", () => window.open(n.dataset.img, "_blank")));
 
   pagination(d);
+  majBoutonEffacer(d.total, [...filtres().keys()].length > 0);
 }
 
 function ligneAlerte(a) {
@@ -1468,13 +1479,12 @@ async function init() {
   el("btn-effacer").addEventListener("click", async () => {
     const p = filtres();
     const combien = await api(`/api/alerts?limit=1&${p}`).then((d) => d.total).catch(() => null);
-    if (combien === 0) { avis("Rien à effacer", "Aucune alerte ne correspond.", ""); return; }
+    if (!combien) { avis("Rien à effacer", "Aucune alerte ne correspond.", ""); return; }
 
-    // On annonce le nombre exact : « effacer l'historique » ne dit pas si l'on
-    // perd trois lignes ou trois mille.
     const sansFiltre = [...p.keys()].length === 0;
     const ok = await confirmer(
-      `Effacer ${combien ?? "ces"} alerte(s) ?`,
+      sansFiltre ? `Effacer tout l'historique — ${combien} alertes ?`
+        : `Effacer les ${combien} alertes affichées ?`,
       sansFiltre
         ? "Aucun filtre n'est actif : c'est TOUT l'historique qui part, avec ses captures et ses clips. Cette action est définitive."
         : "Seules les alertes correspondant aux filtres affichés sont effacées, avec leurs captures et leurs clips. Cette action est définitive.",

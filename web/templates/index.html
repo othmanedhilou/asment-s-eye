@@ -143,7 +143,12 @@
           <div class="filtres-tete">
             <span class="filtres-titre">FILTRES</span>
             <span class="filtres-resume" id="filtres-resume">24 heures · toutes caméras · toutes gravités</span>
-            <button class="bouton" id="btn-filtres">Déplier</button>
+            <span class="filtres-actions">
+              <button class="bouton" id="btn-filtres">Déplier</button>
+              <a class="bouton" href="/api/export/csv">Export CSV</a>
+              <a class="bouton" href="/api/export/pdf?days=7">Rapport PDF</a>
+              <button class="bouton danger" id="btn-effacer">Effacer</button>
+            </span>
           </div>
           <div class="filtres-corps" id="filtres-corps" hidden>
             <select id="f-periode">
@@ -181,9 +186,6 @@
             </select>
             <input type="search" id="f-classe" placeholder="Classe…" />
             <input type="search" id="f-plaque" placeholder="Plaque…" />
-            <a class="bouton" href="/api/export/csv">Export CSV</a>
-            <a class="bouton" href="/api/export/pdf?days=7">Rapport PDF</a>
-            <button class="bouton danger" id="btn-effacer">Effacer ces alertes</button>
           </div>
         </div>
 

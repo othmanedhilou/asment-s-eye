@@ -414,7 +414,7 @@ svg.ico { width: 18px; height: 18px; flex: none; stroke: currentColor; fill: non
 .filtres-tete { display: flex; align-items: center; gap: 14px; padding: 12px 20px; width: 100%; text-align: left; }
 .filtres-titre { font-size: 12px; letter-spacing: 0.1em; color: var(--muted); }
 .filtres-resume { font-size: 14.5px; color: var(--text2); }
-.filtres-tete .bouton { margin-left: auto; }
+.filtres-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
 .filtres-corps { display: flex; gap: 10px; flex-wrap: wrap; padding: 0 20px 14px; }
 .filtres-corps[hidden] { display: none; }
 
