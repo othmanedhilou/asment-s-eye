@@ -100,3 +100,32 @@ def test_image_absente_sans_effet(dossier_temporaire):
     rec = ContinuousRecorder("cam1", fps=4, min_free_gb=0)
     rec.add_frame(None)
     rec.release()
+
+
+def test_un_clip_en_cours_est_ecrit_quand_la_camera_s_arrete(tmp_path, monkeypatch):
+    """Un clip attend dix secondes d'images après l'alerte. Si la caméra
+    s'arrête pendant ce temps — pipeline redémarré, caméra mise en pause,
+    vidéo terminée — les images accumulées partaient à la poubelle et l'alerte
+    restait sans preuve. Or les alertes qui précèdent un arrêt sont souvent
+    celles qui l'expliquent."""
+    from pathlib import Path
+
+    import numpy as np
+
+    from app import recorder as recorder_module
+
+    monkeypatch.setattr(recorder_module, "CLIPS_DIR", tmp_path)
+    enregistres = {}
+    monkeypatch.setattr(recorder_module, "update_alert_clip",
+                        lambda alert_id, chemin: enregistres.update({alert_id: chemin}))
+
+    r = recorder_module.ClipRecorder("cam", fps=2, pre_seconds=2, post_seconds=10)
+    image = np.zeros((48, 64, 3), dtype=np.uint8)
+    r.add_frame(image)
+    r.trigger(42)
+    r.add_frame(image)          # loin des 20 images attendues
+
+    assert enregistres == {}, "le clip ne doit pas encore être écrit"
+    r.release()
+    assert 42 in enregistres
+    assert Path(enregistres[42]).exists()

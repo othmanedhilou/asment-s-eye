@@ -450,6 +450,9 @@ def run_camera(camera_name: str, cam_cfg: dict, config: dict, registry: ModelReg
                             log.info(f"[{camera_name}] cycle {len(active_models)} modèles = {cycle_ms:.0f} ms")
                 finally:
                     stream.release()
+                    # Le clip en cours part avec ce qu'il a : les alertes qui
+                    # precedent un arret sont souvent celles qui l'expliquent.
+                    recorder.release()
                     if enregistrement_continu is not None:
                         enregistrement_continu.release()
             except ConnectionError as e:

@@ -36,6 +36,20 @@ class ClipRecorder:
             if len(self._active["frames"]) >= self._active["target"]:
                 self._write()
 
+    def release(self):
+        """Écrit le clip en cours, meme incomplet, avant que la camera s'arrete.
+
+        Un clip attend dix secondes d'images apres l'alerte. Si la camera
+        s'arrete pendant ce temps — pipeline redemarre, camera mise en pause,
+        fichier video termine — les images accumulees partaient a la poubelle
+        et l'alerte restait sans preuve. Or les alertes qui precedent un arret
+        sont souvent celles qui l'expliquent.
+
+        Un clip de trois secondes vaut mieux qu'aucun clip.
+        """
+        if self._active is not None:
+            self._write()
+
     def trigger(self, alert_id: int):
         """Rattache une alerte au clip en cours, ou en démarre un.
 
