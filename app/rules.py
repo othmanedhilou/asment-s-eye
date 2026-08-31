@@ -42,6 +42,27 @@ ALERT_LABELS = {
 # Seuils de confiance renforcés pour les classes sujettes aux faux positifs
 # (modèles entraînés sur peu de données pour ces classes précises).
 # À retirer une fois ces modèles ré-entraînés avec un dataset plus riche.
+# Libellés fusionnés en une seule alerte.
+#
+# Le modèle distingue mal la flamme de la fumée, et l'essai en conditions
+# réelles l'a montré nettement : une flamme de briquet, saturée par le capteur
+# en un halo blanc-gris, a été annoncée « Smoke 0,57 » — avec plus d'assurance
+# que le « Fire 0,49 » de la même scène.
+#
+# Deux consequences, dont la seconde est la pire. D'abord l'interface affirmait
+# quelque chose de faux. Ensuite, comme ce sont deux libellés différents, le
+# verrou anti-répétition ne s'applique pas de l'un à l'autre : UNE flamme a
+# produit QUATRE alertes.
+#
+# On fusionne. La distinction n'a de toute façon aucune consequence pratique :
+# feu ou fumée, quelqu'un va voir immédiatement. Mieux vaut dire vrai et large
+# que precis et faux.
+LABELS_FUSIONNES = {
+    ("fire_smoke", "Fire"): "feu ou fumée",
+    ("fire_smoke", "Smoke"): "feu ou fumée",
+}
+
+
 # Combien de fois un objet doit avoir été vu avant de pouvoir déclencher.
 # À deux images par seconde, trois images font une seconde et demie : assez
 # pour écarter le clignotement, assez court pour ne pas rater un passage.
@@ -183,16 +204,21 @@ class AlertEngine:
         # Le prix à payer : deux ouvriers sans casque dans la même minute ne
         # font qu'une alerte. C'est le compromis qu'ont tous les VMS, et il vaut
         # mieux qu'une colonne d'alertes que plus personne ne lit.
+        # Le libellé annoncé peut regrouper plusieurs classes du modèle. Il sert
+        # aussi de clé : sans cela, deux noms pour la même chose contournent le
+        # verrou anti-répétition.
+        libelle = LABELS_FUSIONNES.get((detection.model, detection.label),
+                                       detection.label)
         cle_objet = (detection.camera, detection.zone, detection.model,
-                     detection.label, detection.track_id)
+                     libelle, detection.track_id)
         cle_libelle = (detection.camera, detection.zone, detection.model,
-                       detection.label, None)
+                       libelle, None)
 
         if detection.track_id is not None and cle_objet in self._last_alert:
             return None
 
         dernier = self._last_alert.get(cle_libelle, 0.0)
-        if now - dernier < self._cooldown_for(detection.model, detection.label,
+        if now - dernier < self._cooldown_for(detection.model, libelle,
                                               detection.zone_cooldown):
             return None
 
@@ -203,13 +229,13 @@ class AlertEngine:
         alert = Alert(
             camera=detection.camera,
             model=detection.model,
-            label=detection.label,
+            label=libelle,
             confidence=detection.confidence,
             zone=detection.zone,
             bbox=detection.bbox,
             frame_size=detection.frame_size,
             plaque=detection.plaque,
-            message=f"{detection.label} détecté sur {detection.camera}{where} "
+            message=f"{libelle} détecté sur {detection.camera}{where} "
                     f"(confiance {detection.confidence:.2f})",
         )
         if self.on_alert:

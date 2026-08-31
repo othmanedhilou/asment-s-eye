@@ -310,3 +310,34 @@ def test_deux_libelles_differents_ne_se_bloquent_pas():
     moteur = AlertEngine()
     assert moteur.process(suivi(1, label="NO-Hardhat")) is not None
     assert moteur.process(suivi(2, label="NO-Safety Vest")) is not None
+
+
+# ── Feu et fumée : un seul événement ─────────────────────────────────
+
+
+def test_feu_et_fumee_ne_font_qu_une_alerte():
+    """Essai en conditions réelles : une flamme de briquet, saturée par le
+    capteur en un halo blanc-gris, a été annoncée « Smoke 0,57 » — avec plus
+    d'assurance que le « Fire 0,49 » de la même scène. Comme ce sont deux
+    libellés, le verrou anti-répétition ne s'appliquait pas de l'un à l'autre :
+    UNE flamme a produit QUATRE alertes."""
+    moteur = AlertEngine()
+    feu = detection(model="fire_smoke", label="Fire")
+    feu.track_id, feu.track_hits = 1, 5
+    premiere = moteur.process(feu)
+    assert premiere is not None
+    assert premiere.label == "feu ou fumée"
+
+    from app.storage import severity_for
+    assert severity_for("fire_smoke", premiere.label) == "critique"
+
+    fumee = detection(model="fire_smoke", label="Smoke")
+    fumee.track_id, fumee.track_hits = 2, 5
+    assert moteur.process(fumee) is None
+
+
+def test_le_message_reprend_le_libelle_fusionne():
+    moteur = AlertEngine()
+    d = detection(model="fire_smoke", label="Smoke")
+    d.track_id, d.track_hits = 1, 5
+    assert "feu ou fumée" in moteur.process(d).message
