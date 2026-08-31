@@ -94,9 +94,9 @@ function vide(cible, titre, texte) {
    explicite de l'agent s'il en fait un. Un poste de garde est sombre la nuit et
    éclairé le jour : imposer l'un des deux fatigue un cas sur deux. */
 function theme() {
-  const systeme = () =>
-    window.matchMedia?.("(prefers-color-scheme: light)").matches ? "clair" : "sombre";
-  let courant = localStorage.getItem("ciments_eye-theme") || systeme();
+  // Sombre par defaut : un poste de garde est rarement une piece eclairee, et
+  // l'image video ressort mieux sur un fond noir.
+  let courant = localStorage.getItem("ciments_eye-theme") || "sombre";
 
   const appliquer = () => {
     document.documentElement.dataset.theme = courant;
@@ -272,12 +272,16 @@ function dessinerArbre() {
 
 function dessinerMur() {
   const mur = el("mur");
-  const liste = selection ? cameras.filter((c) => c.name === selection) : cameras;
+  // Toutes les cameras restent affichees. Celle qu'on choisit s'agrandit sans
+  // faire disparaitre les autres : l'agent garde le site sous les yeux.
+  const liste = cameras;
+  const focus = selection && cameras.some((c) => c.name === selection);
+  mur.classList.toggle("focus", Boolean(focus));
 
   if (!liste.length) {
     mur.innerHTML = `<div class="mur-vide"><div>
       <div class="vide-titre">Aucune caméra configurée</div>
-      <p>Ajoutez-en une depuis Configuration → Caméras.</p>
+      <p>Ajoutez-en une depuis Paramètres → Caméras.</p>
     </div></div>`;
     return;
   }
@@ -295,7 +299,9 @@ function dessinerMur() {
     ].filter(Boolean).join(" · ");
 
     return `
-      <div class="tuile" id="tuile-${ech(c.name)}" data-cam="${ech(c.name)}">
+      <div class="tuile${c.name === selection ? " principal" : ""}"
+           id="tuile-${ech(c.name)}" data-cam="${ech(c.name)}"
+           title="Clic pour agrandir · double-clic pour le plein écran">
         <img id="flux-${ech(c.name)}" src="/video/${encodeURIComponent(c.name)}.jpg" alt=""
              onerror="this.style.opacity=0.1" onload="this.style.opacity=1" />
         <div class="inc haut">
@@ -309,8 +315,15 @@ function dessinerMur() {
       </div>`;
   }).join("");
 
-  mur.querySelectorAll("[data-cam]").forEach((t) =>
-    t.addEventListener("click", () => ouvrirVisionneuse(t.dataset.cam)));
+  mur.querySelectorAll("[data-cam]").forEach((t) => {
+    t.addEventListener("click", () => {
+      selection = selection === t.dataset.cam ? null : t.dataset.cam;
+      dessinerMur();
+      dessinerArbre();
+      majActions();
+    });
+    t.addEventListener("dblclick", () => ouvrirVisionneuse(t.dataset.cam));
+  });
 }
 
 function rafraichirFlux() {

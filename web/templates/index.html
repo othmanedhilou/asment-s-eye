@@ -8,8 +8,7 @@
   <script>
     try {
       document.documentElement.dataset.theme =
-        localStorage.getItem("ciments_eye-theme") ||
-        (matchMedia("(prefers-color-scheme: light)").matches ? "clair" : "sombre");
+        localStorage.getItem("ciments_eye-theme") || "sombre";
     } catch (e) { document.documentElement.dataset.theme = "sombre"; }
   </script>
 </head>
@@ -47,7 +46,7 @@
     <button class="onglet actif" data-vue="direct"><svg class="ico"><use href="#i-cam"/></svg>Direct</button>
     <button class="onglet" data-vue="historique"><svg class="ico"><use href="#i-list"/></svg>Historique<span class="compteur" id="badge-alertes"></span></button>
     <button class="onglet" data-vue="analyse"><svg class="ico"><use href="#i-chart"/></svg>Analyse</button>
-    <button class="onglet" data-vue="config"><svg class="ico"><use href="#i-cog"/></svg>Configuration</button>
+    <button class="onglet" data-vue="config"><svg class="ico"><use href="#i-cog"/></svg>Paramètres</button>
     <div class="onglets-fin">
       <span id="horloge">--:--:--</span>
       <button class="btn-icone" id="btn-theme" title="Thème clair ou sombre" aria-label="Changer de thème">
@@ -163,8 +162,7 @@
     <!-- ══ Analyse ══ -->
     <section class="page defile" id="vue-analyse">
 
-      <h2>Analyse</h2>
-      <p class="lede">Indicateurs sur 24 heures, 7 et 30 jours.</p>
+      <h2>Analyse<i class="aide" data-aide="Indicateurs sur 24 heures, 7 et 30 jours.">?</i></h2>
       <div class="bloc">
         <div class="bloc-tete">Indicateurs</div>
         <div class="bloc-corps"><table class="liste" id="indicateurs"></table></div>
@@ -183,25 +181,20 @@
           <div class="bloc-corps"><div id="rangs-zone"></div></div>
         </div>
         <div class="bloc">
-          <div class="bloc-tete">Fiabilité — 30 j</div>
+          <div class="bloc-tete">Fiabilité — 30 j<i class="aide" data-aide="Part des alertes déclarées fausses par les opérateurs.">?</i></div>
           <div class="bloc-corps">
-            <p class="lede" style="margin:0 0 8px">Part des alertes déclarées fausses par les opérateurs.</p>
             <div id="rangs-fiabilite"></div>
           </div>
         </div>
         <div class="bloc">
-          <div class="bloc-tete">Fausses alertes par caméra — 30 j</div>
+          <div class="bloc-tete">Fausses alertes par caméra — 30 j<i class="aide" data-aide="Objectif : moins de 2 par jour et par caméra.">?</i></div>
           <div class="bloc-corps">
-            <p class="lede" style="margin:0 0 8px">Objectif : moins de 2 par jour et par caméra.</p>
             <div id="rangs-fausses"></div>
           </div>
         </div>
         <div class="bloc">
-          <div class="bloc-tete">Exports</div>
+          <div class="bloc-tete">Exports<i class="aide" data-aide="Le PDF s&#x27;adresse au responsable HSE, le CSV à qui retravaille les données.">?</i></div>
           <div class="bloc-corps">
-            <p class="lede" style="margin:0 0 8px">
-              Le PDF s'adresse au responsable HSE, le CSV à qui retravaille les données.
-            </p>
             <div class="exports">
               <a class="bouton primaire" href="/api/export/pdf?days=7">Rapport PDF — 7 j</a>
               <a class="bouton" href="/api/export/pdf?days=30">PDF — 30 j</a>
@@ -217,11 +210,7 @@
     <section class="page defile" id="vue-config">
 
       <div class="section-config" id="config-cameras">
-        <h2>Caméras</h2>
-        <p class="lede">
-          Une caméra peut être une webcam, une caméra IP en RTSP, un fichier vidéo ou un dossier
-          d'images. Le pipeline prend en compte tout changement en quelques secondes, sans redémarrage.
-        </p>
+        <h2>Caméras<i class="aide" data-aide="Une caméra peut être une webcam, une caméra IP en RTSP, un fichier vidéo ou un dossier d&#x27;images. Le pipeline prend en compte tout changement en quelques secondes, sans redémarrage.">?</i></h2>
         <div class="outils" style="border:1px solid var(--trait);margin-bottom:12px">
           <button class="bouton primaire" id="btn-ajout-camera"><svg class="ico"><use href="#i-plus"/></svg>Ajouter</button>
           <button class="bouton" id="btn-modifier" disabled>Modifier</button>
@@ -237,9 +226,8 @@
           <div class="champs">
             <label class="champ"><span>Nom</span>
               <input type="text" id="cam-nom" placeholder="quai_chargement" autocomplete="off" /></label>
-            <label class="champ large"><span>Source</span>
-              <input type="text" id="cam-source" placeholder="0   ·   rtsp://user:mdp@192.168.1.42:554/stream   ·   videos/essai.mp4" autocomplete="off" />
-              <small>Webcam (numéro), caméra IP (RTSP), fichier vidéo ou dossier d'images.</small></label>
+            <label class="champ large"><span>Source<i class="aide" data-aide="Webcam (numéro), caméra IP (RTSP), fichier vidéo ou dossier d&#x27;images.">?</i></span>
+              <input type="text" id="cam-source" placeholder="0   ·   rtsp://user:mdp@192.168.1.42:554/stream   ·   videos/essai.mp4" autocomplete="off" /></label>
             <div class="champ large"><span>Fichiers déposés</span>
               <div id="choix-fichiers" class="enligne"></div></div>
             <label class="champ"><span>État</span>
@@ -247,9 +235,8 @@
                 <option value="true">Active</option>
                 <option value="false">En pause</option>
               </select></label>
-            <div class="champ large"><span>Modèles actifs</span>
-              <div id="cam-modeles" class="cases"></div>
-              <small>N'activez que les modèles pertinents : c'est le principal levier de performance.</small></div>
+            <div class="champ large"><span>Modèles actifs<i class="aide" data-aide="N&#x27;activez que les modèles pertinents : c&#x27;est le principal levier de performance.">?</i></span>
+              <div id="cam-modeles" class="cases"></div></div>
           </div>
 
           <details class="avance">
@@ -257,40 +244,33 @@
             <div class="champs">
             <label class="champ"><span>Images par seconde</span>
               <input type="number" id="cam-fps" step="0.5" min="0.5" placeholder="4" /></label>
-            <label class="champ"><span>Suivi des objets</span>
+            <label class="champ"><span>Suivi des objets<i class="aide" data-aide="Comptage, sens de passage, une alerte par personne.">?</i></span>
               <select id="cam-suivi">
                 <option value="false">Désactivé</option>
                 <option value="true">Activé</option>
-              </select>
-              <small>Comptage, sens de passage, une alerte par personne.</small></label>
-            <label class="champ"><span>Lecture des plaques</span>
+              </select></label>
+            <label class="champ"><span>Lecture des plaques<i class="aide" data-aide="Exige le suivi : le numéro est établi par vote sur plusieurs images.">?</i></span>
               <select id="cam-plaques">
                 <option value="false">Désactivée</option>
                 <option value="true">Activée</option>
-              </select>
-              <small>Exige le suivi : le numéro est établi par vote sur plusieurs images.</small></label>
-            <label class="champ"><span>Contrôle du bâchage</span>
+              </select></label>
+            <label class="champ"><span>Contrôle du bâchage<i class="aide" data-aide="Signale un camion sans bâche, confirmé sur 3 images.">?</i></span>
               <select id="cam-bachage">
                 <option value="false">Désactivé</option>
                 <option value="true">Activé</option>
-              </select>
-              <small>Signale un camion sans bâche, confirmé sur 3 images.</small></label>
-            <label class="champ"><span>Collecte d'images</span>
+              </select></label>
+            <label class="champ"><span>Collecte d'images<i class="aide" data-aide="Constitue un jeu d&#x27;entraînement cadré comme la caméra réelle.">?</i></span>
               <select id="cam-collecte">
                 <option value="false">Désactivée</option>
                 <option value="true">À chaque franchissement de ligne</option>
-              </select>
-              <small>Constitue un jeu d'entraînement cadré comme la caméra réelle.</small></label>
-            <label class="champ"><span>Enregistrement continu</span>
+              </select></label>
+            <label class="champ"><span>Enregistrement continu<i class="aide" data-aide="S&#x27;arrête sous 10 Go d&#x27;espace libre.">?</i></span>
               <select id="cam-enregistrement">
                 <option value="false">Désactivé</option>
                 <option value="true">Segments de 5 min, 7 jours</option>
-              </select>
-              <small>S'arrête sous 10 Go d'espace libre.</small></label>
-            <label class="champ large"><span>Caméras voisines</span>
-              <input type="text" id="cam-voisins" placeholder="quai_sortie, portail_nord" autocomplete="off" />
-              <small>Caméras vers lesquelles un objet peut se diriger. Écarte les
-                     rapprochements géographiquement impossibles.</small></label>
+              </select></label>
+            <label class="champ large"><span>Caméras voisines<i class="aide" data-aide="Caméras vers lesquelles un objet peut se diriger. Écarte les rapprochements géographiquement impossibles.">?</i></span>
+              <input type="text" id="cam-voisins" placeholder="quai_sortie, portail_nord" autocomplete="off" /></label>
             </div>
           </details>
 
@@ -306,13 +286,7 @@
 
       <div class="section-config" id="config-zones" hidden>
 
-      <h2>Zones d'intérêt</h2>
-      <p class="lede">
-        Délimitez les secteurs à surveiller et les modèles qui s'y appliquent. Hors zone, les
-        détections sont ignorées — c'est le principal levier contre les fausses alertes. Une zone
-        d'exclusion fait l'inverse : elle masque ce qui gêne, comme la route au fond du champ.
-        Sans aucune zone, la caméra est analysée en entier.
-      </p>
+      <h2>Zones d'intérêt<i class="aide" data-aide="Délimitez les secteurs à surveiller et les modèles qui s&#x27;y appliquent. Hors zone, les détections sont ignorées — c&#x27;est le principal levier contre les fausses alertes. Une zone d&#x27;exclusion fait l&#x27;inverse : elle masque ce qui gêne, comme la route au fond du champ. Sans aucune zone, la caméra est analysée en entier.">?</i></h2>
       <div class="zone-plan">
         <div class="bloc">
           <div class="bloc-tete">Tracé</div>
@@ -342,14 +316,12 @@
                 <option value="surveillance">Surveiller</option>
                 <option value="exclusion">Ignorer (masque)</option>
               </select></label>
-            <div class="champ" style="margin-top:8px"><span>Modèles concernés</span>
-              <div id="zone-modeles" class="cases"></div>
-              <small>Aucun coché = tous les modèles.</small></div>
+            <div class="champ" style="margin-top:8px"><span>Modèles concernés<i class="aide" data-aide="Aucun coché = tous les modèles.">?</i></span>
+              <div id="zone-modeles" class="cases"></div></div>
             <div class="champ" style="margin-top:8px"><span>Horaire</span>
               <div class="enligne">
-                <input type="time" id="zone-debut" /><span class="msg">→</span><input type="time" id="zone-fin" />
-              </div>
-              <small>Vide = 24 h/24. Une plage peut passer minuit.</small></div>
+                <input type="time" id="zone-debut" /><span class="msg">→<i class="aide" data-aide="Vide = 24 h/24. Une plage peut passer minuit.">?</i></span><input type="time" id="zone-fin" />
+              </div></div>
             <div class="champ" style="margin-top:8px"><span>Seuil et délai propres</span>
               <div class="enligne">
                 <input type="number" id="zone-seuil" step="0.05" min="0" max="1" placeholder="seuil" />
@@ -372,13 +344,7 @@
 
       <div class="section-config" id="config-fichiers" hidden>
 
-      <h2>Fichiers de test</h2>
-      <p class="lede">
-        Déposez une vidéo ou une image : elle devient une source utilisable comme une caméra, avec
-        les mêmes zones, les mêmes modèles et les mêmes alertes. C'est ce qui permet d'éprouver le
-        système sans attendre l'accès aux caméras du site — une webcam de bureau ne montre jamais
-        de départ de feu ni d'ouvrier sans casque.
-      </p>
+      <h2>Fichiers de test<i class="aide" data-aide="Déposez une vidéo ou une image : elle devient une source utilisable comme une caméra, avec les mêmes zones, les mêmes modèles et les mêmes alertes. C&#x27;est ce qui permet d&#x27;éprouver le système sans attendre l&#x27;accès aux caméras du site — une webcam de bureau ne montre jamais de départ de feu ni d&#x27;ouvrier sans casque.">?</i></h2>
       <div class="bloc">
         <div class="bloc-tete">Déposer</div>
         <div class="bloc-corps">
@@ -400,8 +366,7 @@
 
       <div class="section-config" id="config-modeles" hidden>
 
-      <h2>Réglages</h2>
-      <p class="lede">Activation de la détection et des alertes par modèle. Effet immédiat, sans redémarrage.</p>
+      <h2>Réglages<i class="aide" data-aide="Activation de la détection et des alertes par modèle. Effet immédiat, sans redémarrage.">?</i></h2>
       <div class="bloc">
         <div class="bloc-tete">Modèles de détection</div>
         <div class="bloc-corps"><div id="liste-reglages"></div></div>
@@ -409,8 +374,7 @@
       </div>
 
       <div class="section-config" id="config-usages" hidden>
-        <h2>Cas d'usage du cahier des charges</h2>
-        <p class="lede">Les 12 cas définis en section 3.2, et leur état réel d'implémentation.</p>
+        <h2>Cas d'usage du cahier des charges<i class="aide" data-aide="Les 12 cas définis en section 3.2, et leur état réel d&#x27;implémentation.">?</i></h2>
         <div class="bloc"><div class="bloc-corps" style="padding:0">
           <table class="liste" id="cas-usage"></table>
         </div></div>
@@ -418,11 +382,7 @@
 
       <div class="section-config" id="config-systeme" hidden>
 
-      <h2>État du système</h2>
-      <p class="lede">
-        Un système de surveillance qui s'arrête devient silencieux, et le silence ressemble au
-        calme. Cette page existe pour que l'arrêt se voie.
-      </p>
+      <h2>État du système<i class="aide" data-aide="Un système de surveillance qui s&#x27;arrête devient silencieux, et le silence ressemble au calme. Cette page existe pour que l&#x27;arrêt se voie.">?</i></h2>
       <div class="bloc">
         <div class="bloc-tete">Machine</div>
         <div class="bloc-corps"><table class="liste" id="systeme-machine"></table></div>
@@ -432,12 +392,8 @@
         <div class="bloc-corps"><table class="liste" id="systeme-cameras"></table></div>
       </div>
       <div class="bloc">
-        <div class="bloc-tete">Objets suivis d'une caméra à l'autre</div>
+        <div class="bloc-tete">Objets suivis d'une caméra à l'autre<i class="aide" data-aide="Une correspondance établie par la plaque est certaine ; une correspondance fondée sur l&#x27;apparence reste probable — deux ouvriers en tenue identique produisent la même signature.">?</i></div>
         <div class="bloc-corps">
-          <p class="lede" style="margin:0 0 8px">
-            Une correspondance établie par la plaque est certaine ; une correspondance fondée sur
-            l'apparence reste probable — deux ouvriers en tenue identique produisent la même signature.
-          </p>
           <table class="liste" id="systeme-rapprochements"></table>
         </div>
       </div>
