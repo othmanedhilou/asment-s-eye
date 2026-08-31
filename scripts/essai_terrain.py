@@ -9,6 +9,27 @@ Les images sont prises sur Wikimedia Commons, par recherche thematique. Aucune
 n'a servi a l'entrainement : un modele qui reussit sur son jeu de validation et
 echoue ici ne generalisera pas davantage sur le site.
 
+CE QUE CET ESSAI NE MESURE PAS
+------------------------------
+Il ne vaut que pour les modeles dont le sujet apparait dans des photographies
+ordinaires : equipements de protection, incendie, personnes, soudure. Ceux-la
+ont ete eprouves pour de bon.
+
+Il ne vaut PAS pour les modeles entraines sur un cadrage etroit et specifique.
+Le modele de convoyeur vient de BeltCrack : des gros plans de la SURFACE de la
+bande. Le juger sur une photo de galerie de convoyeur traversant un champ, ou
+la bande n'est meme pas visible, ne dit rien de lui. Meme chose pour le
+controle de chargement, entraine sur des vues de benne prises au portail.
+
+Pour ceux-la, le seul essai valable se fait sur VOTRE camera, cadree comme elle
+le sera en exploitation.
+
+Ce que l'essai revele quand meme sur eux : faute de classe « rien a signaler »,
+ils rendent une detection sur a peu pres n'importe quoi — le modele de
+convoyeur a annonce « crack 0,52 » sur un visage humain, puis sur un diagramme
+de circulation oceanique intitule « ocean conveyor belt ». D'ou une regle
+d'exploitation : n'activer un modele que sur une camera qui regarde son sujet.
+
 Deux precautions apprises a l'usage :
   - le Python de la machine peut avoir des certificats expires ; on passe par
     curl, qui a son propre magasin
