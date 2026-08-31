@@ -94,41 +94,44 @@ function vide(cible, titre, texte) {
    explicite de l'agent s'il en fait un. Un poste de garde est sombre la nuit et
    éclairé le jour : imposer l'un des deux fatigue un cas sur deux. */
 function theme() {
-  // Sombre par defaut : un poste de garde est rarement une piece eclairee, et
+  // Noir par defaut : un poste de garde est rarement une piece eclairee, et
   // l'image video ressort mieux sur un fond noir.
-  let courant = localStorage.getItem("ciments_eye-theme") || "sombre";
+  let courant = localStorage.getItem("ciments_eye-theme") || "noir";
 
   const appliquer = () => {
     document.documentElement.dataset.theme = courant;
-    el("theme-ico").setAttribute("href", courant === "clair" ? "#i-lune" : "#i-soleil");
-    el("btn-theme").title = courant === "clair" ? "Passer en sombre" : "Passer en clair";
+    document.querySelectorAll("[data-theme-choix]").forEach((b) =>
+      b.classList.toggle("actif", b.dataset.themeChoix === courant));
   };
   appliquer();
 
-  el("btn-theme").addEventListener("click", () => {
-    courant = courant === "clair" ? "sombre" : "clair";
-    localStorage.setItem("ciments_eye-theme", courant);
-    appliquer();
-  });
+  document.querySelectorAll("[data-theme-choix]").forEach((b) =>
+    b.addEventListener("click", () => {
+      courant = b.dataset.themeChoix;
+      localStorage.setItem("ciments_eye-theme", courant);
+      appliquer();
+    }));
 }
 
+const ECRANS = {
+  direct: ["Direct", "mur d'images du site"],
+  historique: ["Historique", "retrouver un événement"],
+  analyse: ["Analyse", "indicateurs et fiabilité"],
+  config: ["Paramètres", "caméras, zones, modèles"],
+};
+
 function onglets() {
-  document.querySelectorAll(".onglet").forEach((b) => {
+  document.querySelectorAll(".rail-item").forEach((b) => {
     b.addEventListener("click", () => {
-      document.querySelectorAll(".onglet").forEach((x) => x.classList.remove("actif"));
+      const vue = b.dataset.vue;
+      document.querySelectorAll(".rail-item").forEach((x) => x.classList.remove("actif"));
       document.querySelectorAll(".page").forEach((p) => p.classList.remove("actif"));
       b.classList.add("actif");
-      el(`vue-${b.dataset.vue}`).classList.add("actif");
+      el(`vue-${vue}`).classList.add("actif");
 
-      // Le panneau change de contenu selon l'onglet : les caméras en
-      // exploitation, les sections en configuration. Il disparaît là où il
-      // n'aurait rien à montrer.
-      const vue = b.dataset.vue;
-      el("panneau-direct").hidden = vue !== "direct";
-      el("panneau-config").hidden = vue !== "config";
-      const avecPanneau = ["direct", "config"].includes(vue);
-      el("panneau").hidden = !avecPanneau;
-      el("app").classList.toggle("sans-panneau", !avecPanneau);
+      const [titre, sous] = ECRANS[vue];
+      el("entete-titre").textContent = titre;
+      el("entete-sous").textContent = sous;
 
       ({
         direct: chargerCameras,
@@ -139,7 +142,7 @@ function onglets() {
     });
   });
 
-  document.querySelectorAll("#panneau-config [data-section]").forEach((n) =>
+  document.querySelectorAll("#sous-nav [data-section]").forEach((n) =>
     n.addEventListener("click", () => ouvrirSection(n.dataset.section)));
 
   // Raccourcis : un poste de supervision se pilote sans quitter l'écran.
@@ -147,7 +150,7 @@ function onglets() {
     if (e.target.matches("input, select, textarea")) return;
     const vues = ["direct", "historique", "analyse", "config"];
     if (vues[Number(e.key) - 1]) allerA(vues[Number(e.key) - 1]);
-    if (e.key === "Escape") fermerVisionneuse();
+    if (e.key === "Escape") { fermerVisionneuse(); el("aide").hidden = true; }
   });
 }
 
@@ -155,10 +158,10 @@ let sectionCourante = "cameras";
 
 function ouvrirSection(nom) {
   sectionCourante = nom;
-  document.querySelectorAll("#panneau-config [data-section]").forEach((n) =>
+  document.querySelectorAll("#sous-nav [data-section]").forEach((n) =>
     n.classList.toggle("actif", n.dataset.section === nom));
-  document.querySelectorAll(".section-config").forEach((n) =>
-    (n.hidden = n.id !== "config-" + nom));
+  document.querySelectorAll("#vue-config .section").forEach((n) =>
+    n.classList.toggle("actif", n.id === "config-" + nom));
 
   ({
     cameras: chargerCameras,
@@ -171,7 +174,7 @@ function ouvrirSection(nom) {
 }
 
 function allerA(vue) {
-  document.querySelector(`.onglet[data-vue="${vue}"]`)?.click();
+  document.querySelector(`.rail-item[data-vue="${vue}"]`)?.click();
 }
 
 function tick() {
@@ -184,7 +187,6 @@ async function chargerCameras() {
   const d = await api("/api/cameras");
   cameras = d.cameras;
   noms = cameras.map((c) => c.name);
-  dessinerArbre();
   dessinerMur();
   dessinerTableCameras();
   majBarreEtat();
@@ -227,8 +229,7 @@ function dessinerTableCameras() {
     r.addEventListener("click", () => {
       selection = selection === r.dataset.cam ? null : r.dataset.cam;
       dessinerTableCameras();
-      dessinerArbre();
-      dessinerMur();
+          dessinerMur();
     }));
 }
 
@@ -248,91 +249,138 @@ function majActions() {
     : "Sélectionnez une caméra dans la liste pour la modifier.";
 }
 
-function dessinerArbre() {
-  majActions();
-  const arbre = el("arbre-cameras");
-  if (!cameras.length) {
-    arbre.innerHTML = '<div class="vide" style="padding:14px"><p>Aucune caméra.</p></div>';
-    return;
-  }
-  arbre.innerHTML = cameras.map((c) => `
-    <div class="arbre-item ${selection === c.name ? "actif" : ""}" data-cam="${ech(c.name)}">
-      <span class="pastille ${etatCamera(c)}"></span>
-      <span class="arbre-nom">${ech(c.name)}</span>
-      <span class="arbre-detail">${c.cycle_ms ? c.cycle_ms + "ms" : ""}</span>
-    </div>`).join("");
+let vuePage = 0;
+let colonnes = 2;
+let infosTech = false;
 
-  arbre.querySelectorAll("[data-cam]").forEach((n) =>
-    n.addEventListener("click", () => {
-      selection = selection === n.dataset.cam ? null : n.dataset.cam;
-      dessinerArbre();
-      dessinerMur();
-    }));
+const ETIQ_ETAT = { "en-ligne": "DIRECT", pause: "PAUSE", "hors-ligne": "HORS LIGNE" };
+
+/* Les commandes d'une vignette restent cachées jusqu'au survol : un mur de
+   supervision doit rester nu. C'est ce qui le distingue d'un tableau de bord. */
+function tuile(c, principal) {
+  const e = etatCamera(c);
+  const mods = c.models.length ? c.models.map(nomModele).join(", ") : "aucun modèle";
+  const tech = infosTech
+    ? (e === "en-ligne" ? `${c.models.length} mod · ${c.cycle_ms ? c.cycle_ms + " ms" : "—"}` : "—")
+    : "";
+  return `
+    <div class="tuile${principal ? " principal" : ""}" id="tuile-${ech(c.name)}" data-cam="${ech(c.name)}">
+      <img data-flux="${ech(c.name)}" src="/video/${encodeURIComponent(c.name)}.jpg" alt=""
+           onerror="this.style.opacity=0.08" onload="this.style.opacity=1" />
+      <div class="tuile-haut">
+        <span class="tuile-modeles">${ech(mods)}</span>
+        <span class="tuile-actions">
+          <button data-pause="${ech(c.name)}" title="${c.enabled ? "Mettre en pause" : "Reprendre"}">${c.enabled ? "Pause" : "Reprendre"}</button>
+          <button data-zones="${ech(c.name)}" title="Zones de cette caméra">Zones</button>
+          <button data-plein="${ech(c.name)}" title="Plein écran">Plein écran</button>
+        </span>
+      </div>
+      <div class="tuile-bas">
+        <span class="pastille ${e}"></span>
+        <span class="tuile-nom">${ech(c.name)}</span>
+        <span class="tuile-tech">${ech(tech)}</span>
+      </div>
+    </div>`;
 }
 
 function dessinerMur() {
+  const plan = el("direct-plan");
   const mur = el("mur");
-  // Toutes les cameras restent affichees. Celle qu'on choisit s'agrandit sans
-  // faire disparaitre les autres : l'agent garde le site sous les yeux.
-  const liste = cameras;
-  const focus = selection && cameras.some((c) => c.name === selection);
-  mur.classList.toggle("focus", Boolean(focus));
+  const bande = el("bande");
 
-  if (!liste.length) {
-    mur.innerHTML = `<div class="mur-vide"><div>
+  if (!cameras.length) {
+    plan.classList.remove("focus");
+    mur.className = "mur c1";
+    mur.innerHTML = `<div class="vide mur-vide"><div>
       <div class="vide-titre">Aucune caméra configurée</div>
-      <p>Ajoutez-en une depuis Paramètres → Caméras.</p>
+      <p>Ajoutez-en une depuis Paramètres → Caméras, ou déposez une vidéo
+         dans Paramètres → Fichiers de test pour essayer sans caméra.</p>
     </div></div>`;
+    bande.innerHTML = "";
+    el("mur-page").textContent = "";
+    el("prec-vue").disabled = el("suiv-vue").disabled = true;
     return;
   }
 
-  mur.innerHTML = liste.map((c) => {
-    const e = etatCamera(c);
-    const badge = e === "en-ligne" ? '<span class="rec direct">DIRECT</span>'
-      : e === "pause" ? '<span class="rec pause">PAUSE</span>'
-        : '<span class="rec perdu">HORS LIGNE</span>';
-    const infos = [
-      c.models.length ? `${c.models.length} mod.` : "aucun modèle",
-      c.zones?.length ? `${c.zones.length} zone(s)` : "plein cadre",
-      c.tracking ? "suivi" : "",
-      c.plates ? "plaques" : "",
-    ].filter(Boolean).join(" · ");
+  // Une caméra choisie s'agrandit ; les autres se rangent en colonne et
+  // restent visibles. L'agent garde le site entier sous les yeux.
+  const principale = cameras.find((c) => c.name === selection);
+  plan.classList.toggle("focus", Boolean(principale));
 
-    return `
-      <div class="tuile${c.name === selection ? " principal" : ""}"
-           id="tuile-${ech(c.name)}" data-cam="${ech(c.name)}"
-           title="Clic pour agrandir · double-clic pour le plein écran">
-        <img id="flux-${ech(c.name)}" src="/video/${encodeURIComponent(c.name)}.jpg" alt=""
-             onerror="this.style.opacity=0.1" onload="this.style.opacity=1" />
-        <div class="inc haut">
-          <span class="inc-nom">${ech(c.name)}</span>
-          <span class="inc-fin">${badge}</span>
-        </div>
-        <div class="inc bas">
-          <span>${ech(infos)}</span>
-          <span class="inc-fin">${c.cycle_ms ? c.cycle_ms + " ms" : ""}</span>
-        </div>
-      </div>`;
-  }).join("");
+  if (principale) {
+    mur.className = "mur";
+    mur.innerHTML = tuile(principale, true);
+    bande.innerHTML = cameras.filter((c) => c !== principale).map((c) => tuile(c, false)).join("");
+    el("mur-page").textContent = `${principale.name} — clic pour revenir à la mosaïque`;
+    el("prec-vue").disabled = el("suiv-vue").disabled = true;
+  } else {
+    const parPage = colonnes * colonnes;
+    const pages = Math.max(1, Math.ceil(cameras.length / parPage));
+    vuePage = Math.min(Math.max(0, vuePage), pages - 1);
+    const debut = vuePage * parPage;
+    const lot = cameras.slice(debut, debut + parPage);
 
-  mur.querySelectorAll("[data-cam]").forEach((t) => {
-    t.addEventListener("click", () => {
-      selection = selection === t.dataset.cam ? null : t.dataset.cam;
+    mur.className = `mur c${colonnes}`;
+    mur.innerHTML = lot.map((c) => tuile(c, false)).join("");
+    bande.innerHTML = "";
+    el("mur-page").textContent = pages > 1
+      ? `Vue ${vuePage + 1}/${pages} · caméras ${debut + 1}–${debut + lot.length} sur ${cameras.length}`
+      : `${cameras.length} caméra${cameras.length > 1 ? "s" : ""}`;
+    el("prec-vue").disabled = vuePage === 0;
+    el("suiv-vue").disabled = vuePage + 1 >= pages;
+  }
+
+  brancherTuiles();
+}
+
+function brancherTuiles() {
+  document.querySelectorAll("#direct-plan [data-cam]").forEach((n) =>
+    n.addEventListener("click", () => {
+      selection = selection === n.dataset.cam ? null : n.dataset.cam;
       dessinerMur();
-      dessinerArbre();
       majActions();
+    }));
+
+  const sans = (n, fn) => n.addEventListener("click", (e) => { e.stopPropagation(); fn(); });
+  document.querySelectorAll("[data-plein]").forEach((n) => sans(n, () => ouvrirVisionneuse(n.dataset.plein)));
+  document.querySelectorAll("[data-zones]").forEach((n) => sans(n, () => {
+    allerA("config");
+    ouvrirSection("zones");
+    choisirCameraZone(n.dataset.zones);
+    el("zone-camera").value = n.dataset.zones;
+  }));
+  document.querySelectorAll("[data-pause]").forEach((n) => sans(n, () => basculerPause(n.dataset.pause)));
+}
+
+/* Mettre une caméra en pause libère du calcul sans perdre sa configuration.
+   On renvoie l'objet complet : l'API remplit les champs absents par leurs
+   valeurs par défaut, ce qui effacerait les options en cours. */
+async function basculerPause(nom) {
+  const c = cameras.find((x) => x.name === nom);
+  if (!c) return;
+  try {
+    await api(`/api/cameras/${encodeURIComponent(nom)}`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        source: c.source, models: c.models, fps: c.fps, imgsz: c.imgsz,
+        workers: c.workers, enabled: !c.enabled, tracking: c.tracking,
+        recording: c.recording, plates: c.plates, collecte: c.collecte,
+        bachage: c.bachage, voisins: c.voisins || [],
+        segment_minutes: c.segment_minutes, retention_days: c.retention_days,
+      }),
     });
-    t.addEventListener("dblclick", () => ouvrirVisionneuse(t.dataset.cam));
-  });
+    avis(nom, c.enabled ? "Caméra mise en pause." : "Caméra reprise.", "ok");
+    await chargerCameras();
+  } catch (err) {
+    avis("Changement refusé", err.message, "err");
+  }
 }
 
 function rafraichirFlux() {
   const t = Date.now();
-  for (const n of noms) {
-    const img = el(`flux-${n}`);
-    if (img) img.src = `/video/${encodeURIComponent(n)}.jpg?t=${t}`;
-  }
-  if (visionnee) el("visionneuse-image").src = `/video/${encodeURIComponent(visionnee)}.jpg?t=${t}`;
+  document.querySelectorAll("[data-flux]").forEach((img) => {
+    img.src = `/video/${encodeURIComponent(img.dataset.flux)}.jpg?t=${t}`;
+  });
 }
 
 function ouvrirVisionneuse(nom) {
@@ -356,7 +404,18 @@ function outilsDirect() {
     if (!b) return;
     document.querySelectorAll("#disposition .bouton").forEach((x) => x.classList.remove("actif"));
     b.classList.add("actif");
-    el("mur").className = `mur c${b.dataset.cols}`;
+    colonnes = Number(b.dataset.cols);
+    vuePage = 0;
+    dessinerMur();
+  });
+
+  el("prec-vue").addEventListener("click", () => { vuePage--; dessinerMur(); });
+  el("suiv-vue").addEventListener("click", () => { vuePage++; dessinerMur(); });
+
+  el("btn-tech").addEventListener("click", (e) => {
+    infosTech = !infosTech;
+    e.currentTarget.classList.toggle("actif", infosTech);
+    dessinerMur();
   });
 
   el("btn-plein-ecran").addEventListener("click", () => {
@@ -364,10 +423,15 @@ function outilsDirect() {
     else el("vue-direct").requestFullscreen?.();
   });
 
+  el("vers-historique").addEventListener("click", () => allerA("historique"));
+
   el("btn-recharger").addEventListener("click", chargerCameras);
   el("btn-modifier").addEventListener("click", () => selection && ouvrirFormCamera(selection));
   el("btn-supprimer").addEventListener("click", () => selection && supprimerCamera(selection));
   el("visionneuse-fermer").addEventListener("click", fermerVisionneuse);
+
+  el("btn-aide").addEventListener("click", () => { el("aide").hidden = false; });
+  el("aide-fermer").addEventListener("click", () => { el("aide").hidden = true; });
 }
 
 /* ═══ Configuration d'une caméra ═══ */
@@ -500,22 +564,34 @@ async function supprimerCamera(nom) {
 
 async function chargerEvenements() {
   let d;
-  try { d = await api("/api/alerts?limit=14"); } catch { return; }
+  try { d = await api("/api/alerts?limit=12&acknowledged=false"); } catch { return; }
 
+  el("vivantes-compte").textContent = d.total ?? d.items.length;
   const box = el("evenements");
   if (!d.items.length) {
-    box.innerHTML = '<div class="vide" style="padding:14px"><p>Aucun événement.</p></div>';
+    box.innerHTML = '<div class="vide" style="padding:36px 18px"><p>Aucune alerte à traiter.</p></div>';
     return;
   }
   box.innerHTML = d.items.map((a) => `
-    <div class="evt ${a.severity}" data-cam="${ech(a.camera)}">
-      <span class="evt-h">${heure(a.timestamp)}</span>
-      <span class="evt-t">${ech(a.label)}</span>
-      <span class="evt-c">${ech(a.camera)}${a.zone ? " · " + ech(a.zone) : ""}</span>
-    </div>`).join("");
+    <button class="carte ${a.severity}" data-cam="${ech(a.camera)}">
+      <span class="carte-tete">
+        <span class="sev ${a.severity}">${a.severity}</span>
+        <span class="carte-heure">${heure(a.timestamp)}</span>
+      </span>
+      <span class="carte-titre">${ech(a.label)}</span>
+      <span class="carte-pied">
+        <span class="carte-cam">${ech(a.camera)}${a.zone ? " — " + ech(a.zone) : ""}</span>
+        <span class="carte-mod">${ech(a.model)}</span>
+      </span>
+    </button>`).join("");
 
   box.querySelectorAll("[data-cam]").forEach((n) =>
-    n.addEventListener("click", () => { selection = n.dataset.cam; dessinerArbre(); dessinerMur(); }));
+    n.addEventListener("click", () => {
+      allerA("direct");
+      selection = n.dataset.cam;
+      dessinerMur();
+      majActions();
+    }));
 }
 
 /* ═══ Historique ═══ */
@@ -539,7 +615,21 @@ function filtres() {
   return p;
 }
 
+function resumerFiltres() {
+  const lu = (id, defaut) => {
+    const n = el(id);
+    if (!n || !n.value) return defaut;
+    return n.selectedOptions ? n.selectedOptions[0].textContent.trim() : n.value;
+  };
+  el("filtres-resume").textContent = [
+    lu("f-periode", "tout l'historique"),
+    lu("f-camera", "toutes caméras"),
+    lu("f-gravite", "toutes gravités"),
+  ].join(" · ");
+}
+
 async function chargerAlertes() {
+  resumerFiltres();
   const p = filtres();
   p.set("limit", PAR_PAGE);
   p.set("offset", page * PAR_PAGE);
@@ -598,7 +688,7 @@ function ligneAlerte(a) {
     <td>${ech(a.label)}${faux}${zone}${plaque}</td>
     <td>${ech(a.camera)}${clip}</td>
     <td>${nomModele(a.model)}</td>
-    <td><span class="grav ${a.severity}">${a.severity}</span></td>
+    <td><span class="sev ${a.severity}">${a.severity}</span></td>
     <td class="num">${a.confidence.toFixed(2)}</td>
     <td class="num">${dateHeure(a.timestamp)}</td>
     <td><div class="enligne">${traitement}${jugement}</div></td>
@@ -610,11 +700,11 @@ function pagination(d) {
   const p = el("pagination");
   if (pages <= 1) { p.innerHTML = `<span>${d.total} alerte(s)</span>`; return; }
   p.innerHTML = `
-    <button class="bouton" ${page === 0 ? "disabled" : ""} id="prec">Précédent</button>
+    <button class="bouton" ${page === 0 ? "disabled" : ""} id="page-prec">Précédent</button>
     <span>Page ${page + 1} / ${pages} — ${d.total} alerte(s)</span>
-    <button class="bouton" ${page + 1 >= pages ? "disabled" : ""} id="suiv">Suivant</button>`;
-  el("prec")?.addEventListener("click", () => { page--; chargerAlertes(); });
-  el("suiv")?.addEventListener("click", () => { page++; chargerAlertes(); });
+    <button class="bouton" ${page + 1 >= pages ? "disabled" : ""} id="page-suiv">Suivant</button>`;
+  el("page-prec")?.addEventListener("click", () => { page--; chargerAlertes(); });
+  el("page-suiv")?.addEventListener("click", () => { page++; chargerAlertes(); });
 }
 
 async function prendreEnCharge(id, bouton) {
@@ -838,7 +928,7 @@ async function chargerAnalyse() {
   const parCam = Object.values(qualite.par_camera || {});
   const pire = parCam.length ? Math.max(...parCam.map((c) => c.fausses_par_jour)) : null;
 
-  el("indicateurs").innerHTML = `<tbody>
+  el("indicateurs").innerHTML = `
     ${indic("Alertes 24 h", resume.total_24h)}
     ${indic("Critiques 24 h", resume.critiques_24h, resume.critiques_24h > 0)}
     ${indic("À traiter", resume.non_acquittees, resume.non_acquittees > 0)}
@@ -846,8 +936,7 @@ async function chargerAnalyse() {
     ${indic("Délai moyen de prise en charge",
     mtta == null ? "–" : mtta < 90 ? `${mtta} s` : `${Math.round(mtta / 60)} min`)}
     ${indic("Fausses alertes / jour / caméra (pire)",
-      pire == null ? "–" : pire.toFixed(1), pire > 2)}
-  </tbody>`;
+      pire == null ? "–" : pire.toFixed(1), pire > 2)}`;
 
   const max = Math.max(1, ...frise.map((t) => t.total));
   el("histo-24h").innerHTML = frise.map((t) => `
@@ -874,13 +963,16 @@ async function chargerUsages() {
         <td class="num">${String(u.num).padStart(2, "0")}</td>
         <td>${ech(u.titre)}${u.note ? `<br><span class="msg">${ech(u.note)}</span>` : ""}</td>
         <td>${u.model ? nomModele(u.model) : "—"}</td>
-        <td><span class="grav ${u.etat === "operationnel" ? "moyenne" : u.etat === "partiel" ? "haute" : "critique"}">${etats[u.etat]}</span></td>
+        <td><span class="sev ${u.etat === "operationnel" ? "moyenne" : u.etat === "partiel" ? "haute" : "critique"}">${etats[u.etat]}</span></td>
         <td class="msg">${u.detect ? "active" : "inactive"}</td>
       </tr>`).join("")}</tbody>`;
 }
 
 function indic(nom, valeur, alarme = false) {
-  return `<tr><td>${nom}</td><td class="num" style="text-align:right${alarme ? ";color:var(--crit)" : ""}">${valeur}</td></tr>`;
+  return `<div class="indic">
+    <div class="indic-lab">${ech(String(nom)).toUpperCase()}</div>
+    <div class="indic-val ${alarme ? "crit" : ""}">${valeur}</div>
+  </div>`;
 }
 
 function rangs(cible, data, libelle) {
@@ -938,13 +1030,12 @@ async function chargerSysteme() {
   ]);
   const m = h.machine || {};
 
-  el("systeme-machine").innerHTML = `<tbody>
+  el("systeme-machine").innerHTML = `
     ${indic("Pipeline de détection", h.pipeline.running ? "actif" : "arrêté", !h.pipeline.running)}
     ${indic("Caméras actives", `${h.cameras_actives} / ${h.cameras_configurees}`)}
     ${indic("Processeur", m.cpu_percent != null ? `${m.cpu_percent} %` : "–", (m.cpu_percent ?? 0) > 90)}
     ${indic("Mémoire", m.memory_percent != null ? `${m.memory_percent} %` : "–", (m.memory_percent ?? 0) > 90)}
-    ${indic("Disque libre", m.disk_free_gb != null ? `${m.disk_free_gb} Go` : "–", (m.disk_free_gb ?? 99) < 5)}
-  </tbody>`;
+    ${indic("Disque libre", m.disk_free_gb != null ? `${m.disk_free_gb} Go` : "–", (m.disk_free_gb ?? 99) < 5)}`;
 
   const lignes = Object.entries(h.cameras || {});
   el("systeme-cameras").innerHTML = lignes.length ? `
@@ -953,7 +1044,7 @@ async function chargerSysteme() {
     <tbody>${lignes.map(([n, c]) => `
       <tr>
         <td>${ech(n)}</td>
-        <td><span class="grav ${c.state === "en ligne" ? "moyenne" : "critique"}">${ech(c.state || "inconnu")}</span></td>
+        <td><span class="sev ${c.state === "en ligne" ? "moyenne" : "critique"}">${ech(c.state || "inconnu")}</span></td>
         <td class="num">${c.cycle_ms ? c.cycle_ms + " ms" : "–"}</td>
         <td class="num">${c.modeles_actifs ?? "–"}</td>
         <td class="num">${c.objets_suivis ?? "–"}</td>
@@ -983,26 +1074,23 @@ async function majBarreEtat() {
   try {
     const [h, resume] = await Promise.all([api("/api/health"), api("/api/stats/summary")]);
     const actif = h.pipeline.running;
-    el("etat-pastille").className = `pastille ${actif ? "en-ligne" : "hors-ligne"}`;
-    el("etat-pipeline").textContent = actif ? "Détection active" : "Détection arrêtée";
-
     const enLigne = cameras.filter((c) => c.online).length;
-    el("etat-cameras").textContent = `${enLigne}/${cameras.length}`;
 
-    const cycles = Object.values(h.cameras || {}).map((c) => c.cycle_ms).filter(Boolean);
-    el("etat-cycle").textContent = cycles.length
-      ? `${Math.round(cycles.reduce((a, b) => a + b, 0) / cycles.length)} ms` : "–";
+    el("puce-pastille").className = `pastille ${actif ? "" : "hors-ligne"}`;
+    el("puce-pastille").style.background = actif ? "var(--ok)" : "var(--crit)";
+    el("puce-cameras").textContent = actif
+      ? `${cameras.length} caméra${cameras.length > 1 ? "s" : ""} · ${enLigne} en ligne`
+      : "détection arrêtée";
 
-    el("etat-atraiter").textContent = resume.non_acquittees;
+    const crit = resume.critiques_24h || 0;
+    const puce = el("puce-crit");
+    puce.hidden = crit === 0;
+    puce.textContent = `${crit} alerte${crit > 1 ? "s" : ""} critique${crit > 1 ? "s" : ""}`;
+
     el("badge-alertes").textContent = resume.non_acquittees || "";
-
-    const m = h.machine || {};
-    el("etat-cpu").textContent = m.cpu_percent != null ? `${m.cpu_percent}%` : "–";
-    el("etat-mem").textContent = m.memory_percent != null ? `${m.memory_percent}%` : "–";
-    el("etat-disque").textContent = m.disk_free_gb != null ? `${m.disk_free_gb} Go` : "–";
   } catch {
-    el("etat-pipeline").textContent = "Interface injoignable";
-    el("etat-pastille").className = "pastille hors-ligne";
+    el("puce-cameras").textContent = "interface injoignable";
+    el("puce-pastille").style.background = "var(--crit)";
   }
 }
 
@@ -1020,6 +1108,12 @@ async function guetter() {
   avis(`${a.label} — ${a.camera}`, a.zone ? `Zone ${a.zone}` : "", "critique");
 
   if (el("suivi-alertes")?.checked) {
+    // La caméra concernée n'est peut-être pas sur la vue affichée : on y va.
+    const i = cameras.findIndex((c) => c.name === a.camera);
+    if (i >= 0 && !selection) {
+      const page = Math.floor(i / (colonnes * colonnes));
+      if (page !== vuePage) { vuePage = page; dessinerMur(); }
+    }
     document.querySelectorAll(".tuile").forEach((t) => t.classList.remove("alerte"));
     const t = el(`tuile-${a.camera}`);
     t?.classList.add("alerte");
@@ -1032,7 +1126,10 @@ async function guetter() {
 async function chargerReglages() {
   const s = await api("/api/settings");
   el("liste-reglages").innerHTML = "";
-  for (const [m, v] of Object.entries(s)) {
+  const entrees = Object.entries(s);
+  el("modeles-compte").textContent =
+    `${entrees.filter(([, v]) => v.detect).length} actifs sur ${entrees.length}`;
+  for (const [m, v] of entrees) {
     const l = document.createElement("div");
     l.className = "ligne-reglage";
     l.innerHTML = `<div>${nomModele(m)}</div>`;
@@ -1045,7 +1142,7 @@ async function chargerReglages() {
 function interrupteur(modele, cle, valeur, texte) {
   const l = document.createElement("label");
   l.className = "inter";
-  l.innerHTML = `<input type="checkbox" ${valeur ? "checked" : ""} /><span class="rail"></span><span>${texte}</span>`;
+  l.innerHTML = `<input type="checkbox" ${valeur ? "checked" : ""} /><span class="rail-inter"></span><span>${texte}</span>`;
   l.querySelector("input").addEventListener("change", async (e) => {
     try {
       await api(`/api/settings/${modele}/${cle}`, {
@@ -1249,11 +1346,11 @@ async function init() {
   theme();
   onglets();
 
-  el("btn-filtres-plus").addEventListener("click", (e) => {
-    const bloc = el("filtres-plus");
-    bloc.hidden = !bloc.hidden;
-    e.target.classList.toggle("actif", !bloc.hidden);
-    e.target.textContent = bloc.hidden ? "Plus de filtres" : "Moins de filtres";
+  el("btn-filtres").addEventListener("click", (e) => {
+    const corps = el("filtres-corps");
+    corps.hidden = !corps.hidden;
+    e.currentTarget.classList.toggle("actif", !corps.hidden);
+    e.currentTarget.textContent = corps.hidden ? "Déplier" : "Replier";
   });
   outilsDirect();
   formCamera();
@@ -1268,7 +1365,7 @@ async function init() {
   remplirFiltres();
   await chargerReglages();
   await chargerEvenements();
-  await chargerFrise();
+  await majBarreEtat();
 
   setInterval(tick, 1000);
   setInterval(rafraichirFlux, 700);

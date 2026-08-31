@@ -1,0 +1,17 @@
+Reference visuelle de l'interface.
+
+  VMS système de surveillance complet.zip   la maquette rendue par Claude Design
+  apercu.png                                capture de l'ecran Direct
+
+La maquette est un rendu React charge depuis un CDN : elle ne peut pas servir
+telle quelle sur un site coupe d'Internet. Elle a ete portee en HTML, CSS et
+JavaScript simples dans web/, sans aucune ressource distante.
+
+Ce qui a change au passage :
+  - les tailles de texte montent d'un cran (la maquette placait le corps a
+    13-13,5 px, en dessous de ce qui se lit debout a deux metres)
+  - le troisieme theme « Or » est retire ; restent Noir et Clair
+  - des etats vides ont ete ajoutes : la maquette montrait douze cameras et
+    quarante-sept alertes, un site qui demarre n'a ni l'un ni l'autre
+  - les champs affiches correspondent au produit reel : la resolution est
+    figee a 640 par l'export OpenVINO, la cadence par defaut est de 4 img/s
