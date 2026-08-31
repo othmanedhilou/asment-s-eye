@@ -5,6 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SmokeWatch</title>
   <link rel="stylesheet" href="/static/css/dashboard.css" />
+  <script>
+    try {
+      document.documentElement.dataset.theme =
+        localStorage.getItem("smokewatch-theme") ||
+        (matchMedia("(prefers-color-scheme: light)").matches ? "clair" : "sombre");
+    } catch (e) { document.documentElement.dataset.theme = "sombre"; }
+  </script>
 </head>
 <body>
 
@@ -22,6 +29,8 @@
   <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
   <symbol id="i-full" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 00-2 2v3M21 8V5a2 2 0 00-2-2h-3M16 21h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/></symbol>
   <symbol id="i-close" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></symbol>
+  <symbol id="i-soleil" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.5"/><path d="M12 1.5v2.5M12 20v2.5M4.2 4.2l1.8 1.8M18 18l1.8 1.8M1.5 12h2.5M20 12h2.5M4.2 19.8L6 18M18 6l1.8-1.8"/></symbol>
+  <symbol id="i-lune" viewBox="0 0 24 24"><path d="M21 13.2A9 9 0 1110.8 3a7 7 0 1010.2 10.2z"/></symbol>
 </svg>
 
 <div class="app" id="app">
@@ -39,7 +48,12 @@
     <button class="onglet" data-vue="historique"><svg class="ico"><use href="#i-list"/></svg>Historique<span class="compteur" id="badge-alertes"></span></button>
     <button class="onglet" data-vue="analyse"><svg class="ico"><use href="#i-chart"/></svg>Analyse</button>
     <button class="onglet" data-vue="config"><svg class="ico"><use href="#i-cog"/></svg>Configuration</button>
-    <div class="onglets-fin"><span id="horloge">--:--:--</span></div>
+    <div class="onglets-fin">
+      <span id="horloge">--:--:--</span>
+      <button class="btn-icone" id="btn-theme" title="Thème clair ou sombre" aria-label="Changer de thème">
+        <svg class="ico"><use href="#i-soleil" id="theme-ico"/></svg>
+      </button>
+    </div>
   </nav>
 
   <aside class="panneau" id="panneau">
@@ -105,23 +119,12 @@
       <div class="filtres">
         <select id="f-modele"><option value="">Tous modèles</option></select>
         <select id="f-camera"><option value="">Toutes caméras</option></select>
-        <select id="f-zone"><option value="">Toutes zones</option></select>
         <select id="f-gravite">
           <option value="">Toutes gravités</option>
           <option value="critique">Critique</option>
           <option value="haute">Haute</option>
           <option value="moyenne">Moyenne</option>
           <option value="technique">Technique</option>
-        </select>
-        <select id="f-traite">
-          <option value="">Traitées et non traitées</option>
-          <option value="false">À traiter</option>
-          <option value="true">Traitées</option>
-        </select>
-        <select id="f-fausse">
-          <option value="">Vraies et fausses</option>
-          <option value="false">Vraies</option>
-          <option value="true">Fausses</option>
         </select>
         <select id="f-periode">
           <option value="">Tout l'historique</option>
@@ -130,14 +133,28 @@
           <option value="168">7 jours</option>
           <option value="720">30 jours</option>
         </select>
-        <select id="f-poste">
-          <option value="">Toute la journée</option>
-          <option value="6-14">Matin 6–14 h</option>
-          <option value="14-22">Après-midi 14–22 h</option>
-          <option value="22-6">Nuit 22–6 h</option>
-        </select>
-        <input type="search" id="f-classe" placeholder="Classe…" />
-        <input type="search" id="f-plaque" placeholder="Plaque…" />
+        <button class="bouton" id="btn-filtres-plus">Plus de filtres</button>
+        <div id="filtres-plus" hidden style="display:flex;gap:8px;flex-wrap:wrap;width:100%">
+          <select id="f-zone"><option value="">Toutes zones</option></select>
+          <select id="f-traite">
+            <option value="">Traitées et non traitées</option>
+            <option value="false">À traiter</option>
+            <option value="true">Traitées</option>
+          </select>
+          <select id="f-fausse">
+            <option value="">Vraies et fausses</option>
+            <option value="false">Vraies</option>
+            <option value="true">Fausses</option>
+          </select>
+          <select id="f-poste">
+            <option value="">Toute la journée</option>
+            <option value="6-14">Matin 6–14 h</option>
+            <option value="14-22">Après-midi 14–22 h</option>
+            <option value="22-6">Nuit 22–6 h</option>
+          </select>
+          <input type="search" id="f-classe" placeholder="Classe…" />
+          <input type="search" id="f-plaque" placeholder="Plaque…" />
+        </div>
       </div>
       <div style="flex:1;overflow-y:auto" id="tableau-alertes"></div>
       <div class="pagination" id="pagination"></div>
@@ -225,13 +242,21 @@
               <small>Webcam (numéro), caméra IP (RTSP), fichier vidéo ou dossier d'images.</small></label>
             <div class="champ large"><span>Fichiers déposés</span>
               <div id="choix-fichiers" class="enligne"></div></div>
-            <label class="champ"><span>Images par seconde</span>
-              <input type="number" id="cam-fps" step="0.5" min="0.5" placeholder="4" /></label>
             <label class="champ"><span>État</span>
               <select id="cam-actif">
                 <option value="true">Active</option>
                 <option value="false">En pause</option>
               </select></label>
+            <div class="champ large"><span>Modèles actifs</span>
+              <div id="cam-modeles" class="cases"></div>
+              <small>N'activez que les modèles pertinents : c'est le principal levier de performance.</small></div>
+          </div>
+
+          <details class="avance">
+            <summary>Options avancées</summary>
+            <div class="champs">
+            <label class="champ"><span>Images par seconde</span>
+              <input type="number" id="cam-fps" step="0.5" min="0.5" placeholder="4" /></label>
             <label class="champ"><span>Suivi des objets</span>
               <select id="cam-suivi">
                 <option value="false">Désactivé</option>
@@ -266,10 +291,9 @@
               <input type="text" id="cam-voisins" placeholder="quai_sortie, portail_nord" autocomplete="off" />
               <small>Caméras vers lesquelles un objet peut se diriger. Écarte les
                      rapprochements géographiquement impossibles.</small></label>
-            <div class="champ large"><span>Modèles actifs</span>
-              <div id="cam-modeles" class="cases"></div>
-              <small>N'activez que les modèles pertinents : c'est le principal levier de performance.</small></div>
-          </div>
+            </div>
+          </details>
+
           <div class="actions">
             <button class="bouton primaire" id="cam-valider">Enregistrer</button>
             <button class="bouton" id="cam-tester">Tester la connexion</button>

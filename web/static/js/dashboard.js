@@ -90,6 +90,28 @@ function vide(cible, titre, texte) {
 
 /* ═══ Onglets ═══ */
 
+/* Le thème suit d'abord le réglage du système d'exploitation, puis le choix
+   explicite de l'agent s'il en fait un. Un poste de garde est sombre la nuit et
+   éclairé le jour : imposer l'un des deux fatigue un cas sur deux. */
+function theme() {
+  const systeme = () =>
+    window.matchMedia?.("(prefers-color-scheme: light)").matches ? "clair" : "sombre";
+  let courant = localStorage.getItem("smokewatch-theme") || systeme();
+
+  const appliquer = () => {
+    document.documentElement.dataset.theme = courant;
+    el("theme-ico").setAttribute("href", courant === "clair" ? "#i-lune" : "#i-soleil");
+    el("btn-theme").title = courant === "clair" ? "Passer en sombre" : "Passer en clair";
+  };
+  appliquer();
+
+  el("btn-theme").addEventListener("click", () => {
+    courant = courant === "clair" ? "sombre" : "clair";
+    localStorage.setItem("smokewatch-theme", courant);
+    appliquer();
+  });
+}
+
 function onglets() {
   document.querySelectorAll(".onglet").forEach((b) => {
     b.addEventListener("click", () => {
@@ -1211,7 +1233,15 @@ function brancherZones() {
 /* ═══ Démarrage ═══ */
 
 async function init() {
+  theme();
   onglets();
+
+  el("btn-filtres-plus").addEventListener("click", (e) => {
+    const bloc = el("filtres-plus");
+    bloc.hidden = !bloc.hidden;
+    e.target.classList.toggle("actif", !bloc.hidden);
+    e.target.textContent = bloc.hidden ? "Plus de filtres" : "Moins de filtres";
+  });
   outilsDirect();
   formCamera();
   brancherFiltres();
