@@ -7,7 +7,7 @@
       "epi"
     ],
     "fps": 2.0,
-    "enabled": true,
+    "enabled": false,
     "tracking": true,
     "recording": false,
     "plates": false,
