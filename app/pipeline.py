@@ -67,15 +67,51 @@ def _run_one_model(registry: ModelRegistry, model_name: str, frame, imgsz: int) 
         return []
 
 
+# Une couleur par objet suivi. Deux personnes côte à côte doivent se
+# distinguer d'un coup d'oeil ; un identifiant écrit ne suffit pas, on ne le lit
+# pas sur une vignette de 200 px.
+_TEINTES = [(64, 210, 255), (120, 255, 120), (255, 170, 80), (200, 120, 255),
+            (90, 230, 230), (255, 120, 170), (150, 200, 90), (255, 220, 100)]
+
+
+def _couleur_piste(track_id) -> tuple:
+    if track_id is None:
+        return (0, 0, 255)
+    return _TEINTES[track_id % len(_TEINTES)]
+
+
 def _draw_detection(frame, detection: Detection):
     x1, y1, x2, y2 = [int(v) for v in detection.bbox]
-    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
-    label = f"{detection.label} {detection.confidence:.2f}"
+    couleur = _couleur_piste(detection.track_id)
+    cv2.rectangle(frame, (x1, y1), (x2, y2), couleur, 2)
+
+    label = ""
+    if detection.track_id is not None:
+        label = f"#{detection.track_id} "
+    label += f"{detection.label} {detection.confidence:.2f}"
     if detection.plaque:
         label += f" · {detection.plaque}"
     if detection.zone:
         label += f" [{detection.zone}]"
-    cv2.putText(frame, label, (x1, max(y1 - 8, 0)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+
+    # Un fond plein derrière le texte : sans lui, l'étiquette devient illisible
+    # dès que l'objet passe devant quelque chose de clair.
+    (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+    haut = max(y1 - th - 8, 0)
+    cv2.rectangle(frame, (x1, haut), (x1 + tw + 8, haut + th + 8), couleur, -1)
+    cv2.putText(frame, label, (x1 + 4, haut + th + 2),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (20, 20, 20), 1, cv2.LINE_AA)
+
+
+def _draw_traces(frame, tracker):
+    """Trace le chemin parcouru par chaque objet suivi."""
+    for track_id, points in tracker.traces():
+        couleur = _couleur_piste(track_id)
+        for a, b in zip(points, points[1:]):
+            cv2.line(frame, (int(a[0]), int(a[1])), (int(b[0]), int(b[1])), couleur, 2,
+                     cv2.LINE_AA)
+        x, y = points[-1]
+        cv2.circle(frame, (int(x), int(y)), 4, couleur, -1)
 
 
 def _draw_zones(frame, zone_filter: ZoneFilter):
@@ -268,6 +304,7 @@ def run_camera(camera_name: str, cam_cfg: dict, config: dict, registry: ModelReg
     from concurrent.futures import ThreadPoolExecutor
 
     offline_since = None
+    incident_signale = False
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         while stop_event is None or not stop_event.is_set():
@@ -277,7 +314,11 @@ def run_camera(camera_name: str, cam_cfg: dict, config: dict, registry: ModelReg
                 log.info(f"[{camera_name}] source ouverte : {source} ({stream.kind})")
                 update_camera(camera_name, state="en ligne", source=str(source),
                               kind=stream.kind, error=None)
+                if incident_signale and on_incident:
+                    on_incident(camera_name, "camera_retablie",
+                                f"Caméra {camera_name} de nouveau en ligne")
                 offline_since = None
+                incident_signale = False
 
                 try:
                     frame_count = 0
@@ -304,6 +345,7 @@ def run_camera(camera_name: str, cam_cfg: dict, config: dict, registry: ModelReg
                             if suivi_actif:
                                 tracker = trackers.setdefault(model_name, SimpleTracker())
                                 detections = tracker.update(detections)
+                                _draw_traces(annotated, tracker)
                                 for detection in detections:
                                     detection.model = model_name
                                     _suivre_entre_cameras(
@@ -369,6 +411,11 @@ def run_camera(camera_name: str, cam_cfg: dict, config: dict, registry: ModelReg
                             "fps_reel": round(1000 / cycle_ms, 2) if cycle_ms else None,
                             "modeles_actifs": len(active_models),
                         }
+                        # « suivi » est publié même à false : sans lui, une
+                        # caméra sans suivi et une caméra dont le suivi ne
+                        # trouve rien se ressemblent, et on ne sait pas laquelle
+                        # des deux on regarde.
+                        etat["suivi"] = suivi_actif
                         if suivi_actif:
                             etat["objets_suivis"] = sum(t.actifs for t in trackers.values())
                             if compteurs:
@@ -405,12 +452,14 @@ def run_camera(camera_name: str, cam_cfg: dict, config: dict, registry: ModelReg
             # Une coupure brève est normale (reconnexion réseau). On n'alerte que
             # si la caméra reste injoignable : sinon le moindre hoquet réveille
             # l'équipe de nuit pour rien.
-            if offline_since is not None and on_incident \
+            # Et une seule fois. Une panne ne se répète pas : elle dure. Répéter
+            # l'alerte toutes les trente secondes noierait le reste et
+            # apprendrait à l'agent à ignorer la colonne.
+            if offline_since is not None and on_incident and not incident_signale \
                     and time.monotonic() - offline_since > OFFLINE_ALERT_AFTER:
                 on_incident(camera_name, "camera_hors_ligne",
-                            f"Caméra {camera_name} injoignable depuis "
-                            f"{int(time.monotonic() - offline_since)} s")
-                offline_since = time.monotonic()  # réarme le délai
+                            f"Caméra {camera_name} ne répond plus")
+                incident_signale = True
 
             log.warning(f"[{camera_name}] source perdue, nouvelle tentative dans 2 s...")
             update_camera(camera_name, state="reconnexion")
@@ -506,6 +555,36 @@ class CameraSupervisor:
             self._stop(name)
 
 
+# Port sans service, reserve au verrou. Se liberer tout seul a la mort du
+# processus est exactement ce qu'on veut : un fichier de verrou survivrait a un
+# arret brutal et empecherait tout redemarrage.
+PORT_VERROU = 8791
+_verrou = None
+
+
+def verrou_unique() -> bool:
+    """Un seul pipeline a la fois.
+
+    Deux pipelines sur la meme machine, c'est deux fois l'inference sur deux
+    coeurs, deux ecritures concurrentes de la meme image live et deux etats de
+    sante qui s'ecrasent. Le symptome visible est une interface lente et des
+    compteurs incoherents, et la cause est invisible depuis l'interface. On
+    refuse donc de demarrer plutot que de degrader silencieusement.
+    """
+    global _verrou
+    import socket
+
+    _verrou = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        _verrou.bind(("127.0.0.1", PORT_VERROU))
+        _verrou.listen(1)
+        return True
+    except OSError:
+        _verrou.close()
+        _verrou = None
+        return False
+
+
 def main():
     """Démarre la supervision : une caméra, un thread, ajustés en continu.
 
@@ -514,6 +593,12 @@ def main():
     par processus coûterait plusieurs centaines de Mo chacun), et l'inférence
     libère le GIL, donc le parallélisme est réel.
     """
+
+    if not verrou_unique():
+        log.error("un pipeline tourne deja sur cette machine (port "
+                  f"{PORT_VERROU} occupe) — demarrage refuse")
+        return
+
     from app.notifier import local_alert, system_alert
     from app.rules import AlertEngine
     from app.storage import cleanup_old_data

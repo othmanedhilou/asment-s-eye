@@ -42,6 +42,33 @@ def iou(a, b) -> float:
     return intersection / union if union else 0.0
 
 
+# Un modèle d'EPI ne voit pas « une personne » : il voit un casque, un gilet,
+# une absence de casque. La même personne change donc d'étiquette d'une image à
+# l'autre, et un suivi par étiquette stricte lui donnerait une identité neuve à
+# chaque changement — donc une alerte neuve. On regroupe les étiquettes qui
+# désignent le même objet physique.
+FAMILLES = {
+    "personne": {
+        "person", "Person", "personne",
+        "Hardhat", "NO-Hardhat", "Mask", "NO-Mask",
+        "Safety Vest", "NO-Safety Vest", "Safety Cone",
+        "Gloves", "NO-Gloves", "Goggles", "NO-Goggles",
+        "up", "bending", "down", "fallen", "falling", "Fall-Detected",
+    },
+    "vehicule": {
+        "car", "truck", "bus", "motorcycle", "bicycle", "van",
+        "truk_odol", "truk_normal", "truck_odol", "normal_truck",
+        "covered-trucks", "six-wheel covered-trucks",
+    },
+}
+
+_FAMILLE_PAR_LABEL = {lab: fam for fam, labs in FAMILLES.items() for lab in labs}
+
+
+def famille(label: str) -> str | None:
+    return _FAMILLE_PAR_LABEL.get(label)
+
+
 def centre(bbox):
     x1, y1, x2, y2 = bbox
     return ((x1 + x2) / 2.0, (y1 + y2) / 2.0)
@@ -84,8 +111,19 @@ class SimpleTracker:
     """
 
     def __init__(self, iou_min: float = 0.3, patience: int = 5, historique: int = 30,
-                 distance_max_facteur: float = 1.5):
+                 distance_max_facteur: float = 1.5, iou_famille: float = 0.35,
+                 distance_famille_facteur: float = 0.6):
         self.iou_min = iou_min
+        # Rapprocher deux étiquettes différentes est plus risqué que rapprocher
+        # deux fois la même : on l'exige plus recouvrant, et plus proche.
+        #
+        # Les valeurs viennent d'une mesure, pas d'une intuition : à 2 images
+        # par seconde, un piéton se déplace d'environ un tiers de sa largeur
+        # entre deux images, ce qui fait tomber le recouvrement autour de 0,5.
+        # Un seuil de famille à 0,55 refusait donc le rapprochement au moment
+        # même où il compte — quand la personne bouge.
+        self.iou_famille = iou_famille
+        self.distance_famille_facteur = distance_famille_facteur
         self.patience = patience   # images tolérées sans revoir l'objet
         self.historique = historique
         self.distance_max_facteur = distance_max_facteur
@@ -97,19 +135,32 @@ class SimpleTracker:
         paires = []
         for i, det in enumerate(detections):
             for track_id, track in libres.items():
-                if track.label != det.label:
-                    continue
-                recouvrement = iou(det.bbox, track.bbox)
-                if recouvrement >= self.iou_min:
-                    # Le recouvrement reste le critère le plus sûr : on le
-                    # place devant toute association par distance.
-                    paires.append((1.0 + recouvrement, i, track_id))
+                meme_label = track.label == det.label
+                meme_famille = (famille(track.label) is not None
+                                and famille(track.label) == famille(det.label))
+                if not meme_label and not meme_famille:
                     continue
 
-                limite = self.distance_max_facteur * max(diagonale(track.bbox), 1.0)
+                recouvrement = iou(det.bbox, track.bbox)
+                seuil = self.iou_min if meme_label else self.iou_famille
+                if recouvrement >= seuil:
+                    # Le recouvrement reste le critère le plus sûr : on le
+                    # place devant toute association par distance. Une même
+                    # étiquette passe devant un simple air de famille.
+                    paires.append((2.0 + recouvrement if meme_label else 1.5 + recouvrement,
+                                   i, track_id))
+                    continue
+
+                # Rattrapage par proximité des centres. Il est franchement plus
+                # serré entre étiquettes différentes : confondre deux objets
+                # voisins casserait tous les comptages.
+                facteur = (self.distance_max_facteur if meme_label
+                           else self.distance_famille_facteur)
+                limite = facteur * max(diagonale(track.bbox), 1.0)
                 ecart = distance(det.bbox, track.bbox)
                 if ecart <= limite:
-                    paires.append((1.0 - ecart / limite, i, track_id))
+                    score = 1.0 - ecart / limite
+                    paires.append((score if meme_label else score * 0.5, i, track_id))
         paires.sort(reverse=True)
         return paires
 
@@ -124,6 +175,9 @@ class SimpleTracker:
                 continue
             track = libres.pop(track_id)
             track.bbox = detections[i].bbox
+            # L'étiquette suit l'objet : un ouvrier qui remet son casque reste
+            # le même ouvrier, la piste garde son identité et change d'état.
+            track.label = detections[i].label
             track.perdu = 0
             track.positions.append(centre(detections[i].bbox))
             del track.positions[:-self.historique]
@@ -153,6 +207,17 @@ class SimpleTracker:
     @property
     def actifs(self) -> int:
         return sum(1 for t in self._tracks.values() if t.perdu == 0)
+
+    def traces(self) -> list:
+        """Trajectoires visibles : (identifiant, points parcourus).
+
+        Ce qui rend le suivi crédible à l'écran n'est pas la boîte — elle
+        existe sans suivi — mais le trait qui relie les positions successives
+        d'un même objet. C'est ce trait qui montre qu'on a compris que c'est le
+        même.
+        """
+        return [(t.id, list(t.positions)) for t in self._tracks.values()
+                if t.perdu == 0 and len(t.positions) > 1]
 
 
 def _cote(point, a, b) -> float:

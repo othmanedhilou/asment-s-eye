@@ -102,6 +102,7 @@
             <label class="bascule" title="Met en avant la caméra concernée dès qu'une alerte critique arrive">
               <input type="checkbox" id="suivi-alertes" checked /> Suivi des alertes
             </label>
+            <button class="bouton" id="btn-son" title="Son des alertes critiques">Son</button>
             <button class="bouton" id="btn-tech">Infos techniques</button>
             <button class="bouton" id="btn-recharger"><svg class="ico"><use href="#i-refresh"/></svg></button>
             <button class="bouton" id="btn-plein-ecran"><svg class="ico"><use href="#i-full"/></svg>Plein écran</button>
@@ -233,7 +234,6 @@
           <button data-section="zones">Zones d'intérêt</button>
           <button data-section="fichiers">Fichiers de test</button>
           <button data-section="modeles">Modèles</button>
-          <button data-section="usages">Cas d'usage</button>
           <button data-section="systeme">État du système</button>
         </div>
 
@@ -406,14 +406,6 @@
           </div>
         </div>
 
-        <!-- Cas d'usage -->
-        <div class="section" id="config-usages">
-          <div class="bloc">
-            <div class="bloc-tete">CAS D'USAGE DU CAHIER DES CHARGES</div>
-            <table class="liste" id="cas-usage"></table>
-          </div>
-        </div>
-
         <!-- État du système -->
         <div class="section" id="config-systeme">
           <div class="bloc">
@@ -443,7 +435,10 @@
       <svg class="ico"><use href="#i-close"/></svg>Quitter le plein écran (Échap)
     </button>
   </div>
-  <div class="visionneuse-corps"><img id="visionneuse-image" alt="" /></div>
+  <div class="visionneuse-corps">
+    <img id="visionneuse-image" alt="" />
+    <video id="visionneuse-video" controls hidden></video>
+  </div>
 </div>
 
 <!-- L'aide vit dans un tiroir : lue une fois, elle n'encombre plus jamais
@@ -469,7 +464,8 @@
     <div class="aide-section">PARAMÈTRES</div>
     <div class="aide-item"><b>Source d'une caméra</b><span>Un numéro pour une webcam, une adresse <code>rtsp://</code> pour une caméra IP, un chemin pour un fichier vidéo ou un dossier d'images.</span></div>
     <div class="aide-item"><b>Zones d'intérêt</b><span>Hors zone, les détections sont ignorées : c'est le principal levier contre les fausses alertes. Une zone d'exclusion fait l'inverse — elle masque ce qui gêne, comme la route au fond du champ. Sans aucune zone, l'image est analysée en entier.</span></div>
-    <div class="aide-item"><b>Fichiers de test</b><span>Une vidéo déposée devient une source utilisable comme une caméra. C'est ce qui permet d'éprouver le système sans attendre l'accès au réseau du site : une webcam de bureau ne montre jamais de départ de feu.</span></div>
+    <div class="aide-item"><b>Fichiers de test</b><span>Glisser une vidéo ou une image lance l'analyse immédiatement, sans rien créer. Le résultat s'affiche en Direct sous le nom « essai ». C'est ce qui permet d'éprouver le système sans attendre l'accès au réseau du site : une webcam de bureau ne montre jamais de départ de feu.</span></div>
+    <div class="aide-item"><b>Suivi des objets</b><span>Chaque objet reçoit un numéro et une couleur, et laisse derrière lui la trace de son parcours. C'est ce qui permet de n'alerter qu'une fois par personne : sans suivi, la même personne sans casque déclencherait une alerte à chaque image.</span></div>
     <div class="aide-item"><b>Modèles</b><span>N'activer que les modèles pertinents pour chaque caméra : c'est le premier levier de performance sur une machine à deux cœurs.</span></div>
     <div class="aide-item"><b>Seuil et anti-répétition</b><span>Le seuil est la confiance minimale pour déclencher. L'anti-répétition empêche la même alerte de se répéter pendant un délai donné.</span></div>
     <div class="aide-item"><b>État du système</b><span>Un système de surveillance qui s'arrête devient silencieux, et le silence ressemble au calme. Cette page existe pour que l'arrêt se voie.</span></div>

@@ -196,3 +196,49 @@ def test_classes_du_jeu_de_chute_retenu(monkeypatch):
     assert engine.process(detection(model="fall", label="down")) is not None
     assert engine.process(detection(model="fall", label="up")) is None
     assert engine.process(detection(model="fall", label="bending")) is None
+
+
+# ── Une alerte par objet suivi, pas une par image ────────────────────
+
+
+def suivi(track_id, label="NO-Hardhat"):
+    d = detection(label=label)
+    d.track_id = track_id
+    return d
+
+
+def test_un_objet_suivi_n_alerte_qu_une_seule_fois():
+    """Le suivi transforme l'alerte en événement : cet ouvrier-là, sans casque,
+    se signale une fois. Sans cela, il se signalerait à chaque image."""
+    moteur = AlertEngine()
+    assert moteur.process(suivi(7)) is not None
+    for _ in range(50):
+        assert moteur.process(suivi(7)) is None
+
+
+def test_chaque_objet_suivi_alerte_pour_son_propre_compte():
+    moteur = AlertEngine()
+    assert moteur.process(suivi(1)) is not None
+    assert moteur.process(suivi(2)) is not None
+    assert moteur.process(suivi(3)) is not None
+
+
+def test_sans_suivi_le_delai_anti_repetition_reste_le_seul_rempart():
+    moteur = AlertEngine(cooldown_seconds=3600)
+    assert moteur.process(detection()) is not None
+    assert moteur.process(detection()) is None
+
+
+def test_une_benne_vide_n_est_pas_une_infraction():
+    """« empty » était la première source de fausses alertes : une benne vide
+    est un état normal, pas un manquement."""
+    moteur = AlertEngine()
+    assert moteur.process(detection(model="load_control", label="empty")) is None
+
+
+def test_la_memoire_des_alertes_ne_grossit_pas_indefiniment():
+    moteur = AlertEngine()
+    moteur.MEMOIRE_MAX = 100
+    for i in range(400):
+        moteur.process(suivi(i))
+    assert len(moteur._last_alert) <= 200

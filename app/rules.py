@@ -30,7 +30,10 @@ ALERT_LABELS = {
     # sans le moindre message d'erreur.
     # « truk_normal » n'y figure pas : un camion conforme ne doit rien
     # déclencher. Idem pour « roda », les roues, annotées pour compter les essieux.
-    "load_control": {"torn", "empty", "truk_odol", "truck_odol", "overloaded",
+    # « empty » (benne vide) est retiré : une benne vide n'est pas une
+    # infraction, et le modèle actuel la voyait partout — c'était la première
+    # source de fausses alertes.
+    "load_control": {"torn", "truk_odol", "truck_odol", "overloaded",
                      "bache_absente", "bache_partielle", "bache_dechiree", "surcharge"},
     "person_animal": {"person", "animal"},
     "vehicles": {"car", "truck", "bus", "motorcycle", "bicycle"},
@@ -42,7 +45,17 @@ ALERT_LABELS = {
 MIN_CONFIDENCE_OVERRIDE = {
     ("gloves_glasses", "Fall-Detected"): 0.80,
     ("load_control", "torn"): 0.75,
-    ("load_control", "empty"): 0.75,
+    # Une webcam de bureau braquée sur un visage n'a aucune raison de produire
+    # une voiture ou une fissure de convoyeur. Ces classes-là ne sortent d'un
+    # modèle mal cadré que sous 60 % de confiance : on les exige franches.
+    ("vehicles", "car"): 0.60,
+    ("vehicles", "truck"): 0.60,
+    ("vehicles", "bus"): 0.60,
+    ("vehicles", "motorcycle"): 0.60,
+    ("vehicles", "bicycle"): 0.60,
+    ("person_animal", "animal"): 0.60,
+    ("conveyor", "crack"): 0.60,
+    ("arc", "Sparks"): 0.60,
 }
 
 
@@ -87,6 +100,17 @@ class AlertEngine:
         self.on_alert = on_alert
         self._last_alert: dict[tuple[str, str, str], float] = {}
 
+    # Une piste par personne et par passage : sur une journée de trafic, la
+    # table grossit sans jamais rétrécir. On la borne.
+    MEMOIRE_MAX = 20_000
+
+    def _oublier_les_vieilles(self):
+        if len(self._last_alert) <= self.MEMOIRE_MAX:
+            return
+        ordre = sorted(self._last_alert.items(), key=lambda kv: kv[1])
+        for cle, _ in ordre[: len(ordre) // 4]:
+            del self._last_alert[cle]
+
     def _cooldown_for(self, model: str, label: str, zone_cooldown: float | None = None) -> float:
         if self.cooldown_seconds is not None:
             return self.cooldown_seconds
@@ -129,12 +153,22 @@ class AlertEngine:
         key = (detection.camera, detection.zone, detection.model, detection.label,
                detection.track_id)
         now = time.monotonic()
-        last = self._last_alert.get(key, 0.0)
-        if now - last < self._cooldown_for(detection.model, detection.label,
-                                           detection.zone_cooldown):
-            return None
+
+        # Quand la caméra suit ses objets, une alerte est un événement, pas un
+        # état : cet ouvrier-là, sans casque, alerte UNE fois. Tant que la piste
+        # vit, on n'y revient pas. Sans suivi, il ne reste que le délai
+        # anti-répétition — un pansement, faute de mieux.
+        if detection.track_id is not None:
+            if key in self._last_alert:
+                return None
+        else:
+            last = self._last_alert.get(key, 0.0)
+            if now - last < self._cooldown_for(detection.model, detection.label,
+                                               detection.zone_cooldown):
+                return None
 
         self._last_alert[key] = now
+        self._oublier_les_vieilles()
         where = f" dans {detection.zone}" if detection.zone else ""
         alert = Alert(
             camera=detection.camera,

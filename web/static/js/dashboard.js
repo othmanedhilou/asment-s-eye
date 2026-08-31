@@ -168,7 +168,6 @@ function ouvrirSection(nom) {
     zones: chargerZones,
     fichiers: chargerFichiers,
     modeles: chargerReglages,
-    usages: chargerUsages,
     systeme: chargerSysteme,
   })[nom]?.();
 }
@@ -229,7 +228,8 @@ function dessinerTableCameras() {
     r.addEventListener("click", () => {
       selection = selection === r.dataset.cam ? null : r.dataset.cam;
       dessinerTableCameras();
-          dessinerMur();
+      dessinerMur();
+      majActions();
     }));
 }
 
@@ -264,7 +264,8 @@ function tuile(c, principal) {
     ? (e === "en-ligne" ? `${c.models.length} mod · ${c.cycle_ms ? c.cycle_ms + " ms" : "—"}` : "—")
     : "";
   return `
-    <div class="tuile${principal ? " principal" : ""}" id="tuile-${ech(c.name)}" data-cam="${ech(c.name)}">
+    <div class="tuile${principal ? " principal" : ""}${e === "hors-ligne" ? " hs" : ""}"
+         id="tuile-${ech(c.name)}" data-cam="${ech(c.name)}">
       <img data-flux="${ech(c.name)}" src="/video/${encodeURIComponent(c.name)}.jpg" alt=""
            onerror="this.style.opacity=0.08" onload="this.style.opacity=1" />
       <div class="tuile-haut">
@@ -383,7 +384,21 @@ function rafraichirFlux() {
   });
 }
 
+function ouvrirClip(url) {
+  el("visionneuse-nom").textContent = "Clip de l'alerte";
+  el("visionneuse-etat").textContent = "";
+  el("visionneuse-image").hidden = true;
+  const v = el("visionneuse-video");
+  v.hidden = false;
+  v.src = url;
+  v.play().catch(() => { /* lecture différée par le navigateur */ });
+  el("visionneuse").hidden = false;
+}
+
 function ouvrirVisionneuse(nom) {
+  el("visionneuse-video").hidden = true;
+  el("visionneuse-video").pause?.();
+  el("visionneuse-image").hidden = false;
   visionnee = nom;
   const c = cameras.find((x) => x.name === nom);
   el("visionneuse-nom").textContent = nom;
@@ -394,6 +409,8 @@ function ouvrirVisionneuse(nom) {
 }
 
 function fermerVisionneuse() {
+  const v = el("visionneuse-video");
+  if (v) { v.pause?.(); v.removeAttribute("src"); v.hidden = true; }
   visionnee = null;
   el("visionneuse").hidden = true;
 }
@@ -658,6 +675,9 @@ async function chargerAlertes() {
     b.addEventListener("click", () => marquer(b.dataset.faux, true)));
   el("tableau-alertes").querySelectorAll("[data-vrai]").forEach((b) =>
     b.addEventListener("click", () => marquer(b.dataset.vrai, false)));
+  el("tableau-alertes").querySelectorAll("[data-clip]").forEach((n) =>
+    n.addEventListener("click", () => ouvrirClip(n.dataset.clip)));
+
   el("tableau-alertes").querySelectorAll("[data-img]").forEach((n) =>
     n.addEventListener("click", () => window.open(n.dataset.img, "_blank")));
 
@@ -665,12 +685,17 @@ async function chargerAlertes() {
 }
 
 function ligneAlerte(a) {
+  const clipUrl = a.clip ? `/api/clip?path=${encodeURIComponent(a.clip)}` : null;
   const vign = a.snapshot
     ? `<img class="vignette" src="/api/snapshot?path=${encodeURIComponent(a.snapshot)}"
-            data-img="/api/snapshot?path=${encodeURIComponent(a.snapshot)}" alt="" />`
+            ${clipUrl ? `data-clip="${clipUrl}" title="Voir le clip"`
+    : `data-img="/api/snapshot?path=${encodeURIComponent(a.snapshot)}"`} alt="" />`
     : "";
-  const clip = a.clip
-    ? ` <a class="lien" href="/api/clip?path=${encodeURIComponent(a.clip)}" target="_blank">clip</a>` : "";
+  // Un clip vaut mieux qu'une image : il montre ce qui s'est passé avant et
+  // après, ce qu'une capture ne dira jamais.
+  const clip = clipUrl
+    ? ` <button class="bouton" data-clip="${clipUrl}" style="padding:3px 9px">▶ clip</button>`
+    : ' <span class="msg">clip en cours…</span>';
   const zone = a.zone ? ` <span class="etiq zone">${ech(a.zone)}</span>` : "";
   const plaque = a.plaque ? ` <span class="etiq plaque">${ech(a.plaque)}</span>` : "";
   const faux = a.false_positive ? ' <span class="etiq">fausse</span>' : "";
@@ -686,7 +711,7 @@ function ligneAlerte(a) {
   return `<tr class="${a.severity}${a.false_positive ? " fausse" : ""}">
     <td>${vign}</td>
     <td>${ech(a.label)}${faux}${zone}${plaque}</td>
-    <td>${ech(a.camera)}${clip}</td>
+    <td>${ech(a.camera)}<br>${clip}</td>
     <td>${nomModele(a.model)}</td>
     <td><span class="sev ${a.severity}">${a.severity}</span></td>
     <td class="num">${a.confidence.toFixed(2)}</td>
@@ -823,11 +848,15 @@ async function chargerFichiers() {
           <td>${f.type}</td>
           <td class="num">${f.taille_mo} Mo</td>
           <td><div class="enligne">
+            <button class="bouton primaire" data-essai="${ech(f.source)}">Analyser</button>
             <button class="bouton" data-use="${ech(f.source)}">Créer une caméra</button>
             <button class="bouton danger" data-del="${ech(f.nom)}">Supprimer</button>
           </div></td>
         </tr>`).join("")}</tbody>
     </table>`;
+
+  el("liste-fichiers").querySelectorAll("[data-essai]").forEach((b) =>
+    b.addEventListener("click", () => analyser(b.dataset.essai)));
 
   el("liste-fichiers").querySelectorAll("[data-use]").forEach((b) =>
     b.addEventListener("click", () => {
@@ -852,6 +881,37 @@ async function chargerFichiers() {
     }));
 
   choixFichiers();
+}
+
+/* Éprouver un modèle ne doit pas demander de créer une caméra : on braque une
+   source d'essai sur le fichier et on regarde. La caméra « essai » est réservée
+   à cet usage et réutilisée à chaque fois — sinon la liste se remplirait d'une
+   caméra par vidéo testée, ce qui est arrivé. */
+const CAMERA_ESSAI = "essai";
+
+async function analyser(source) {
+  let modeles = [];
+  try {
+    const s = await api("/api/settings");
+    modeles = Object.entries(s).filter(([, v]) => v.detect).map(([m]) => m);
+  } catch { /* on tentera sans liste */ }
+
+  try {
+    await api(`/api/cameras/${CAMERA_ESSAI}`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        source, models: modeles, enabled: true, tracking: true, fps: 2,
+      }),
+    });
+  } catch (e) {
+    avis("Analyse impossible", e.message, "err");
+    return;
+  }
+
+  avis("Analyse lancée", `${modeles.length} modèle(s) — quelques secondes de chargement.`, "ok");
+  allerA("direct");
+  selection = CAMERA_ESSAI;
+  await chargerCameras();
 }
 
 function brancherDepot() {
@@ -900,8 +960,9 @@ function envoyer(fichier) {
       const a = r.apercu || {};
       msg.className = "msg ok";
       msg.textContent = `${r.nom} — ${r.taille_mo} Mo` + (a.width ? `, ${a.width}×${a.height}` : "");
-      avis("Fichier importé", "Utilisable comme source de caméra.", "ok");
       chargerFichiers();
+      if (r.source) analyser(r.source);
+      else avis("Fichier importé", "Utilisable comme source de caméra.", "ok");
     } else {
       msg.className = "msg err";
       msg.textContent = r.detail || `Échec (${xhr.status})`;
@@ -950,22 +1011,6 @@ async function chargerAnalyse() {
   fiabilite(qualite);
   faussesParCamera(qualite);
 
-}
-
-async function chargerUsages() {
-  const usages = await api("/api/usecases");
-  const etats = { operationnel: "Opérationnel", partiel: "Partiel", a_entrainer: "À entraîner" };
-  el("cas-usage").innerHTML = `
-    <thead><tr><th style="width:34px">#</th><th>Cas d'usage</th><th>Modèle</th>
-    <th style="width:100px">État</th><th style="width:120px">Détection</th></tr></thead>
-    <tbody>${usages.usecases.map((u) => `
-      <tr>
-        <td class="num">${String(u.num).padStart(2, "0")}</td>
-        <td>${ech(u.titre)}${u.note ? `<br><span class="msg">${ech(u.note)}</span>` : ""}</td>
-        <td>${u.model ? nomModele(u.model) : "—"}</td>
-        <td><span class="sev ${u.etat === "operationnel" ? "moyenne" : u.etat === "partiel" ? "haute" : "critique"}">${etats[u.etat]}</span></td>
-        <td class="msg">${u.detect ? "active" : "inactive"}</td>
-      </tr>`).join("")}</tbody>`;
 }
 
 function indic(nom, valeur, alarme = false) {
@@ -1094,6 +1139,48 @@ async function majBarreEtat() {
   }
 }
 
+/* Le son : un agent ne regarde pas l'écran en permanence. Une alerte critique
+   doit pouvoir l'appeler. Synthétisé sur place — aucun fichier à charger, donc
+   rien à télécharger sur un site coupé d'Internet. */
+let sonActif = localStorage.getItem("ciments_eye-son") !== "non";
+
+function brancherSon() {
+  const b = el("btn-son");
+  const rendre = () => {
+    b.classList.toggle("actif", sonActif);
+    b.textContent = sonActif ? "Son activé" : "Son coupé";
+    b.title = sonActif ? "Couper le son des alertes" : "Rétablir le son des alertes";
+  };
+  rendre();
+  b.addEventListener("click", () => {
+    sonActif = !sonActif;
+    localStorage.setItem("ciments_eye-son", sonActif ? "oui" : "non");
+    rendre();
+    if (sonActif) sonner();
+  });
+}
+
+function sonner() {
+  if (!sonActif) return;
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    // Deux notes brèves : un bip continu se confond avec un bruit d'atelier.
+    [0, 0.22].forEach((retard, i) => {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = "square";
+      o.frequency.value = i === 0 ? 880 : 660;
+      g.gain.setValueAtTime(0.0001, ctx.currentTime + retard);
+      g.gain.exponentialRampToValueAtTime(0.22, ctx.currentTime + retard + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + retard + 0.18);
+      o.connect(g).connect(ctx.destination);
+      o.start(ctx.currentTime + retard);
+      o.stop(ctx.currentTime + retard + 0.2);
+    });
+    setTimeout(() => ctx.close(), 1200);
+  } catch { /* le navigateur refuse le son tant que rien n'a été cliqué */ }
+}
+
 /* ═══ Alertes critiques en direct ═══ */
 
 async function guetter() {
@@ -1106,6 +1193,7 @@ async function guetter() {
   derniereCritique = a.id;
 
   avis(`${a.label} — ${a.camera}`, a.zone ? `Zone ${a.zone}` : "", "critique");
+  sonner();
 
   if (el("suivi-alertes")?.checked) {
     // La caméra concernée n'est peut-être pas sur la vue affichée : on y va.
@@ -1353,6 +1441,7 @@ async function init() {
     e.currentTarget.textContent = corps.hidden ? "Déplier" : "Replier";
   });
   outilsDirect();
+  brancherSon();
   formCamera();
   brancherFiltres();
   brancherFrise();

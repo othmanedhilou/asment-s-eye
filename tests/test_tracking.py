@@ -182,3 +182,70 @@ def test_lignes_et_exclusions_hors_comptage():
     tracker = SimpleTracker()
     detections = tracker.update([det()])
     assert occupation(zones, detections, 640, 480) == {}
+
+
+# ── Le suivi survit au clignotement d'étiquette ──────────────────────
+#
+# Un modèle d'EPI ne voit pas « une personne » : il voit un casque, puis une
+# absence de casque. Si chaque changement crée une identité neuve, chaque
+# changement crée aussi une alerte neuve — c'est le défaut qui noyait
+# l'opérateur sous les répétitions.
+
+
+def test_meme_personne_qui_retire_son_casque_garde_son_identifiant():
+    t = SimpleTracker()
+    avec = t.update([det(label="Hardhat", bbox=(100, 100, 200, 300), model="epi")])
+    identifiant = avec[0].track_id
+
+    sans = t.update([det(label="NO-Hardhat", bbox=(103, 102, 203, 303), model="epi")])
+    assert sans[0].track_id == identifiant
+
+
+def test_une_personne_et_un_vehicule_ne_se_confondent_pas():
+    """Deux familles différentes ne fusionnent jamais, même superposées."""
+    t = SimpleTracker()
+    a = t.update([det(label="person", bbox=(100, 100, 200, 300))])
+    b = t.update([det(label="car", bbox=(100, 100, 200, 300))])
+    assert b[0].track_id != a[0].track_id
+
+
+def test_deux_etiquettes_de_la_meme_famille_mais_disjointes_restent_distinctes():
+    """L'air de famille ne suffit pas : il faut aussi que les boîtes se
+    recouvrent franchement. Deux ouvriers aux deux bouts de l'image sont deux
+    personnes."""
+    t = SimpleTracker()
+    a = t.update([det(label="Hardhat", bbox=(0, 0, 80, 200), model="epi")])
+    b = t.update([det(label="NO-Hardhat", bbox=(600, 400, 680, 600), model="epi")])
+    assert b[0].track_id != a[0].track_id
+
+
+def test_les_traces_donnent_le_chemin_parcouru():
+    t = SimpleTracker()
+    for x in (100, 130, 160):
+        t.update([det(bbox=(x, 100, x + 100, 300))])
+    traces = t.traces()
+    assert len(traces) == 1
+    _, points = traces[0]
+    assert len(points) == 3
+    assert points[0][0] < points[-1][0]     # l'objet s'est déplacé vers la droite
+
+
+def test_une_personne_qui_marche_et_change_d_etat_garde_son_identifiant():
+    """Le cas qui compte vraiment : l'objet bouge ET change d'étiquette.
+
+    À deux images par seconde, un piéton se déplace d'environ un tiers de sa
+    largeur, ce qui fait tomber le recouvrement autour de 0,5. Un seuil de
+    famille plus exigeant refusait le rapprochement au moment même où il sert.
+    """
+    t = SimpleTracker()
+    identifiant = None
+    for k in range(15):
+        etiquette = "Hardhat" if k < 7 else "NO-Hardhat"
+        d = t.update([det(label=etiquette, bbox=(40 + k * 22, 90, 110 + k * 22, 260),
+                          model="epi")])[0]
+        if identifiant is None:
+            identifiant = d.track_id
+        assert d.track_id == identifiant, f"identite perdue a l'image {k}"
+
+    _, points = t.traces()[0]
+    assert len(points) == 15

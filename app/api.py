@@ -78,8 +78,11 @@ class CameraBody(BaseModel):
     imgsz: int | None = None
     workers: int | None = None
     enabled: bool = True
-    # Suivi des objets et enregistrement continu : couteux, donc explicites.
-    tracking: bool = False
+    # Le suivi conditionne tout le reste : sans lui une alerte se répète au
+    # lieu de désigner un objet, on ne peut ni compter ni connaître un sens de
+    # passage. Il coûte peu au regard de l'inférence. Il est donc actif par
+    # défaut, et se désactive à la main sur une caméra qu'on veut alléger.
+    tracking: bool = True
     recording: bool = False
     plates: bool = False          # lecture des plaques (véhicules, suivi requis)
     collecte: bool = False        # photographier chaque franchissement de ligne
