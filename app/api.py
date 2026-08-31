@@ -132,8 +132,26 @@ LIVE_MAX_AGE_SECONDS = 15
 
 @app.get("/", response_class=HTMLResponse)
 def index():
-    html_path = WEB_DIR / "templates" / "index.html"
-    return html_path.read_text(encoding="utf-8")
+    """Sert la page en versionnant la feuille de style et le script.
+
+    Sans cette version, l'URL des fichiers statiques ne change jamais et le
+    navigateur reste libre de resservir sa copie : une correction livree ne
+    parvient pas a l'ecran, et l'on croit a un bouton qui ne marche pas. Le
+    marqueur suit la date de modification du fichier — il change quand le
+    fichier change, et pas autrement, donc le cache continue de servir tant
+    qu'on n'a rien touche.
+    """
+    statiques = WEB_DIR / "static"
+    marqueur = 0
+    for fichier in ("css/dashboard.css", "js/dashboard.js"):
+        chemin = statiques / fichier
+        if chemin.exists():
+            marqueur = max(marqueur, int(chemin.stat().st_mtime))
+
+    html = (WEB_DIR / "templates" / "index.html").read_text(encoding="utf-8")
+    html = html.replace("/static/css/dashboard.css", f"/static/css/dashboard.css?v={marqueur}")
+    html = html.replace("/static/js/dashboard.js", f"/static/js/dashboard.js?v={marqueur}")
+    return HTMLResponse(html, headers={"Cache-Control": "no-store"})
 
 
 # ── Alertes ──────────────────────────────────────────────────────────

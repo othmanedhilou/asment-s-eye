@@ -325,3 +325,17 @@ def test_supprimer_l_historique_par_filtre(client):
 
 def test_supprimer_une_alerte_inconnue_renvoie_404(client):
     assert client.delete("/api/alerts/999999").status_code == 404
+
+
+def test_la_page_versionne_ses_fichiers_statiques(client):
+    """Sans version dans l'URL, le navigateur resservait sa copie : une
+    correction livrée n'atteignait pas l'écran, et l'on croyait à un bouton
+    qui ne marche pas."""
+    html = client.get("/").text
+    assert "/static/css/dashboard.css?v=" in html
+    assert "/static/js/dashboard.js?v=" in html
+    assert "/static/js/dashboard.js\"" not in html
+
+
+def test_la_page_n_est_pas_mise_en_cache(client):
+    assert client.get("/").headers.get("cache-control") == "no-store"
