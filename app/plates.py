@@ -10,7 +10,7 @@ Deux voies, dans cet ordre de préférence :
 
 1. **Un modèle de détection de plaque**, s'il est déclaré dans la configuration
    sous le nom `plate`. C'est la voie fiable. Le jour où vous entraînez
-   `smokewatch_plate_best.pt`, il est utilisé automatiquement.
+   `ciments_eye_plate_best.pt`, il est utilisé automatiquement.
 2. **Une recherche par vision classique** : une plaque est un rectangle clair,
    très allongé (rapport 2:1 à 6:1), riche en contours verticaux, situé dans la
    moitié basse du véhicule. C'est l'approche d'avant l'apprentissage profond :

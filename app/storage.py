@@ -17,7 +17,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 from app.models import Alert
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
-DB_PATH = DATA_DIR / "smokewatch.db"
+DB_PATH = DATA_DIR / "ciments_eye.db"
 
 # Sévérité métier par modèle (logique HSE site cimentier)
 SEVERITY_BY_MODEL = {

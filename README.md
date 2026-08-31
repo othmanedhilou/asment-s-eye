@@ -1,4 +1,4 @@
-# SmokeWatch
+# Ciment's Eye
 
 Système de supervision vidéo intelligente pour site cimentier (Ciments du Maroc).
 Détection temps réel de la fumée, du feu, du non-port des EPI et d'autres risques
@@ -96,7 +96,7 @@ résolution par défaut.
 **`.env`** — jeton du bot Telegram et destinataires (voir `.env.example`). Le
 premier reçoit toutes les alertes, les suivants uniquement les critiques.
 
-**`SMOKEWATCH_LOG_LEVEL=DEBUG`** — trace chaque détection.
+**`CIMENTS_EYE_LOG_LEVEL=DEBUG`** — trace chaque détection.
 
 ## Modèles
 

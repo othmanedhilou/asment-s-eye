@@ -1,4 +1,4 @@
-# Desinstallation des services Windows SmokeWatch.
+# Desinstallation des services Windows Ciment's Eye.
 # A executer en tant qu'administrateur.
 #
 # Ne touche ni au code, ni aux modeles, ni a la base de donnees : seuls les
@@ -16,7 +16,7 @@ if (-not (Get-Command nssm -ErrorAction SilentlyContinue)) {
     throw "NSSM introuvable dans le PATH : impossible de retirer les services."
 }
 
-foreach ($name in @("SmokeWatchPipeline", "SmokeWatchWeb")) {
+foreach ($name in @("Ciment's EyePipeline", "Ciment's EyeWeb")) {
     if (Get-Service $name -ErrorAction SilentlyContinue) {
         Write-Host "Arret et suppression de $name"
         nssm stop $name confirm 2>$null | Out-Null

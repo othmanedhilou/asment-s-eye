@@ -1,4 +1,4 @@
-# Configuration SmokeWatch — caméras, modèles, ROI
+# Configuration Ciment's Eye — caméras, modèles, ROI
 
 cameras:
   webcam_test:
@@ -20,43 +20,43 @@ cameras:
 
 models:
   arc:
-    file: models/smokewatch_arc_best_openvino_model
+    file: models/ciments_eye_arc_best_openvino_model
     conf: 0.4
     enabled: true
   conveyor:
-    file: models/smokewatch_conveyor_best_openvino_model
+    file: models/ciments_eye_conveyor_best_openvino_model
     conf: 0.4
     enabled: true  # bande transporteuse : classe unique "crack" (fissure/déchirure)
   epi:
-    file: models/smokewatch_epi_best_openvino_model
+    file: models/ciments_eye_epi_best_openvino_model
     conf: 0.4
     enabled: true
   # Détection de personne au sol, modèle dédié. Aujourd'hui la chute est une
   # classe du modèle gloves_glasses, où elle est peu fiable. Passer à false
   # une fois ce modèle entraîné : les alertes basculent automatiquement.
   fall:
-    file: models/smokewatch_fall_best_openvino_model
+    file: models/ciments_eye_fall_best_openvino_model
     conf: 0.4
     enabled: false   # passer à true une fois le modèle entraîné et exporté
 
   fire_smoke:
-    file: models/smokewatch_fire_smoke_best_openvino_model
+    file: models/ciments_eye_fire_smoke_best_openvino_model
     conf: 0.35
     enabled: true
   gloves_glasses:
-    file: models/smokewatch_gloves_glasses_best_openvino_model
+    file: models/ciments_eye_gloves_glasses_best_openvino_model
     conf: 0.4
     enabled: true
   load_control:
-    file: models/smokewatch_load_control_best_openvino_model
+    file: models/ciments_eye_load_control_best_openvino_model
     conf: 0.4
     enabled: true  # faux positifs connus (0.89) -> désactivé PAR DÉFAUT via le panneau (data/settings.json), pas ici
   person_animal:
-    file: models/smokewatch_person_animal_best_openvino_model
+    file: models/ciments_eye_person_animal_best_openvino_model
     conf: 0.4
     enabled: true
   vehicles:
-    file: models/smokewatch_vehicles_best_openvino_model
+    file: models/ciments_eye_vehicles_best_openvino_model
     conf: 0.4
     enabled: true
 

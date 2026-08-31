@@ -1,13 +1,13 @@
 # Guide d'installation
 
-Pour le technicien qui installe SmokeWatch sur le serveur du site. Comptez une
+Pour le technicien qui installe Ciment's Eye sur le serveur du site. Comptez une
 heure la première fois, dont une bonne partie en téléchargements.
 
 ---
 
 ## 1. La machine
 
-SmokeWatch tourne **sans carte graphique** : tout se fait sur le processeur.
+Ciment's Eye tourne **sans carte graphique** : tout se fait sur le processeur.
 C'est le nombre de cœurs qui détermine combien de caméras peuvent être traitées.
 
 | | Minimum | Recommandé pour 7 caméras |
@@ -48,8 +48,8 @@ interne. Ce n'est pas un poste de travail.
 
 ```powershell
 cd C:\
-git clone <url-du-depot> SmokeWatch
-cd SmokeWatch
+git clone <url-du-depot> Ciment's Eye
+cd Ciment's Eye
 ```
 
 ### Environnement Python
@@ -166,7 +166,7 @@ détection de présence près des fours la nuit uniquement.
 En PowerShell **administrateur** :
 
 ```powershell
-cd C:\SmokeWatch
+cd C:\Ciment's Eye
 powershell -ExecutionPolicy Bypass -File scripts\install.ps1
 ```
 
@@ -175,9 +175,9 @@ deux services Windows démarrant automatiquement au boot et redémarrant après 
 incident, puis les lance.
 
 ```powershell
-Get-Service SmokeWatch*                          # état
+Get-Service Ciment's Eye*                          # état
 Get-Content logs\pipeline.log -Tail 50 -Wait     # suivre la détection
-Restart-Service SmokeWatchWeb                    # après une mise à jour
+Restart-Service Ciment's EyeWeb                    # après une mise à jour
 ```
 
 Le script est rejouable : relancez-le après chaque mise à jour du code.
@@ -185,7 +185,7 @@ Le script est rejouable : relancez-le après chaque mise à jour du code.
 ### Ouvrir l'accès à l'équipe
 
 ```powershell
-New-NetFirewallRule -DisplayName "SmokeWatch" -Direction Inbound -LocalPort 8000 -Protocol TCP -Action Allow
+New-NetFirewallRule -DisplayName "Ciment's Eye" -Direction Inbound -LocalPort 8000 -Protocol TCP -Action Allow
 ```
 
 L'équipe accède ensuite à `http://<adresse-du-serveur>:8000` depuis n'importe
@@ -216,12 +216,12 @@ besoin : une sauvegarde jamais restaurée n'est pas une sauvegarde.
 ### Mettre à jour
 
 ```powershell
-Stop-Service SmokeWatchPipeline, SmokeWatchWeb
+Stop-Service Ciment's EyePipeline, Ciment's EyeWeb
 .\venv\Scripts\python.exe scripts\backup.py create
 git pull
 .\venv\Scripts\python.exe -m pip install -r requirements.txt
 .\venv\Scripts\python.exe -m pytest tests -q
-Start-Service SmokeWatchPipeline, SmokeWatchWeb
+Start-Service Ciment's EyePipeline, Ciment's EyeWeb
 ```
 
 Si la nouvelle version pose problème : `git checkout <commit-précédent>`, puis
@@ -239,7 +239,7 @@ purge a lieu au démarrage du pipeline. Les journaux sont conservés 30 jours.
 | Symptôme | Cause probable | Solution |
 |---|---|---|
 | Un service ne démarre pas | Dépendances ou modèles manquants | Consulter `logs\pipeline.err.log` |
-| « Détection arrêtée » dans l'interface | Le pipeline ne tourne plus | `Restart-Service SmokeWatchPipeline` |
+| « Détection arrêtée » dans l'interface | Le pipeline ne tourne plus | `Restart-Service Ciment's EyePipeline` |
 | Caméra « HORS LIGNE » | Adresse, identifiants ou réseau | Écran Caméras → Tester la connexion |
 | Traitement très lent | Trop de modèles par caméra | Réduire les modèles, ou les images/s |
 | Le pipeline ne démarre jamais | Machine trop chargée pendant la compilation initiale | Attendre : compter 10 s par modèle au premier lancement |

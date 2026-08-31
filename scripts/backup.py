@@ -35,7 +35,7 @@ BACKUP_DIR = PROJECT_ROOT / "backups"
 
 # Chemins relatifs a la racine du projet.
 A_SAUVEGARDER = [
-    "data/smokewatch.db",
+    "data/ciments_eye.db",
     "data/settings.json",
     "data/health.json",
     "config/cameras.json",
@@ -47,7 +47,7 @@ A_SAUVEGARDER = [
 
 def cmd_create(args):
     BACKUP_DIR.mkdir(parents=True, exist_ok=True)
-    archive = BACKUP_DIR / f"smokewatch_{datetime.now():%Y%m%d_%H%M%S}.zip"
+    archive = BACKUP_DIR / f"ciments_eye_{datetime.now():%Y%m%d_%H%M%S}.zip"
 
     presents, absents = [], []
     for relatif in A_SAUVEGARDER:

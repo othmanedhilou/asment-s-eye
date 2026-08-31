@@ -1,11 +1,11 @@
-"""Teste un modèle SmokeWatch sur une image ou une vidéo.
+"""Teste un modèle Ciment's Eye sur une image ou une vidéo.
 
 Usage:
     python scripts/run_inference.py --model epi --source chemin/vers/image.jpg
     python scripts/run_inference.py --model fire_smoke --source chemin/vers/video.mp4
     python scripts/run_inference.py --model epi --source 0   # webcam
 
-Les modèles disponibles se déduisent des fichiers models/smokewatch_<nom>_best.pt
+Les modèles disponibles se déduisent des fichiers models/ciments_eye_<nom>_best.pt
 Le résultat annoté est sauvegardé dans runs/detect/predict*/ par Ultralytics.
 """
 
@@ -18,7 +18,7 @@ MODELS_DIR = Path(__file__).resolve().parent.parent / "models"
 
 
 def resolve_model_path(name: str) -> Path:
-    candidate = MODELS_DIR / f"smokewatch_{name}_best.pt"
+    candidate = MODELS_DIR / f"ciments_eye_{name}_best.pt"
     if candidate.exists():
         return candidate
 

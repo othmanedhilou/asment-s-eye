@@ -21,8 +21,8 @@ MODEL_NAMES = [
 
 def main():
     for name in MODEL_NAMES:
-        pt_path = MODELS_DIR / f"smokewatch_{name}_best.pt"
-        out_dir = MODELS_DIR / f"smokewatch_{name}_best_openvino_model"
+        pt_path = MODELS_DIR / f"ciments_eye_{name}_best.pt"
+        out_dir = MODELS_DIR / f"ciments_eye_{name}_best_openvino_model"
         if out_dir.exists():
             print(f"[{name}] déjà converti, skip")
             continue

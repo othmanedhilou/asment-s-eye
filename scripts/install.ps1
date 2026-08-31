@@ -1,4 +1,4 @@
-# Installation de SmokeWatch en services Windows (demarrage automatique au boot,
+# Installation de Ciment's Eye en services Windows (demarrage automatique au boot,
 # redemarrage automatique en cas de crash).
 #
 # A executer EN TANT QU'ADMINISTRATEUR sur le serveur de supervision :
@@ -63,11 +63,11 @@ if ($busy) {
 
 New-Item -ItemType Directory -Force $LogsDir | Out-Null
 
-Write-Host "Installation des services SmokeWatch depuis $ProjectRoot"
+Write-Host "Installation des services Ciment's Eye depuis $ProjectRoot"
 
 # --- Installation d'un service ------------------------------------------------
 
-function Install-SmokeWatchService {
+function Install-Ciment's EyeService {
     param(
         [string]$Name,
         [string]$Arguments,
@@ -99,25 +99,25 @@ function Install-SmokeWatchService {
     Write-Host "  $Name installe"
 }
 
-Install-SmokeWatchService -Name "SmokeWatchPipeline" `
+Install-Ciment's EyeService -Name "Ciment's EyePipeline" `
     -Arguments "-u -m app.pipeline" `
-    -DisplayName "SmokeWatch - Pipeline de detection" `
+    -DisplayName "Ciment's Eye - Pipeline de detection" `
     -Description "Detection IA multi-modeles sur les flux cameras" `
     -LogPrefix "pipeline"
 
-Install-SmokeWatchService -Name "SmokeWatchWeb" `
+Install-Ciment's EyeService -Name "Ciment's EyeWeb" `
     -Arguments "-m uvicorn app.api:app --host 0.0.0.0 --port $Port" `
-    -DisplayName "SmokeWatch - Interface VMS" `
+    -DisplayName "Ciment's Eye - Interface VMS" `
     -Description "Interface web de supervision (port $Port)" `
     -LogPrefix "web"
 
 # --- Demarrage et controle ----------------------------------------------------
 
-Start-Service SmokeWatchPipeline
-Start-Service SmokeWatchWeb
+Start-Service Ciment's EyePipeline
+Start-Service Ciment's EyeWeb
 Start-Sleep -Seconds 5
 
-$states = Get-Service SmokeWatchPipeline, SmokeWatchWeb
+$states = Get-Service Ciment's EyePipeline, Ciment's EyeWeb
 $states | Format-Table Name, Status, StartType -AutoSize
 
 $failed = $states | Where-Object { $_.Status -ne "Running" }
@@ -133,7 +133,7 @@ if ($failed) {
 
 Write-Host ""
 Write-Host "Commandes utiles :"
-Write-Host "  Get-Service SmokeWatch*             etat des services"
-Write-Host "  Restart-Service SmokeWatchWeb       redemarrage apres mise a jour du code"
+Write-Host "  Get-Service Ciment's Eye*             etat des services"
+Write-Host "  Restart-Service Ciment's EyeWeb       redemarrage apres mise a jour du code"
 Write-Host "  Get-Content logs\pipeline.log -Tail 50 -Wait   suivre la detection en direct"
 Write-Host "  .\scripts\uninstall.ps1             desinstallation complete"

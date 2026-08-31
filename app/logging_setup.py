@@ -20,10 +20,10 @@ LOGS_DIR = Path(__file__).resolve().parent.parent / "logs"
 _configured = False
 
 
-def setup_logging(name: str = "smokewatch", level: str | None = None):
+def setup_logging(name: str = "ciments_eye", level: str | None = None):
     """À appeler une fois au démarrage de chaque processus (pipeline, API).
 
-    Le niveau se règle par la variable d'environnement SMOKEWATCH_LOG_LEVEL.
+    Le niveau se règle par la variable d'environnement CIMENTS_EYE_LOG_LEVEL.
     En DEBUG, chaque détection est tracée — utile pour régler des seuils ou
     comprendre pourquoi une zone ne déclenche pas, trop verbeux en exploitation.
     """
@@ -31,7 +31,7 @@ def setup_logging(name: str = "smokewatch", level: str | None = None):
     if _configured:
         return logger
 
-    level = level or os.getenv("SMOKEWATCH_LOG_LEVEL", "INFO").upper()
+    level = level or os.getenv("CIMENTS_EYE_LOG_LEVEL", "INFO").upper()
 
     LOGS_DIR.mkdir(parents=True, exist_ok=True)
     logger.remove()  # retire le handler par défaut de loguru

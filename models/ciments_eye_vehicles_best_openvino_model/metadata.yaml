@@ -1,6 +1,6 @@
-description: Ultralytics smokewatch_person_animal_best model trained on /kaggle/working/person_animal.yaml
+description: Ultralytics ciments_eye_vehicles_best model trained on /kaggle/working/vehicles.yaml
 author: Ultralytics
-date: '2026-08-26T17:09:31.716682+01:00'
+date: '2026-08-26T17:09:35.329098+01:00'
 version: 8.4.129
 license: AGPL-3.0 License (https://ultralytics.com/license)
 docs: https://docs.ultralytics.com
@@ -12,8 +12,11 @@ imgsz:
 - 640
 - 640
 names:
-  0: person
-  1: animal
+  0: bicycle
+  1: car
+  2: motorcycle
+  3: bus
+  4: truck
 args:
   data: null
   batch: 1

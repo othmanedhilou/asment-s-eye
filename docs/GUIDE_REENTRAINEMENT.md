@@ -173,7 +173,7 @@ figée. Entraîner en 416 ou 832 obligerait à tout réexporter, et l'inférence
 planterait. Ce piège a déjà coûté une soirée sur ce projet.
 
 **Sauvegarder sur Drive.** Colab coupe sans prévenir. Le carnet écrit
-directement dans `MonDrive/SmokeWatch/runs/` et reprend automatiquement.
+directement dans `MonDrive/Ciment's Eye/runs/` et reprend automatiquement.
 
 **Mesurer avant et après.** C'est la règle la plus importante. Sans point de
 comparaison, on ne sait pas si l'on a progressé — et un recul ne se voit nulle
@@ -201,13 +201,13 @@ ce cas, ne déployez pas.**
 
 ```powershell
 # 1. Sauvegarder l'ancien modèle — il faut pouvoir revenir en arrière
-copy models\smokewatch_epi_best.pt models\smokewatch_epi_best_ancien.pt
+copy models\ciments_eye_epi_best.pt models\ciments_eye_epi_best_ancien.pt
 
 # 2. Installer le nouveau
-copy <telechargé>\smokewatch_epi_best_v2.pt models\smokewatch_epi_best.pt
+copy <telechargé>\ciments_eye_epi_best_v2.pt models\ciments_eye_epi_best.pt
 
 # 3. Supprimer l'export OpenVINO périmé — sinon le pipeline garde l'ancien modèle
-rmdir /s models\smokewatch_epi_best_openvino_model
+rmdir /s models\ciments_eye_epi_best_openvino_model
 
 # 4. Reconvertir
 .\venv\Scripts\python.exe scripts\export_openvino.py
@@ -217,7 +217,7 @@ rmdir /s models\smokewatch_epi_best_openvino_model
 .\venv\Scripts\python.exe scripts\benchmark.py compare --last
 
 # 6. Redémarrer
-Restart-Service SmokeWatchPipeline
+Restart-Service Ciment's EyePipeline
 ```
 
 L'étape 3 n'est pas facultative : sans elle, le pipeline continue d'utiliser

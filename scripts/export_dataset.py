@@ -123,7 +123,7 @@ def main():
 
     noms = "\n".join(f"  {i}: {nom}" for i, nom in enumerate(classes))
     (out / "data.yaml").write_text(
-        f"""# Jeu de donnees issu de l'exploitation reelle de SmokeWatch
+        f"""# Jeu de donnees issu de l'exploitation reelle de Ciment's Eye
 # Modele : {args.model} — periode : {args.days} derniers jours
 #
 # Les images sans fichier .txt correspondant sont des IMAGES DE FOND : des
@@ -159,7 +159,7 @@ names:
     print(f"  1. deposer le dossier {out.name}/ sur le GPU")
     print("  2. verifier les pre-annotations (Roboflow, labelImg)")
     print("  3. entrainer a partir du modele actuel, pas de zero :")
-    print(f"       model = YOLO('smokewatch_{args.model}_best.pt')")
+    print(f"       model = YOLO('ciments_eye_{args.model}_best.pt')")
     print(f"       model.train(data='{out.name}/data.yaml', epochs=30, imgsz=640)")
     print("  4. mesurer avant/apres :  python scripts/benchmark.py compare --last")
     print("  5. reconvertir :          python scripts/export_openvino.py")

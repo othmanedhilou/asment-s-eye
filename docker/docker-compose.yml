@@ -4,7 +4,7 @@
 services:
   mediamtx:
     image: bluenviron/mediamtx:latest
-    container_name: smokewatch_mediamtx
+    container_name: ciments_eye_mediamtx
     restart: unless-stopped
     ports:
       - "8554:8554"   # RTSP

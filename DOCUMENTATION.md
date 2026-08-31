@@ -1,4 +1,4 @@
-# SmokeWatch — Documentation technique
+# Ciment's Eye — Documentation technique
 
 Système de supervision vidéo intelligente (VMS) pour site industriel cimentier.
 Détection temps réel des risques HSE sur flux caméras, alertes immédiates aux
@@ -76,7 +76,7 @@ Les deux processus à lancer sont `app.pipeline` (détection) et `app.api`
 | Canal | Fichier | Sens |
 |---|---|---|
 | Image live | `data/live/<caméra>.jpg` | pipeline → API |
-| Alertes | `data/smokewatch.db` (SQLite) | pipeline → API |
+| Alertes | `data/ciments_eye.db` (SQLite) | pipeline → API |
 | Réglages | `data/settings.json` | API → pipeline |
 | Caméras | `config/cameras.json` | API → pipeline |
 | Zones | `config/zones.json` | API → pipeline |
@@ -656,7 +656,7 @@ fichier par jour, rotation automatique et rétention de 30 jours. Le niveau se
 règle sans toucher au code :
 
 ```powershell
-$env:SMOKEWATCH_LOG_LEVEL = "DEBUG"   # trace chaque détection
+$env:CIMENTS_EYE_LOG_LEVEL = "DEBUG"   # trace chaque détection
 ```
 
 `DEBUG` est précieux pour comprendre pourquoi une zone ne déclenche pas ou pour
@@ -692,7 +692,7 @@ Conversion (une seule fois par machine) :
 .\venv\Scripts\python.exe scripts\export_openvino.py
 ```
 
-Chaque `.pt` produit un dossier `models/smokewatch_<nom>_best_openvino_model`.
+Chaque `.pt` produit un dossier `models/ciments_eye_<nom>_best_openvino_model`.
 
 **Attention : la taille d'entrée est figée à l'export** (640×640). Mettre
 `imgsz: 480` dans `config.yaml` fait planter l'inférence — il faut réexporter à
@@ -728,7 +728,7 @@ cameras:
 
 models:
   fire_smoke:
-    file: models/smokewatch_fire_smoke_best_openvino_model
+    file: models/ciments_eye_fire_smoke_best_openvino_model
     conf: 0.35
     enabled: true
 

@@ -1,6 +1,6 @@
-description: Ultralytics smokewatch_fire_smoke_best model trained on /kaggle/working/fire_smoke.yaml
+description: Ultralytics ciments_eye_gloves_glasses_best model trained on /kaggle/working/gloves_glasses.yaml
 author: Ultralytics
-date: '2026-08-26T17:09:08.757207+01:00'
+date: '2026-08-26T17:09:20.476208+01:00'
 version: 8.4.129
 license: AGPL-3.0 License (https://ultralytics.com/license)
 docs: https://docs.ultralytics.com
@@ -12,8 +12,11 @@ imgsz:
 - 640
 - 640
 names:
-  0: Fire
-  1: Smoke
+  0: Fall-Detected
+  1: Gloves
+  2: Goggles
+  3: NO-Gloves
+  4: NO-Goggles
 args:
   data: null
   batch: 1

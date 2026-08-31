@@ -1,4 +1,4 @@
-/* SmokeWatch — poste de supervision
+/* Ciment's Eye — poste de supervision
  *
  * Aucune dépendance : la page doit s'ouvrir même si le serveur du site est
  * coupé d'Internet.
@@ -96,7 +96,7 @@ function vide(cible, titre, texte) {
 function theme() {
   const systeme = () =>
     window.matchMedia?.("(prefers-color-scheme: light)").matches ? "clair" : "sombre";
-  let courant = localStorage.getItem("smokewatch-theme") || systeme();
+  let courant = localStorage.getItem("ciments_eye-theme") || systeme();
 
   const appliquer = () => {
     document.documentElement.dataset.theme = courant;
@@ -107,7 +107,7 @@ function theme() {
 
   el("btn-theme").addEventListener("click", () => {
     courant = courant === "clair" ? "sombre" : "clair";
-    localStorage.setItem("smokewatch-theme", courant);
+    localStorage.setItem("ciments_eye-theme", courant);
     appliquer();
   });
 }

@@ -108,8 +108,8 @@ def build_report(days: int = 7) -> bytes:
         buffer, pagesize=A4,
         leftMargin=20 * mm, rightMargin=20 * mm,
         topMargin=18 * mm, bottomMargin=18 * mm,
-        title=f"SmokeWatch — rapport HSE {fin:%d/%m/%Y}",
-        author="SmokeWatch",
+        title=f"Ciment's Eye — rapport HSE {fin:%d/%m/%Y}",
+        author="Ciment's Eye",
     )
 
     contenu = [
@@ -228,7 +228,7 @@ def build_report(days: int = 7) -> bytes:
         Spacer(1, 18),
         HRFlowable(width="100%", thickness=0.5, color=TRAIT, spaceAfter=8),
         Paragraph(
-            "Rapport produit automatiquement par SmokeWatch. Les taux de fiabilité "
+            "Rapport produit automatiquement par Ciment's Eye. Les taux de fiabilité "
             "dépendent du marquage des fausses alertes par les opérateurs : sans ce "
             "retour, ils restent incomplets.", st["note"]),
     ]

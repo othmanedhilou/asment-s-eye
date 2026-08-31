@@ -51,7 +51,7 @@ EXTENSIONS_IMAGE = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
 # serveur, dans videos/.
 TAILLE_MAX_OCTETS = 1024 * 1024 * 1024
 
-app = FastAPI(title="SmokeWatch VMS")
+app = FastAPI(title="Ciment's Eye VMS")
 
 app.add_middleware(
     CORSMiddleware,
@@ -230,7 +230,7 @@ def api_export_pdf(days: int = 7):
 
     pdf = build_report(days=days)
     from datetime import date
-    nom = f"smokewatch_rapport_{date.today():%Y%m%d}.pdf"
+    nom = f"ciments_eye_rapport_{date.today():%Y%m%d}.pdf"
     return Response(
         content=pdf,
         media_type="application/pdf",
@@ -244,7 +244,7 @@ def api_export_csv():
     return Response(
         content=csv_data,
         media_type="text/csv; charset=utf-8",
-        headers={"Content-Disposition": "attachment; filename=smokewatch_alertes.csv"},
+        headers={"Content-Disposition": "attachment; filename=ciments_eye_alertes.csv"},
     )
 
 

@@ -1,6 +1,6 @@
-description: Ultralytics smokewatch_vehicles_best model trained on /kaggle/working/vehicles.yaml
+description: Ultralytics ciments_eye_epi_best model trained on /kaggle/working/epi_data.yaml
 author: Ultralytics
-date: '2026-08-26T17:09:35.329098+01:00'
+date: '2026-08-26T17:09:05.257517+01:00'
 version: 8.4.129
 license: AGPL-3.0 License (https://ultralytics.com/license)
 docs: https://docs.ultralytics.com
@@ -12,11 +12,16 @@ imgsz:
 - 640
 - 640
 names:
-  0: bicycle
-  1: car
-  2: motorcycle
-  3: bus
-  4: truck
+  0: Hardhat
+  1: Mask
+  2: NO-Hardhat
+  3: NO-Mask
+  4: NO-Safety Vest
+  5: Person
+  6: Safety Cone
+  7: Safety Vest
+  8: machinery
+  9: vehicle
 args:
   data: null
   batch: 1
