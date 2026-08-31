@@ -42,8 +42,16 @@ ALERT_LABELS = {
 # Seuils de confiance renforcés pour les classes sujettes aux faux positifs
 # (modèles entraînés sur peu de données pour ces classes précises).
 # À retirer une fois ces modèles ré-entraînés avec un dataset plus riche.
+# Combien de fois un objet doit avoir été vu avant de pouvoir déclencher.
+# À deux images par seconde, trois images font une seconde et demie : assez
+# pour écarter le clignotement, assez court pour ne pas rater un passage.
+MIN_VUES_AVANT_ALERTE = 3
+
 MIN_CONFIDENCE_OVERRIDE = {
     ("gloves_glasses", "Fall-Detected"): 0.80,
+    # La classe la plus faible du modèle EPI, et la moins pertinente pour une
+    # cimenterie : elle produisait l'essentiel des fausses alertes.
+    ("epi", "NO-Mask"): 0.55,
     ("load_control", "torn"): 0.75,
     # Une webcam de bureau braquée sur un visage n'a aucune raison de produire
     # une voiture ou une fissure de convoyeur. Ces classes-là ne sortent d'un
@@ -135,6 +143,13 @@ class AlertEngine:
         if not is_alert_enabled(detection.model):
             return None
 
+        # Une apparition fugace n'est pas une observation. Tant que la caméra
+        # suit ses objets, on attend d'avoir vu celui-ci plusieurs fois : c'est
+        # ce qui distingue un ouvrier présent d'un scintillement du modèle.
+        if detection.track_id is not None \
+                and detection.track_hits < MIN_VUES_AVANT_ALERTE:
+            return None
+
         min_conf = MIN_CONFIDENCE_OVERRIDE.get((detection.model, detection.label))
         if min_conf is not None and detection.confidence < min_conf:
             return None
@@ -150,24 +165,39 @@ class AlertEngine:
         # L'identifiant de suivi aussi, quand la camera l'active : sans lui, un
         # deuxieme ouvrier sans casque reste masque pendant cinq minutes par
         # l'alerte du premier. Avec lui, chaque personne alerte une fois.
-        key = (detection.camera, detection.zone, detection.model, detection.label,
-               detection.track_id)
         now = time.monotonic()
 
-        # Quand la caméra suit ses objets, une alerte est un événement, pas un
-        # état : cet ouvrier-là, sans casque, alerte UNE fois. Tant que la piste
-        # vit, on n'y revient pas. Sans suivi, il ne reste que le délai
-        # anti-répétition — un pansement, faute de mieux.
-        if detection.track_id is not None:
-            if key in self._last_alert:
-                return None
-        else:
-            last = self._last_alert.get(key, 0.0)
-            if now - last < self._cooldown_for(detection.model, detection.label,
-                                               detection.zone_cooldown):
-                return None
+        # DEUX verrous, et il faut les deux.
+        #
+        # Le premier tient à l'objet : cet ouvrier-là, sans casque, se signale
+        # UNE fois tant que sa piste vit. C'est ce que le suivi permet.
+        #
+        # Le second tient au libellé, sans regarder la piste. Il est
+        # indispensable parce que le suivi n'est pas infaillible : mesuré sur
+        # cette machine, le cycle tombe à 2,7 s quand deux modèles tournent, et
+        # à cette cadence un objet qui bouge n'est plus rapproché du précédent.
+        # Il repart alors avec une identité neuve — donc, sans ce second verrou,
+        # une alerte neuve. C'est exactement ce qui produisait sept « gilet
+        # absent » en trois minutes.
+        #
+        # Le prix à payer : deux ouvriers sans casque dans la même minute ne
+        # font qu'une alerte. C'est le compromis qu'ont tous les VMS, et il vaut
+        # mieux qu'une colonne d'alertes que plus personne ne lit.
+        cle_objet = (detection.camera, detection.zone, detection.model,
+                     detection.label, detection.track_id)
+        cle_libelle = (detection.camera, detection.zone, detection.model,
+                       detection.label, None)
 
-        self._last_alert[key] = now
+        if detection.track_id is not None and cle_objet in self._last_alert:
+            return None
+
+        dernier = self._last_alert.get(cle_libelle, 0.0)
+        if now - dernier < self._cooldown_for(detection.model, detection.label,
+                                              detection.zone_cooldown):
+            return None
+
+        self._last_alert[cle_objet] = now
+        self._last_alert[cle_libelle] = now
         self._oublier_les_vieilles()
         where = f" dans {detection.zone}" if detection.zone else ""
         alert = Alert(

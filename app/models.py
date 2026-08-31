@@ -17,6 +17,10 @@ class Detection:
     zone_cooldown: float | None = None
     frame_size: tuple[int, int] | None = None  # (largeur, hauteur) de l'image source
     track_id: int | None = None  # identifiant de suivi, quand la caméra l'active
+    # Nombre d'images où cet objet a été vu. Une détection qui n'apparaît qu'une
+    # fois est presque toujours du bruit : on attend confirmation avant d'en
+    # faire une alerte.
+    track_hits: int = 0
     plaque: str | None = None    # numéro lu, pour les véhicules
     global_id: int | None = None  # identifiant partagé entre caméras
 

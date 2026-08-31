@@ -1,10 +1,12 @@
 {
-  "15143526_1080_1920_60fps _1_": {
-    "source": "videos/15143526_1080_1920_60fps _1_.mp4",
+  "webcam": {
+    "source": "0",
     "models": [
-      "vehicles"
+      "person_animal",
+      "epi"
     ],
-    "enabled": true,
+    "fps": 2.0,
+    "enabled": false,
     "tracking": true,
     "recording": false,
     "plates": false,

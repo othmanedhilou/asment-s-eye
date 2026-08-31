@@ -1,7 +1,8 @@
 """Tests du suivi d'objets et du comptage de franchissements."""
 
 from app.models import Detection
-from app.tracking import LineCounter, SimpleTracker, build_counters, iou, occupation
+from app.tracking import (LineCounter, SimpleTracker, build_counters, iou,
+                          meme_objet_possible, occupation)
 
 
 def det(label="person", bbox=(100, 100, 200, 300), model="person_animal"):
@@ -249,3 +250,41 @@ def test_une_personne_qui_marche_et_change_d_etat_garde_son_identifiant():
 
     _, points = t.traces()[0]
     assert len(points) == 15
+
+
+def test_le_nombre_de_vues_est_publie_avec_la_detection():
+    t = SimpleTracker()
+    for attendu in (1, 2, 3, 4):
+        d = t.update([det(bbox=(100, 100, 200, 300))])[0]
+        assert d.track_hits == attendu
+
+
+def test_un_objet_masque_quelques_images_garde_son_identite():
+    """À deux images par seconde, une patience de cinq images ne faisait que
+    deux secondes et demie — trop court pour un objet momentanément caché."""
+    t = SimpleTracker()
+    identifiant = t.update([det(bbox=(100, 100, 200, 300))])[0].track_id
+    for _ in range(8):
+        t.update([])                      # l'objet disparaît des détections
+    retour = t.update([det(bbox=(105, 100, 205, 300))])[0]
+    assert retour.track_id == identifiant
+
+
+def test_deux_manquements_sur_la_meme_personne_ne_se_disputent_pas_une_piste():
+    """Le modèle EPI émet plusieurs boîtes simultanées sur une même personne :
+    l'absence de casque sur la tête, l'absence de masque sur le visage. Les
+    regrouper leur faisait se disputer une seule piste, et la perdante en créait
+    une neuve à chaque image — une alerte de plus à chaque fois."""
+    assert not meme_objet_possible("NO-Hardhat", "NO-Mask")
+    assert meme_objet_possible("Hardhat", "NO-Hardhat")
+    assert meme_objet_possible("Mask", "NO-Mask")
+
+    t = SimpleTracker()
+    ids = []
+    for _ in range(6):
+        d = t.update([
+            det(label="NO-Hardhat", bbox=(100, 60, 200, 160), model="epi"),
+            det(label="NO-Mask", bbox=(110, 100, 190, 180), model="epi"),
+        ])
+        ids.append(tuple(x.track_id for x in d))
+    assert len(set(ids)) == 1, f"les identites changent : {ids}"

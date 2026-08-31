@@ -201,9 +201,11 @@ def test_classes_du_jeu_de_chute_retenu(monkeypatch):
 # ── Une alerte par objet suivi, pas une par image ────────────────────
 
 
-def suivi(track_id, label="NO-Hardhat"):
+def suivi(track_id, label="NO-Hardhat", vues=5):
+    """Un objet suivi et déjà confirmé, sauf indication contraire."""
     d = detection(label=label)
     d.track_id = track_id
+    d.track_hits = vues
     return d
 
 
@@ -216,11 +218,27 @@ def test_un_objet_suivi_n_alerte_qu_une_seule_fois():
         assert moteur.process(suivi(7)) is None
 
 
-def test_chaque_objet_suivi_alerte_pour_son_propre_compte():
+def test_deux_ouvriers_au_meme_manquement_ne_font_qu_une_alerte():
+    """Le compromis assumé, écrit noir sur blanc.
+
+    Deux personnes sans casque devant la même caméra dans la même minute ne
+    produisent qu'une alerte. On préférerait en produire deux — mais le suivi
+    n'est pas assez fiable à basse cadence pour distinguer « deuxième ouvrier »
+    de « premier ouvrier dont j'ai perdu la trace », et la seconde erreur coûte
+    bien plus cher : c'est elle qui noie l'opérateur.
+
+    Les caméras et les libellés restent indépendants (tests ci-dessous)."""
     moteur = AlertEngine()
     assert moteur.process(suivi(1)) is not None
-    assert moteur.process(suivi(2)) is not None
-    assert moteur.process(suivi(3)) is not None
+    assert moteur.process(suivi(2)) is None
+
+
+def test_deux_cameras_alertent_chacune_pour_son_compte():
+    moteur = AlertEngine()
+    a = suivi(1); a.camera = "portail"
+    b = suivi(2); b.camera = "quai"
+    assert moteur.process(a) is not None
+    assert moteur.process(b) is not None
 
 
 def test_sans_suivi_le_delai_anti_repetition_reste_le_seul_rempart():
@@ -242,3 +260,53 @@ def test_la_memoire_des_alertes_ne_grossit_pas_indefiniment():
     for i in range(400):
         moteur.process(suivi(i))
     assert len(moteur._last_alert) <= 200
+
+
+def test_une_apparition_fugace_n_alerte_pas():
+    """Le defaut mesure en conditions reelles : NO-Mask clignotait a 0,42 de
+    confiance et creait une piste neuve a chaque retour, donc une alerte neuve.
+    Une piste doit avoir ete vue plusieurs fois pour compter."""
+    moteur = AlertEngine()
+    d = suivi(1, vues=1)
+    assert moteur.process(d) is None
+    d.track_hits = 2
+    assert moteur.process(d) is None
+    d.track_hits = 3
+    assert moteur.process(d) is not None
+
+
+def test_un_masque_absent_exige_plus_de_certitude():
+    moteur = AlertEngine()
+    faible = detection(model="epi", label="NO-Mask", confidence=0.45)
+    faible.track_id, faible.track_hits = 1, 5
+    assert moteur.process(faible) is None
+
+    franche = detection(model="epi", label="NO-Mask", confidence=0.70)
+    franche.track_id, franche.track_hits = 2, 5
+    assert moteur.process(franche) is not None
+
+
+# ── Le second verrou : le suivi n'est pas infaillible ────────────────
+
+
+def test_un_suivi_qui_lache_ne_rouvre_pas_les_vannes():
+    """Mesuré en conditions réelles : à 0,4 image par seconde, un objet qui
+    bouge n'est plus rapproché du précédent et repart avec une identité neuve.
+    Sans un verrou par libellé, chaque perte de piste produisait une alerte —
+    sept « gilet absent » en trois minutes."""
+    moteur = AlertEngine()
+    assert moteur.process(suivi(1)) is not None
+    for identifiant in range(2, 30):          # le suiveur perd la piste sans cesse
+        assert moteur.process(suivi(identifiant)) is None
+
+
+def test_le_verrou_par_libelle_finit_par_se_lever():
+    moteur = AlertEngine(cooldown_seconds=0)
+    assert moteur.process(suivi(1)) is not None
+    assert moteur.process(suivi(2)) is not None
+
+
+def test_deux_libelles_differents_ne_se_bloquent_pas():
+    moteur = AlertEngine()
+    assert moteur.process(suivi(1, label="NO-Hardhat")) is not None
+    assert moteur.process(suivi(2, label="NO-Safety Vest")) is not None

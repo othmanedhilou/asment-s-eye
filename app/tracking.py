@@ -42,31 +42,38 @@ def iou(a, b) -> float:
     return intersection / union if union else 0.0
 
 
-# Un modèle d'EPI ne voit pas « une personne » : il voit un casque, un gilet,
-# une absence de casque. La même personne change donc d'étiquette d'une image à
-# l'autre, et un suivi par étiquette stricte lui donnerait une identité neuve à
-# chaque changement — donc une alerte neuve. On regroupe les étiquettes qui
-# désignent le même objet physique.
-FAMILLES = {
-    "personne": {
-        "person", "Person", "personne",
-        "Hardhat", "NO-Hardhat", "Mask", "NO-Mask",
-        "Safety Vest", "NO-Safety Vest", "Safety Cone",
-        "Gloves", "NO-Gloves", "Goggles", "NO-Goggles",
-        "up", "bending", "down", "fallen", "falling", "Fall-Detected",
-    },
-    "vehicule": {
-        "car", "truck", "bus", "motorcycle", "bicycle", "van",
-        "truk_odol", "truk_normal", "truck_odol", "normal_truck",
-        "covered-trucks", "six-wheel covered-trucks",
-    },
-}
+# Deux etiquettes ne designent le meme objet que si elles s'excluent : une
+# personne est casquee OU non casquee, jamais les deux. C'est ce qui permet de
+# garder son identite quand elle retire son casque.
+#
+# Le regroupement large — « tout ce qui touche a une personne » — etait faux, et
+# la mesure l'a montre : le modele EPI emet PLUSIEURS boites simultanees sur la
+# meme personne (absence de casque sur la tete, absence de masque sur le
+# visage). Regroupees, elles se disputaient une seule piste, et la perdante en
+# creait une neuve a chaque image — donc une alerte de plus a chaque fois.
+ETATS_EXCLUSIFS = [
+    {"Hardhat", "NO-Hardhat"},
+    {"Mask", "NO-Mask"},
+    {"Safety Vest", "NO-Safety Vest"},
+    {"Gloves", "NO-Gloves"},
+    {"Goggles", "NO-Goggles"},
+    {"up", "bending", "down", "fallen", "falling"},
+    {"truk_odol", "truk_normal", "truck_odol", "normal_truck"},
+    {"covered-trucks", "six-wheel covered-trucks"},
+]
 
-_FAMILLE_PAR_LABEL = {lab: fam for fam, labs in FAMILLES.items() for lab in labs}
+_GROUPE_PAR_LABEL = {}
+for _i, _groupe in enumerate(ETATS_EXCLUSIFS):
+    for _label in _groupe:
+        _GROUPE_PAR_LABEL[_label] = _i
 
 
-def famille(label: str) -> str | None:
-    return _FAMILLE_PAR_LABEL.get(label)
+def meme_objet_possible(a: str, b: str) -> bool:
+    """Ces deux etiquettes peuvent-elles designer le meme objet a deux instants ?"""
+    if a == b:
+        return True
+    groupe = _GROUPE_PAR_LABEL.get(a)
+    return groupe is not None and groupe == _GROUPE_PAR_LABEL.get(b)
 
 
 def centre(bbox):
@@ -80,6 +87,7 @@ class Track:
     label: str
     bbox: tuple
     perdu: int = 0
+    vues: int = 1                      # images où l'objet a été effectivement vu
     positions: list = field(default_factory=list)
 
 
@@ -110,7 +118,11 @@ class SimpleTracker:
     taille de l'objet pour ne pas confondre deux personnes distinctes.
     """
 
-    def __init__(self, iou_min: float = 0.3, patience: int = 5, historique: int = 30,
+    # À deux images par seconde, cinq images de patience ne font que deux
+    # secondes et demie : trop court pour qu'un objet un instant masqué
+    # retrouve son identité. Il en repartait avec une neuve, et donc avec une
+    # nouvelle alerte.
+    def __init__(self, iou_min: float = 0.3, patience: int = 12, historique: int = 30,
                  distance_max_facteur: float = 1.5, iou_famille: float = 0.35,
                  distance_famille_facteur: float = 0.6):
         self.iou_min = iou_min
@@ -136,8 +148,7 @@ class SimpleTracker:
         for i, det in enumerate(detections):
             for track_id, track in libres.items():
                 meme_label = track.label == det.label
-                meme_famille = (famille(track.label) is not None
-                                and famille(track.label) == famille(det.label))
+                meme_famille = not meme_label and meme_objet_possible(track.label, det.label)
                 if not meme_label and not meme_famille:
                     continue
 
@@ -179,9 +190,11 @@ class SimpleTracker:
             # le même ouvrier, la piste garde son identité et change d'état.
             track.label = detections[i].label
             track.perdu = 0
+            track.vues += 1
             track.positions.append(centre(detections[i].bbox))
             del track.positions[:-self.historique]
             detections[i].track_id = track.id
+            detections[i].track_hits = track.vues
             assignes[track.id] = track
             detections_prises.add(i)
 
@@ -192,6 +205,7 @@ class SimpleTracker:
                           positions=[centre(det.bbox)])
             self._prochain_id += 1
             det.track_id = track.id
+            det.track_hits = track.vues
             assignes[track.id] = track
 
         # Un objet momentanément masqué ne doit pas changer d'identité : on le
