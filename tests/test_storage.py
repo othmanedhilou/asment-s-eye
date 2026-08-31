@@ -172,3 +172,44 @@ def test_purge_conserve_les_alertes_recentes():
     log_alert(alerte())
     cleanup_old_data()
     assert len(read_alerts()) == 1
+
+
+# ── Effacer l'historique ─────────────────────────────────────────────
+
+
+def test_effacer_respecte_les_filtres(tmp_path, monkeypatch):
+    """« Supprimer » doit effacer exactement ce que la liste affiche, ni plus."""
+    from app.storage import delete_alerts, log_alert, read_alerts
+
+    log_alert(Alert(camera="portail", model="epi", label="NO-Hardhat",
+                    confidence=0.9, message="x"))
+    log_alert(Alert(camera="quai", model="epi", label="NO-Hardhat",
+                    confidence=0.9, message="x"))
+
+    resultat = delete_alerts(camera="portail")
+    assert resultat["supprimees"] == 1
+    restantes = read_alerts(limit=50)
+    assert all(a["camera"] != "portail" for a in restantes)
+    assert any(a["camera"] == "quai" for a in restantes)
+
+
+def test_effacer_une_alerte_precise():
+    from app.storage import delete_alert, log_alert, read_alerts
+
+    identifiant = log_alert(Alert(camera="c", model="epi", label="NO-Mask",
+                                  confidence=0.9, message="x"))
+    assert delete_alert(identifiant) is True
+    assert all(a["id"] != identifiant for a in read_alerts(limit=50))
+    assert delete_alert(identifiant) is False
+
+
+def test_un_chemin_hors_du_dossier_clips_n_est_jamais_efface(tmp_path):
+    """Les chemins viennent de la base, donc d'anciennes installations : un
+    chemin absolu herite ne doit pas faire supprimer un fichier au hasard."""
+    from app.storage import _effacer_media
+
+    etranger = tmp_path / "document_important.txt"
+    etranger.write_text("a ne pas toucher")
+    assert _effacer_media(str(etranger)) is False
+    assert etranger.exists()
+    assert _effacer_media(None) is False

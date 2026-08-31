@@ -25,6 +25,8 @@ from app.storage import (
     alerts_for_day,
     count_alerts,
     days_with_alerts,
+    delete_alert,
+    delete_alerts,
     export_csv,
     mark_false_positive,
     quality_stats,
@@ -155,13 +157,16 @@ def api_alerts(
     Le total accompagne la page : après quelques mois d'exploitation, savoir
     qu'il existe 1 240 résultats change la façon de chercher.
     """
+    # Tous les criteres, y compris le libelle, la plaque et la tranche horaire.
+    # Ils manquaient au comptage : le total annonce ne correspondait pas a la
+    # liste des que l'un d'eux servait, et il commande la pagination.
     filtres = {
         "model": model, "camera": camera, "severity": severity, "zone": zone,
         "acknowledged": acknowledged, "false_positive": false_positive,
-        "since_hours": since_hours,
+        "since_hours": since_hours, "label": label, "plaque": plaque,
+        "hour_from": hour_from, "hour_to": hour_to,
     }
-    items = read_alerts(limit=limit, offset=offset, label=label, plaque=plaque,
-                        hour_from=hour_from, hour_to=hour_to, **filtres)
+    items = read_alerts(limit=limit, offset=offset, **filtres)
     return {"items": items, "total": count_alerts(**filtres),
             "limit": limit, "offset": offset}
 
@@ -176,6 +181,40 @@ def api_false_positive(alert_id: int, body: FalsePositiveBody):
     if not mark_false_positive(alert_id, body.is_false, body.operator):
         raise HTTPException(status_code=404, detail="Alerte introuvable")
     return {"ok": True, "id": alert_id, "false_positive": body.is_false}
+
+
+@app.delete("/api/alerts")
+def api_supprimer_alertes(
+    model: str | None = None,
+    camera: str | None = None,
+    severity: str | None = None,
+    zone: str | None = None,
+    acknowledged: bool | None = None,
+    false_positive: bool | None = None,
+    since_hours: int | None = None,
+    label: str | None = None,
+    plaque: str | None = None,
+    hour_from: int | None = None,
+    hour_to: int | None = None,
+):
+    """Efface les alertes correspondant aux criteres — captures et clips compris.
+
+    Les memes parametres que la lecture : l'interface envoie les filtres
+    affiches, donc ce qui disparait est exactement ce qui etait a l'ecran.
+    """
+    resultat = delete_alerts(
+        model=model, camera=camera, severity=severity, zone=zone,
+        acknowledged=acknowledged, false_positive=false_positive,
+        since_hours=since_hours, label=label, plaque=plaque,
+        hour_from=hour_from, hour_to=hour_to)
+    return {"ok": True, **resultat}
+
+
+@app.delete("/api/alerts/{alert_id}")
+def api_supprimer_alerte(alert_id: int):
+    if not delete_alert(alert_id):
+        raise HTTPException(status_code=404, detail="alerte inconnue")
+    return {"ok": True}
 
 
 @app.post("/api/alerts/{alert_id}/ack")

@@ -675,6 +675,15 @@ async function chargerAlertes() {
     b.addEventListener("click", () => marquer(b.dataset.faux, true)));
   el("tableau-alertes").querySelectorAll("[data-vrai]").forEach((b) =>
     b.addEventListener("click", () => marquer(b.dataset.vrai, false)));
+  el("tableau-alertes").querySelectorAll("[data-suppr]").forEach((b) =>
+    b.addEventListener("click", async () => {
+      try {
+        await api(`/api/alerts/${b.dataset.suppr}`, { method: "DELETE" });
+        chargerAlertes();
+        chargerFrise();
+      } catch (e) { avis("Suppression impossible", e.message, "err"); }
+    }));
+
   el("tableau-alertes").querySelectorAll("[data-clip]").forEach((n) =>
     n.addEventListener("click", () => ouvrirClip(n.dataset.clip)));
 
@@ -686,11 +695,12 @@ async function chargerAlertes() {
 
 function ligneAlerte(a) {
   const clipUrl = a.clip ? `/api/clip?path=${encodeURIComponent(a.clip)}` : null;
-  const vign = a.snapshot
+  const image = a.snapshot
     ? `<img class="vignette" src="/api/snapshot?path=${encodeURIComponent(a.snapshot)}"
             ${clipUrl ? `data-clip="${clipUrl}" title="Voir le clip"`
     : `data-img="/api/snapshot?path=${encodeURIComponent(a.snapshot)}"`} alt="" />`
     : "";
+  const vign = clipUrl ? `<span class="avec-clip">${image}</span>` : image;
   // Un clip vaut mieux qu'une image : il montre ce qui s'est passé avant et
   // après, ce qu'une capture ne dira jamais.
   const clip = clipUrl
@@ -716,7 +726,9 @@ function ligneAlerte(a) {
     <td><span class="sev ${a.severity}">${a.severity}</span></td>
     <td class="num">${a.confidence.toFixed(2)}</td>
     <td class="num">${dateHeure(a.timestamp)}</td>
-    <td><div class="enligne">${traitement}${jugement}</div></td>
+    <td><div class="enligne">${traitement}${jugement}
+      <button class="bouton danger" data-suppr="${a.id}" title="Effacer cette alerte"
+              style="padding:3px 9px">✕</button></div></td>
   </tr>`;
 }
 
@@ -1433,6 +1445,32 @@ function brancherZones() {
 async function init() {
   theme();
   onglets();
+
+  el("btn-effacer").addEventListener("click", async () => {
+    const p = filtres();
+    const combien = await api(`/api/alerts?limit=1&${p}`).then((d) => d.total).catch(() => null);
+    if (combien === 0) { avis("Rien à effacer", "Aucune alerte ne correspond.", ""); return; }
+
+    // On annonce le nombre exact : « effacer l'historique » ne dit pas si l'on
+    // perd trois lignes ou trois mille.
+    const sansFiltre = [...p.keys()].length === 0;
+    const ok = await confirmer(
+      `Effacer ${combien ?? "ces"} alerte(s) ?`,
+      sansFiltre
+        ? "Aucun filtre n'est actif : c'est TOUT l'historique qui part, avec ses captures et ses clips. Cette action est définitive."
+        : "Seules les alertes correspondant aux filtres affichés sont effacées, avec leurs captures et leurs clips. Cette action est définitive.",
+      "Effacer");
+    if (!ok) return;
+
+    try {
+      const r = await api(`/api/alerts?${p}`, { method: "DELETE" });
+      avis("Historique effacé", `${r.supprimees} alerte(s), ${r.fichiers} fichier(s).`, "ok");
+      page = 0;
+      chargerAlertes();
+      chargerFrise();
+      chargerEvenements();
+    } catch (e) { avis("Suppression impossible", e.message, "err"); }
+  });
 
   el("btn-filtres").addEventListener("click", (e) => {
     const corps = el("filtres-corps");

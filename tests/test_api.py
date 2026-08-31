@@ -294,3 +294,34 @@ def test_suppression_refusee_si_utilise(client, dossier_uploads, video_file):
     r = client.delete("/api/uploads/essai.mp4")
     assert r.status_code == 409
     assert "rejeu" in r.json()["detail"]
+
+
+# ── Le total doit correspondre à la liste ────────────────────────────
+
+
+def test_le_total_tient_compte_de_tous_les_filtres(client):
+    """Le comptage ignorait la classe, la plaque et la tranche horaire : il
+    annonçait quatre-vingt-dix-huit résultats là où la liste en montrait trois,
+    et c'est ce total qui commande la pagination."""
+    r = client.get("/api/alerts?limit=50&label=zzz-introuvable-zzz")
+    d = r.json()
+    assert d["total"] == len(d["items"]) == 0
+
+
+def test_supprimer_l_historique_par_filtre(client):
+    from app.models import Alert
+    from app.storage import log_alert
+
+    log_alert(Alert(camera="cam-jetable", model="epi", label="NO-Hardhat",
+                    confidence=0.9, message="x"))
+    avant = client.get("/api/alerts?limit=1&camera=cam-jetable").json()["total"]
+    assert avant >= 1
+
+    r = client.delete("/api/alerts?camera=cam-jetable")
+    assert r.status_code == 200
+    assert r.json()["supprimees"] == avant
+    assert client.get("/api/alerts?limit=1&camera=cam-jetable").json()["total"] == 0
+
+
+def test_supprimer_une_alerte_inconnue_renvoie_404(client):
+    assert client.delete("/api/alerts/999999").status_code == 404

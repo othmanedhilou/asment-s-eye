@@ -37,12 +37,21 @@ class ClipRecorder:
                 self._write()
 
     def trigger(self, alert_id: int):
-        """Démarre l'enregistrement d'un clip pour cette alerte (si pas déjà en cours)."""
+        """Rattache une alerte au clip en cours, ou en démarre un.
+
+        Une alerte survenue pendant qu'un clip s'enregistre était auparavant
+        ignorée, et repartait sans preuve vidéo : quarante alertes sur
+        quatre-vingt-dix-huit se retrouvaient sans clip, précisément celles qui
+        arrivaient en rafale — donc les plus intéressantes. Elles partagent
+        maintenant le clip en cours, qui couvre de toute façon leur instant.
+        """
         if self._active is not None:
+            if alert_id not in self._active["alert_ids"]:
+                self._active["alert_ids"].append(alert_id)
             return
         pre_frames = list(self._buffer)
         self._active = {
-            "alert_id": alert_id,
+            "alert_ids": [alert_id],
             "frames": pre_frames,
             "target": len(pre_frames) + self._post_needed,
         }
@@ -57,13 +66,17 @@ class ClipRecorder:
             CLIPS_DIR.mkdir(parents=True, exist_ok=True)
             h, w = frames[0].shape[:2]
             ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-            path = CLIPS_DIR / f"{self.camera}_alerte{active['alert_id']}_{ts}.mp4"
+            premiere = active["alert_ids"][0]
+            path = CLIPS_DIR / f"{self.camera}_alerte{premiere}_{ts}.mp4"
             writer = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"mp4v"), self.fps, (w, h))
             for f in frames:
                 writer.write(f)
             writer.release()
-            update_alert_clip(active["alert_id"], str(path))
-            log.info(f"[{self.camera}] clip enregistré : {path.name}")
+            for alert_id in active["alert_ids"]:
+                update_alert_clip(alert_id, str(path))
+            nb = len(active["alert_ids"])
+            log.info(f"[{self.camera}] clip enregistré : {path.name}"
+                     + (f" ({nb} alertes)" if nb > 1 else ""))
         except Exception as e:
             log.error(f"[{self.camera}] échec enregistrement clip : {e}")
 

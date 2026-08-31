@@ -183,6 +183,7 @@
             <input type="search" id="f-plaque" placeholder="Plaque…" />
             <a class="bouton" href="/api/export/csv">Export CSV</a>
             <a class="bouton" href="/api/export/pdf?days=7">Rapport PDF</a>
+            <button class="bouton danger" id="btn-effacer">Effacer ces alertes</button>
           </div>
         </div>
 
@@ -459,6 +460,7 @@
     <div class="aide-section">HISTORIQUE</div>
     <div class="aide-item"><b>Frise</b><span>Chaque trait est une alerte, placée à son heure et colorée par gravité. Les flèches changent de journée.</span></div>
     <div class="aide-item"><b>Accuser réception</b><span>Indique que l'alerte a été vue et traitée. Elle disparaît des « alertes en cours ».</span></div>
+    <div class="aide-item"><b>Effacer</b><span>« Effacer ces alertes » supprime exactement ce que les filtres affichent — captures et clips compris, pour libérer le disque. Dépliez les filtres d'abord : sans filtre, c'est tout l'historique.</span></div>
     <div class="aide-item"><b>Fausse alerte</b><span>À utiliser quand la détection s'est trompée. Ces signalements alimentent la mesure de fiabilité et servent à réentraîner les modèles.</span></div>
 
     <div class="aide-section">PARAMÈTRES</div>

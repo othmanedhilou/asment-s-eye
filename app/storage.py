@@ -195,6 +195,106 @@ def cleanup_old_data(snapshot_days: int = 30, alert_days: int = 365):
         session.commit()
 
 
+def _filtrer(stmt, model=None, camera=None, severity=None, zone=None,
+             acknowledged=None, false_positive=None, since_hours=None,
+             label=None, plaque=None, hour_from=None, hour_to=None, **_ignores):
+    """Applique les criteres de l'historique a une requete.
+
+    Ecrit une seule fois et partage par la lecture, le comptage et la
+    suppression : c'est la seule facon de garantir que le bouton « supprimer »
+    efface exactement ce que la liste affiche.
+    """
+    if model:
+        stmt = stmt.where(AlertRecord.model == model)
+    if camera:
+        stmt = stmt.where(AlertRecord.camera == camera)
+    if severity:
+        stmt = stmt.where(AlertRecord.severity == severity)
+    if zone:
+        stmt = stmt.where(AlertRecord.zone == zone)
+    if false_positive is not None:
+        stmt = stmt.where(AlertRecord.false_positive == false_positive)
+    if acknowledged is not None:
+        stmt = stmt.where(AlertRecord.acknowledged == acknowledged)
+    if since_hours:
+        cutoff = datetime.now() - timedelta(hours=since_hours)
+        stmt = stmt.where(AlertRecord.timestamp >= cutoff)
+    if label:
+        stmt = stmt.where(AlertRecord.label.like(f"%{label}%"))
+    if plaque:
+        # Recherche partielle : apres un incident, on se souvient souvent de
+        # quelques caracteres, rarement du numero complet.
+        stmt = stmt.where(AlertRecord.plaque.like(f"%{plaque.upper()}%"))
+    # Plage horaire : « toutes les alertes EPI entre 22 h et 6 h » est une
+    # question d'exploitation courante, impossible a poser sans cela.
+    if hour_from is not None and hour_to is not None:
+        heure = func.cast(func.strftime("%H", AlertRecord.timestamp), Integer)
+        if hour_from <= hour_to:
+            stmt = stmt.where(heure >= hour_from, heure < hour_to)
+        else:
+            stmt = stmt.where((heure >= hour_from) | (heure < hour_to))
+    return stmt
+
+
+def _effacer_media(chemin: str | None) -> bool:
+    """Efface une capture ou un clip, si le chemin reste dans le dossier prevu.
+
+    La verification n'est pas de la mefiance envers l'appelant : les chemins
+    viennent de la base, donc d'anciennes versions du logiciel, et un chemin
+    absolu herite d'une autre installation ne doit pas faire supprimer un
+    fichier au hasard sur le disque.
+    """
+    if not chemin:
+        return False
+    racine = (DATA_DIR.parent / "clips").resolve()
+    try:
+        p = Path(chemin).resolve()
+        p.relative_to(racine)
+    except (ValueError, OSError):
+        return False
+    try:
+        p.unlink()
+        return True
+    except OSError:
+        return False
+
+
+def delete_alerts(**filtres) -> dict:
+    """Efface les alertes correspondant aux criteres, captures et clips compris.
+
+    Les fichiers partent avec les lignes : garder des videos orphelines
+    remplirait le disque sans que rien dans l'interface ne les montre. Un clip
+    partage par plusieurs alertes n'est efface qu'une fois.
+    """
+    engine = _get_engine()
+    supprimees = fichiers = 0
+    with Session(engine) as session:
+        lignes = session.scalars(_filtrer(select(AlertRecord), **filtres)).all()
+        vus: set[str] = set()
+        for r in lignes:
+            for chemin in (r.snapshot, r.clip):
+                if chemin and chemin not in vus:
+                    vus.add(chemin)
+                    fichiers += _effacer_media(chemin)
+            session.delete(r)
+            supprimees += 1
+        session.commit()
+    return {"supprimees": supprimees, "fichiers": fichiers}
+
+
+def delete_alert(alert_id: int) -> bool:
+    engine = _get_engine()
+    with Session(engine) as session:
+        r = session.get(AlertRecord, alert_id)
+        if r is None:
+            return False
+        _effacer_media(r.snapshot)
+        _effacer_media(r.clip)
+        session.delete(r)
+        session.commit()
+        return True
+
+
 def read_alerts(
     limit: int = 100,
     model: str | None = None,
@@ -212,37 +312,11 @@ def read_alerts(
 ) -> list[dict]:
     engine = _get_engine()
     with Session(engine) as session:
-        stmt = select(AlertRecord)
-        if model:
-            stmt = stmt.where(AlertRecord.model == model)
-        if camera:
-            stmt = stmt.where(AlertRecord.camera == camera)
-        if severity:
-            stmt = stmt.where(AlertRecord.severity == severity)
-        if zone:
-            stmt = stmt.where(AlertRecord.zone == zone)
-        if false_positive is not None:
-            stmt = stmt.where(AlertRecord.false_positive == false_positive)
-        if acknowledged is not None:
-            stmt = stmt.where(AlertRecord.acknowledged == acknowledged)
-        if since_hours:
-            cutoff = datetime.now() - timedelta(hours=since_hours)
-            stmt = stmt.where(AlertRecord.timestamp >= cutoff)
-        if label:
-            stmt = stmt.where(AlertRecord.label.like(f"%{label}%"))
-        if plaque:
-            # Recherche partielle : après un incident, on se souvient souvent
-            # de quelques caractères, rarement du numéro complet.
-            stmt = stmt.where(AlertRecord.plaque.like(f"%{plaque.upper()}%"))
-        # Plage horaire : « toutes les alertes EPI entre 22 h et 6 h » est une
-        # question d'exploitation courante, impossible à poser sans cela.
-        if hour_from is not None and hour_to is not None:
-            heure = func.cast(func.strftime("%H", AlertRecord.timestamp), Integer)
-            if hour_from <= hour_to:
-                stmt = stmt.where(heure >= hour_from, heure < hour_to)
-            else:
-                stmt = stmt.where((heure >= hour_from) | (heure < hour_to))
-
+        stmt = _filtrer(
+            select(AlertRecord), model=model, camera=camera, severity=severity,
+            zone=zone, acknowledged=acknowledged, false_positive=false_positive,
+            since_hours=since_hours, label=label, plaque=plaque,
+            hour_from=hour_from, hour_to=hour_to)
         stmt = stmt.order_by(AlertRecord.timestamp.desc()).offset(offset).limit(limit)
         return [_to_dict(r) for r in session.scalars(stmt).all()]
 
@@ -251,22 +325,7 @@ def count_alerts(**filters) -> int:
     """Nombre total d'alertes correspondant aux filtres, pour la pagination."""
     engine = _get_engine()
     with Session(engine) as session:
-        stmt = select(func.count()).select_from(AlertRecord)
-        if filters.get("model"):
-            stmt = stmt.where(AlertRecord.model == filters["model"])
-        if filters.get("camera"):
-            stmt = stmt.where(AlertRecord.camera == filters["camera"])
-        if filters.get("severity"):
-            stmt = stmt.where(AlertRecord.severity == filters["severity"])
-        if filters.get("zone"):
-            stmt = stmt.where(AlertRecord.zone == filters["zone"])
-        if filters.get("acknowledged") is not None:
-            stmt = stmt.where(AlertRecord.acknowledged == filters["acknowledged"])
-        if filters.get("false_positive") is not None:
-            stmt = stmt.where(AlertRecord.false_positive == filters["false_positive"])
-        if filters.get("since_hours"):
-            cutoff = datetime.now() - timedelta(hours=filters["since_hours"])
-            stmt = stmt.where(AlertRecord.timestamp >= cutoff)
+        stmt = _filtrer(select(func.count()).select_from(AlertRecord), **filters)
         return session.scalar(stmt) or 0
 
 
