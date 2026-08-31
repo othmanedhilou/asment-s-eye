@@ -98,29 +98,54 @@ function onglets() {
       b.classList.add("actif");
       el(`vue-${b.dataset.vue}`).classList.add("actif");
 
-      // Le panneau des caméras n'a de sens que devant les images et les zones.
-      const avecPanneau = ["direct", "zones"].includes(b.dataset.vue);
+      // Le panneau change de contenu selon l'onglet : les caméras en
+      // exploitation, les sections en configuration. Il disparaît là où il
+      // n'aurait rien à montrer.
+      const vue = b.dataset.vue;
+      el("panneau-direct").hidden = vue !== "direct";
+      el("panneau-config").hidden = vue !== "config";
+      const avecPanneau = ["direct", "config"].includes(vue);
       el("panneau").hidden = !avecPanneau;
       el("app").classList.toggle("sans-panneau", !avecPanneau);
 
       ({
-        direct: () => { chargerCameras(); chargerFrise(); },
-        historique: chargerAlertes,
-        zones: chargerZones,
-        fichiers: chargerFichiers,
+        direct: chargerCameras,
+        historique: () => { chargerAlertes(); chargerFrise(); },
         analyse: chargerAnalyse,
-        systeme: chargerSysteme,
-      })[b.dataset.vue]?.();
+        config: () => ouvrirSection(sectionCourante),
+      })[vue]?.();
     });
   });
+
+  document.querySelectorAll("#panneau-config [data-section]").forEach((n) =>
+    n.addEventListener("click", () => ouvrirSection(n.dataset.section)));
 
   // Raccourcis : un poste de supervision se pilote sans quitter l'écran.
   document.addEventListener("keydown", (e) => {
     if (e.target.matches("input, select, textarea")) return;
-    const vues = ["direct", "historique", "zones", "fichiers", "analyse", "systeme", "reglages"];
+    const vues = ["direct", "historique", "analyse", "config"];
     if (vues[Number(e.key) - 1]) allerA(vues[Number(e.key) - 1]);
     if (e.key === "Escape") fermerVisionneuse();
   });
+}
+
+let sectionCourante = "cameras";
+
+function ouvrirSection(nom) {
+  sectionCourante = nom;
+  document.querySelectorAll("#panneau-config [data-section]").forEach((n) =>
+    n.classList.toggle("actif", n.dataset.section === nom));
+  document.querySelectorAll(".section-config").forEach((n) =>
+    (n.hidden = n.id !== "config-" + nom));
+
+  ({
+    cameras: chargerCameras,
+    zones: chargerZones,
+    fichiers: chargerFichiers,
+    modeles: chargerReglages,
+    usages: chargerUsages,
+    systeme: chargerSysteme,
+  })[nom]?.();
 }
 
 function allerA(vue) {
@@ -139,7 +164,50 @@ async function chargerCameras() {
   noms = cameras.map((c) => c.name);
   dessinerArbre();
   dessinerMur();
+  dessinerTableCameras();
   majBarreEtat();
+}
+
+/* En configuration, les caméras se lisent en tableau : on y compare des
+   réglages, alors que le mur sert à regarder des images. */
+function dessinerTableCameras() {
+  const t = el("table-cameras");
+  if (!t) return;
+  if (!cameras.length) {
+    t.innerHTML = '<tbody><tr><td class="msg" style="padding:20px">'
+      + 'Aucune caméra. Cliquez sur « Ajouter ».</td></tr></tbody>';
+    return;
+  }
+
+  const lignes = cameras.map((c) => {
+    const options = [c.tracking && "suivi", c.plates && "plaques",
+      c.bachage && "bâchage", c.collecte && "collecte",
+      c.recording && "enreg."].filter(Boolean).join(", ") || "—";
+    const etat = c.enabled ? (c.online ? "en ligne" : "hors ligne") : "en pause";
+    return "<tr data-cam=\"" + ech(c.name) + "\" class=\""
+      + (selection === c.name ? "haute" : "") + "\" style=\"cursor:pointer\">"
+      + "<td><span class=\"pastille " + etatCamera(c) + "\"></span></td>"
+      + "<td>" + ech(c.name) + "</td>"
+      + "<td class=\"num\">" + ech(String(c.source ?? "")) + "</td>"
+      + "<td class=\"num\">" + (c.fps ?? "—") + "</td>"
+      + "<td>" + (c.models.length ? c.models.map(nomModele).join(", ") : "aucun") + "</td>"
+      + "<td>" + (c.zones?.length ? ech(c.zones.join(", ")) : "plein cadre") + "</td>"
+      + "<td class=\"msg\">" + options + "</td>"
+      + "<td>" + etat + "</td></tr>";
+  }).join("");
+
+  t.innerHTML = '<thead><tr><th style="width:26px"></th><th>Nom</th><th>Source</th>'
+    + '<th style="width:70px">Img/s</th><th>Modèles</th><th>Zones</th>'
+    + '<th style="width:160px">Options</th><th style="width:90px">État</th></tr></thead>'
+    + "<tbody>" + lignes + "</tbody>";
+
+  t.querySelectorAll("[data-cam]").forEach((r) =>
+    r.addEventListener("click", () => {
+      selection = selection === r.dataset.cam ? null : r.dataset.cam;
+      dessinerTableCameras();
+      dessinerArbre();
+      dessinerMur();
+    }));
 }
 
 function etatCamera(c) {
@@ -149,9 +217,13 @@ function etatCamera(c) {
 
 function majActions() {
   const actif = Boolean(selection);
-  el("btn-modifier").disabled = !actif;
+  const modifier = el("btn-modifier");
+  if (!modifier) return;
+  modifier.disabled = !actif;
   el("btn-supprimer").disabled = !actif;
-  el("btn-modifier").textContent = actif ? `Modifier « ${selection} »` : "Modifier";
+  el("config-selection").textContent = actif
+    ? "Sélection : " + selection
+    : "Sélectionnez une caméra dans la liste pour la modifier.";
 }
 
 function dessinerArbre() {
@@ -183,7 +255,7 @@ function dessinerMur() {
   if (!liste.length) {
     mur.innerHTML = `<div class="mur-vide"><div>
       <div class="vide-titre">Aucune caméra configurée</div>
-      <p>Ajoutez une caméra, ou déposez une vidéo dans l'onglet Fichiers.</p>
+      <p>Ajoutez-en une depuis Configuration → Caméras.</p>
     </div></div>`;
     return;
   }
@@ -634,7 +706,8 @@ async function chargerFichiers() {
 
   el("liste-fichiers").querySelectorAll("[data-use]").forEach((b) =>
     b.addEventListener("click", () => {
-      allerA("direct");
+      allerA("config");
+      ouvrirSection("cameras");
       ouvrirFormCamera();
       el("cam-source").value = b.dataset.use;
       el("cam-nom").value = b.dataset.use.split("/").pop().replace(/\.[^.]+$/, "").slice(0, 40);
@@ -721,9 +794,9 @@ function envoyer(fichier) {
 /* ═══ Analyse ═══ */
 
 async function chargerAnalyse() {
-  const [resume, frise, qualite, usages] = await Promise.all([
+  const [resume, frise, qualite] = await Promise.all([
     api("/api/stats/summary"), api("/api/stats/timeline?hours=24"),
-    api("/api/stats/quality?days=30"), api("/api/usecases"),
+    api("/api/stats/quality?days=30"),
   ]);
 
   const mtta = qualite.delai_prise_en_charge_s;
@@ -753,6 +826,10 @@ async function chargerAnalyse() {
   fiabilite(qualite);
   faussesParCamera(qualite);
 
+}
+
+async function chargerUsages() {
+  const usages = await api("/api/usecases");
   const etats = { operationnel: "Opérationnel", partiel: "Partiel", a_entrainer: "À entraîner" };
   el("cas-usage").innerHTML = `
     <thead><tr><th style="width:34px">#</th><th>Cas d'usage</th><th>Modèle</th>
