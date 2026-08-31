@@ -50,6 +50,17 @@ LONGUEUR_MAX = 10
 CHIFFRES_MIN = 3
 
 # Nombre de lectures concordantes avant de considérer un numéro comme établi.
+# Largeur minimale d'une plaque pour esperer la lire.
+#
+# La regle du metier en lecture automatique : il faut environ 20 a 25 pixels de
+# hauteur de caractere, soit une plaque d'a peu pres 120 pixels de large. En
+# dessous de 90, aucun moteur ne rend autre chose que du bruit — et sur deux
+# coeurs, tenter la lecture coute une seconde qu'on ne recuperera pas.
+#
+# On refuse donc explicitement, et on le DIT : c'est la difference entre « le
+# logiciel ne marche pas » et « cette camera est trop loin du portail ».
+LARGEUR_MIN_PLAQUE = 90
+
 LECTURES_MIN = 2
 
 # Au-delà, on cesse de lire ce véhicule. La lecture coûte ~1,4 s sur ce
@@ -159,6 +170,9 @@ class PlateReader:
         self._votes: dict[tuple, Counter] = defaultdict(Counter)
         self._scores: dict[tuple, list] = defaultdict(list)
         self._tentatives: Counter = Counter()
+        # De quoi expliquer une absence de plaque, camera par camera.
+        self._diagnostic: dict[str, Counter] = defaultdict(Counter)
+        self._largeur_vue: dict[str, int] = {}
 
         # La lecture prend plus d'une seconde : exécutée dans la boucle vidéo,
         # elle figerait la caméra. Un seul fil d'exécution, et on abandonne
@@ -240,13 +254,32 @@ class PlateReader:
         """Localise puis lit — exécuté hors de la boucle vidéo."""
         try:
             cle = (camera, track_id)
-            for x, y, w, h in self.localiser(crop):
+            boites = self.localiser(crop)
+            with self._lock:
+                self._diagnostic[camera]["regions"] += len(boites)
+                if not boites:
+                    self._diagnostic[camera]["sans_region"] += 1
+
+            for x, y, w, h in boites:
+                with self._lock:
+                    self._largeur_vue[camera] = max(self._largeur_vue.get(camera, 0), w)
+                # Trop petite : on ne lance pas une lecture d'une seconde pour
+                # obtenir du bruit, et on retient la raison.
+                if w < LARGEUR_MIN_PLAQUE:
+                    with self._lock:
+                        self._diagnostic[camera]["trop_petite"] += 1
+                    continue
+
                 zone = crop[max(y, 0):y + h, max(x, 0):x + w]
                 texte, score = self.lire_region(zone)
-                if texte:
-                    with self._lock:
+                with self._lock:
+                    self._diagnostic[camera]["lectures"] += 1
+                    if texte:
+                        self._diagnostic[camera]["lues"] += 1
                         self._votes[cle][texte] += 1
                         self._scores[cle].append(score)
+                    else:
+                        self._diagnostic[camera]["illisibles"] += 1
         except Exception as e:
             log.error(f"lecture de plaque interrompue : {e}")
         finally:
@@ -287,11 +320,40 @@ class PlateReader:
         etabli = self.plaque(camera, track_id)
         if etabli:
             return etabli
+        return {"localisee": True, "texte": None, "raison": self.raison(camera)}
+
+    def raison(self, camera: str) -> str:
+        """Pourquoi aucune plaque n'a encore ete etablie sur cette camera.
+
+        Une absence silencieuse laisse croire a une panne. Ici on nomme la
+        cause, et la plus frequente n'est pas logicielle : la camera est trop
+        loin, ou cadre trop large.
+        """
+        if not self.ocr_disponible:
+            return "moteur de lecture indisponible"
+        d = self._diagnostic.get(camera, Counter())
+        if d["trop_petite"] and not d["lectures"]:
+            vue = self._largeur_vue.get(camera, 0)
+            return (f"plaque trop petite : {vue} px de large, il en faut "
+                    f"{LARGEUR_MIN_PLAQUE}. Rapprochez la camera ou resserrez le cadrage.")
+        if d["sans_region"] and not d["regions"]:
+            return "aucune plaque reperee sur le vehicule"
+        if d["illisibles"] and not d["lues"]:
+            return "plaque reperee mais illisible : contre-jour, flou ou angle trop ferme"
+        return "lecture en cours"
+
+    def diagnostic(self, camera: str) -> dict:
+        """Compteurs de lecture, pour l'ecran d'etat du systeme."""
+        d = self._diagnostic.get(camera, Counter())
         return {
-            "localisee": True,
-            "texte": None,
-            "raison": "moteur de lecture indisponible" if not self.ocr_disponible
-                      else "lecture en cours",
+            "regions_reperees": d["regions"],
+            "trop_petites": d["trop_petite"],
+            "lectures_tentees": d["lectures"],
+            "lectures_abouties": d["lues"],
+            "illisibles": d["illisibles"],
+            "largeur_max_vue": self._largeur_vue.get(camera, 0),
+            "largeur_requise": LARGEUR_MIN_PLAQUE,
+            "raison": self.raison(camera),
         }
 
     def plaque(self, camera: str, track_id) -> dict | None:

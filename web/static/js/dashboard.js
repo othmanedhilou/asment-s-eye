@@ -279,6 +279,7 @@ function tuile(c, principal) {
       <div class="tuile-bas">
         <span class="pastille ${e}"></span>
         <span class="tuile-nom">${ech(c.name)}</span>
+        ${(c.plaques || []).map((p) => `<span class="etiq plaque">${ech(p)}</span>`).join("")}
         <span class="tuile-tech">${ech(tech)}</span>
       </div>
     </div>`;
@@ -1108,6 +1109,24 @@ async function chargerSysteme() {
         <td class="msg">${ech(c.error || "")}</td>
       </tr>`).join("")}</tbody>`
     : '<tbody><tr><td class="msg">Le pipeline n\'a publié aucun état.</td></tr></tbody>';
+
+  const avecPlaques = Object.entries(h.cameras || {})
+    .filter(([, c]) => c.lecture_plaques);
+  el("systeme-plaques").innerHTML = avecPlaques.length ? `
+    <thead><tr><th>Caméra</th><th style="width:110px">Plaques lues</th>
+    <th style="width:140px">Largeur vue</th><th>État</th></tr></thead>
+    <tbody>${avecPlaques.map(([n, c]) => {
+    const d = c.lecture_plaques;
+    const assez = d.largeur_max_vue >= d.largeur_requise;
+    return `<tr>
+        <td>${ech(n)}</td>
+        <td class="num">${d.lectures_abouties} / ${d.lectures_tentees}</td>
+        <td class="num" style="${assez ? "" : "color:var(--crit)"}">${
+      d.largeur_max_vue ? `${d.largeur_max_vue} px` : "—"} <span class="msg">(${d.largeur_requise} requis)</span></td>
+        <td class="msg">${ech(d.raison)}</td>
+      </tr>`;
+  }).join("")}</tbody>`
+    : '<tbody><tr><td class="msg">Aucune caméra ne lit de plaques. Activez la lecture sur une caméra qui fait tourner le modèle véhicules.</td></tr></tbody>';
 
   const corr = rapp.correspondances || [];
   el("systeme-rapprochements").innerHTML = corr.length ? `

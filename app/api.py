@@ -86,7 +86,10 @@ class CameraBody(BaseModel):
     # défaut, et se désactive à la main sur une caméra qu'on veut alléger.
     tracking: bool = True
     recording: bool = False
-    plates: bool = False          # lecture des plaques (véhicules, suivi requis)
+    # Identifier un vehicule est une exigence du site, pas une option : c'est
+    # ce qui relie une infraction a un transporteur. Actif par defaut ; sans
+    # effet sur une camera qui ne fait pas tourner le modele vehicules.
+    plates: bool = True           # lecture des plaques (véhicules, suivi requis)
     collecte: bool = False        # photographier chaque franchissement de ligne
     bachage: bool = False         # déduire l'absence de bâche (camions, suivi requis)
     voisins: list[str] = []       # caméras pouvant recevoir un objet venu d'ici
@@ -366,6 +369,9 @@ def api_cameras():
             "zones": [z.get("name") for z in all_zones.get(name, [])],
             "state": etat.get("state"),
             "cycle_ms": etat.get("cycle_ms"),
+            # Les plaques lues en ce moment : c'est l'information qui identifie
+            # un vehicule, elle doit se voir sur la vignette.
+            "plaques": etat.get("plaques", []),
             "error": etat.get("error"),
         })
     return {"cameras": cameras}

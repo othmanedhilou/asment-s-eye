@@ -428,6 +428,8 @@ def run_camera(camera_name: str, cam_cfg: dict, config: dict, registry: ModelReg
                             plaques = [d.plaque for d in retenues if d.plaque]
                             if plaques:
                                 etat["plaques"] = sorted(set(plaques))
+                        if lecteur_plaques is not None:
+                            etat["lecture_plaques"] = lecteur_plaques.diagnostic(camera_name)
                         update_camera(camera_name, **etat)
                         if frame_count % 10 == 0:
                             log.info(f"[{camera_name}] cycle {len(active_models)} modèles = {cycle_ms:.0f} ms")

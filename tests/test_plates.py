@@ -182,3 +182,40 @@ def test_sans_moteur_aucune_invention(monkeypatch):
 def test_observation_sans_suivi():
     """Sans identifiant de suivi, pas de vote possible : on ne lit pas."""
     assert PlateReader().observer("cam1", None, np.zeros((100, 200, 3), dtype=np.uint8)) is None
+
+
+# ── Rendre compte plutôt que se taire ────────────────────────────────
+
+
+def test_une_plaque_trop_petite_n_est_pas_lue_mais_expliquee():
+    """Mesuré sur la vidéo d'essai : la plaque du véhicule détecté faisait
+    60 × 20 px. easyocr en tirait « Lotshl » à 0,04 de confiance. Le défaut
+    n'était pas de rejeter cette lecture — c'était de ne rien dire, laissant
+    croire à une panne du logiciel plutôt qu'à un cadrage de caméra."""
+    import numpy as np
+
+    from app.plates import LARGEUR_MIN_PLAQUE, PlateReader
+
+    lecteur = PlateReader(asynchrone=False)
+    lecteur._ocr_teste = True
+    lecteur._ocr = object()                      # moteur présent, jamais appelé
+    lecteur.localiser = lambda crop: [(0, 0, 60, 20)]
+
+    lecteur._travailler("portail", 1, np.zeros((100, 200, 3), dtype=np.uint8))
+
+    d = lecteur.diagnostic("portail")
+    assert d["trop_petites"] == 1
+    assert d["lectures_tentees"] == 0
+    assert d["largeur_max_vue"] == 60
+    assert d["largeur_requise"] == LARGEUR_MIN_PLAQUE
+    assert "trop petite" in d["raison"]
+    assert "60 px" in d["raison"]
+
+
+def test_sans_moteur_la_raison_le_dit():
+    from app.plates import PlateReader
+
+    lecteur = PlateReader(asynchrone=False)
+    lecteur._ocr_teste = True
+    lecteur._ocr = None
+    assert "moteur" in lecteur.raison("portail")

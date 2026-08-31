@@ -418,6 +418,10 @@
             <table class="liste" id="systeme-cameras"></table>
           </div>
           <div class="bloc">
+            <div class="bloc-tete">LECTURE DES PLAQUES</div>
+            <table class="liste" id="systeme-plaques"></table>
+          </div>
+          <div class="bloc">
             <div class="bloc-tete">OBJETS SUIVIS D'UNE CAMÉRA À L'AUTRE</div>
             <table class="liste" id="systeme-rapprochements"></table>
           </div>
@@ -467,6 +471,7 @@
     <div class="aide-item"><b>Source d'une caméra</b><span>Un numéro pour une webcam, une adresse <code>rtsp://</code> pour une caméra IP, un chemin pour un fichier vidéo ou un dossier d'images.</span></div>
     <div class="aide-item"><b>Zones d'intérêt</b><span>Hors zone, les détections sont ignorées : c'est le principal levier contre les fausses alertes. Une zone d'exclusion fait l'inverse — elle masque ce qui gêne, comme la route au fond du champ. Sans aucune zone, l'image est analysée en entier.</span></div>
     <div class="aide-item"><b>Fichiers de test</b><span>Glisser une vidéo ou une image lance l'analyse immédiatement, sans rien créer. Le résultat s'affiche en Direct sous le nom « essai ». C'est ce qui permet d'éprouver le système sans attendre l'accès au réseau du site : une webcam de bureau ne montre jamais de départ de feu.</span></div>
+    <div class="aide-item"><b>Lecture des plaques</b><span>Une plaque doit faire au moins 90 pixels de large pour être lisible — environ 120 en pratique. En dessous, aucun moteur ne rend autre chose que du bruit, et le système le dit plutôt que de rester muet : c'est un problème de cadrage de caméra, pas de logiciel. Paramètres → État du système donne la largeur réellement vue.</span></div>
     <div class="aide-item"><b>Suivi des objets</b><span>Chaque objet reçoit un numéro et une couleur, et laisse derrière lui la trace de son parcours. C'est ce qui permet de n'alerter qu'une fois par personne : sans suivi, la même personne sans casque déclencherait une alerte à chaque image.</span></div>
     <div class="aide-item"><b>Modèles</b><span>N'activer que les modèles pertinents pour chaque caméra : c'est le premier levier de performance sur une machine à deux cœurs.</span></div>
     <div class="aide-item"><b>Seuil et anti-répétition</b><span>Le seuil est la confiance minimale pour déclencher. L'anti-répétition empêche la même alerte de se répéter pendant un délai donné.</span></div>
