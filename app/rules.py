@@ -217,9 +217,15 @@ class AlertEngine:
         if detection.track_id is not None and cle_objet in self._last_alert:
             return None
 
-        dernier = self._last_alert.get(cle_libelle, 0.0)
-        if now - dernier < self._cooldown_for(detection.model, libelle,
-                                              detection.zone_cooldown):
+        # Le sentinelle est None, pas 0.0. time.monotonic() compte depuis le
+        # demarrage de la machine : sur un serveur qui vient de redemarrer, il
+        # vaut quelques centaines de secondes, et « now - 0.0 » tombait sous le
+        # delai anti-repetition. Toute premiere alerte etait alors avalee
+        # pendant les cinq premieres minutes de vie du systeme — exactement le
+        # moment ou l'on veut savoir qu'il fonctionne.
+        dernier = self._last_alert.get(cle_libelle)
+        if dernier is not None and now - dernier < self._cooldown_for(
+                detection.model, libelle, detection.zone_cooldown):
             return None
 
         self._last_alert[cle_objet] = now

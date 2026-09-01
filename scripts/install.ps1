@@ -67,7 +67,7 @@ Write-Host "Installation des services Ciment's Eye depuis $ProjectRoot"
 
 # --- Installation d'un service ------------------------------------------------
 
-function Install-Ciment's EyeService {
+function Install-CimentsEyeService {
     param(
         [string]$Name,
         [string]$Arguments,
@@ -99,13 +99,13 @@ function Install-Ciment's EyeService {
     Write-Host "  $Name installe"
 }
 
-Install-Ciment's EyeService -Name "Ciment's EyePipeline" `
+Install-CimentsEyeService -Name "CimentsEyePipeline" `
     -Arguments "-u -m app.pipeline" `
     -DisplayName "Ciment's Eye - Pipeline de detection" `
     -Description "Detection IA multi-modeles sur les flux cameras" `
     -LogPrefix "pipeline"
 
-Install-Ciment's EyeService -Name "Ciment's EyeWeb" `
+Install-CimentsEyeService -Name "CimentsEyeWeb" `
     -Arguments "-m uvicorn app.api:app --host 0.0.0.0 --port $Port" `
     -DisplayName "Ciment's Eye - Interface VMS" `
     -Description "Interface web de supervision (port $Port)" `
@@ -113,11 +113,11 @@ Install-Ciment's EyeService -Name "Ciment's EyeWeb" `
 
 # --- Demarrage et controle ----------------------------------------------------
 
-Start-Service Ciment's EyePipeline
-Start-Service Ciment's EyeWeb
+Start-Service CimentsEyePipeline
+Start-Service CimentsEyeWeb
 Start-Sleep -Seconds 5
 
-$states = Get-Service Ciment's EyePipeline, Ciment's EyeWeb
+$states = Get-Service CimentsEyePipeline, CimentsEyeWeb
 $states | Format-Table Name, Status, StartType -AutoSize
 
 $failed = $states | Where-Object { $_.Status -ne "Running" }
@@ -133,7 +133,7 @@ if ($failed) {
 
 Write-Host ""
 Write-Host "Commandes utiles :"
-Write-Host "  Get-Service Ciment's Eye*             etat des services"
-Write-Host "  Restart-Service Ciment's EyeWeb       redemarrage apres mise a jour du code"
+Write-Host "  Get-Service CimentsEye*             etat des services"
+Write-Host "  Restart-Service CimentsEyeWeb       redemarrage apres mise a jour du code"
 Write-Host "  Get-Content logs\pipeline.log -Tail 50 -Wait   suivre la detection en direct"
 Write-Host "  .\scripts\uninstall.ps1             desinstallation complete"

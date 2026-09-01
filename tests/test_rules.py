@@ -341,3 +341,14 @@ def test_le_message_reprend_le_libelle_fusionne():
     d = detection(model="fire_smoke", label="Smoke")
     d.track_id, d.track_hits = 1, 5
     assert "fumée" in moteur.process(d).message
+
+
+def test_la_premiere_alerte_part_meme_si_la_machine_vient_de_demarrer(monkeypatch):
+    """time.monotonic() compte depuis le demarrage de la machine. Avec un
+    sentinelle a 0.0, « now - 0.0 » tombait sous le delai anti-repetition tant
+    que la machine avait moins de cinq minutes de vie : la premiere alerte
+    etait avalee, precisement au moment ou l'on veut savoir que le systeme
+    fonctionne."""
+    monkeypatch.setattr(rules_module.time, "monotonic", lambda: 12.0)
+    moteur = AlertEngine()
+    assert moteur.process(detection()) is not None

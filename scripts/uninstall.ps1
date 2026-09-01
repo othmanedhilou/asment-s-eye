@@ -16,7 +16,7 @@ if (-not (Get-Command nssm -ErrorAction SilentlyContinue)) {
     throw "NSSM introuvable dans le PATH : impossible de retirer les services."
 }
 
-foreach ($name in @("Ciment's EyePipeline", "Ciment's EyeWeb")) {
+foreach ($name in @("CimentsEyePipeline", "CimentsEyeWeb")) {
     if (Get-Service $name -ErrorAction SilentlyContinue) {
         Write-Host "Arret et suppression de $name"
         nssm stop $name confirm 2>$null | Out-Null
