@@ -2,12 +2,12 @@
   "webcam": {
     "source": "0",
     "models": [
-      "fire_smoke",
-      "person_animal",
-      "epi"
+      "fall",
+      "epi",
+      "person_animal"
     ],
     "fps": 2.0,
-    "enabled": false,
+    "enabled": true,
     "tracking": true,
     "recording": false,
     "plates": false,

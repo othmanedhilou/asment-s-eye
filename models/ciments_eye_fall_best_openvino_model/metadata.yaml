@@ -1,0 +1,26 @@
+description: Ultralytics ciments_eye_fall_best model trained on /content/falling-1/data.yaml
+author: Ultralytics
+date: '2026-09-01T09:05:34.316118+01:00'
+version: 8.4.129
+license: AGPL-3.0 License (https://ultralytics.com/license)
+docs: https://docs.ultralytics.com
+stride: 32
+task: detect
+head: Detect
+batch: 1
+imgsz:
+- 640
+- 640
+names:
+  0: bending
+  1: down
+  2: up
+args:
+  data: null
+  batch: 1
+  fraction: 1.0
+  quantize: null
+  dynamic: false
+  nms: false
+channels: 3
+end2end: false

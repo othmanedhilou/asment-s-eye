@@ -41,15 +41,43 @@ def test_alertes_desactivees_pour_ce_modele(monkeypatch):
     assert AlertEngine().process(detection()) is None
 
 
-def test_seuil_renforce_bloque_sous_le_minimum():
+@pytest.fixture
+def sans_modele_de_chute(monkeypatch):
+    """Neutralise le modele `fall`.
+
+    Depuis qu'il est entraine et active, `gloves_glasses/Fall-Detected` est
+    volontairement mis en sourdine — sans quoi une meme personne au sol
+    declencherait deux alertes. Les tests de seuil ci-dessous portent sur le
+    seuil, pas sur cette regle : ils doivent donc dire dans quel etat ils se
+    placent, au lieu d'en dependre silencieusement.
+    """
+    monkeypatch.setattr(rules_module, "_modele_chute_dedie_actif", lambda: False)
+
+
+def test_seuil_renforce_bloque_sous_le_minimum(sans_modele_de_chute):
     """Fall-Detected exige 0.80 : à 0.75 le modèle n'est pas assez sûr."""
     d = detection(model="gloves_glasses", label="Fall-Detected", confidence=0.75)
     assert AlertEngine().process(d) is None
 
 
-def test_seuil_renforce_laisse_passer_au_dessus():
+def test_seuil_renforce_laisse_passer_au_dessus(sans_modele_de_chute):
     d = detection(model="gloves_glasses", label="Fall-Detected", confidence=0.85)
     assert AlertEngine().process(d) is not None
+
+
+def test_le_modele_de_chute_dedie_fait_taire_l_ancienne_classe(monkeypatch):
+    """Une personne au sol ne doit produire qu'une alerte, pas deux.
+
+    Tant que le modele `fall` n'existait pas, la chute etait devinee par
+    gloves_glasses. Maintenant qu'il est entraine (mAP50 0,901) et actif, cette
+    classe-la se tait.
+    """
+    monkeypatch.setattr(rules_module, "_modele_chute_dedie_actif", lambda: True)
+    d = detection(model="gloves_glasses", label="Fall-Detected", confidence=0.95)
+    assert AlertEngine().process(d) is None
+
+    chute = detection(model="fall", label="down", confidence=0.85)
+    assert AlertEngine().process(chute) is not None
 
 
 # ── Anti-répétition ──────────────────────────────────────────────────

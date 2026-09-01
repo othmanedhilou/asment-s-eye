@@ -37,7 +37,7 @@ models:
   fall:
     file: models/ciments_eye_fall_best_openvino_model
     conf: 0.4
-    enabled: false   # passer à true une fois le modèle entraîné et exporté
+    enabled: true    # entraîné le 01/09/2026 — mAP50 0,901 sur up/bending/down
 
   fire_smoke:
     file: models/ciments_eye_fire_smoke_best_openvino_model
@@ -51,6 +51,11 @@ models:
     file: models/ciments_eye_load_control_best_openvino_model
     conf: 0.4
     enabled: true  # faux positifs connus (0.89) -> désactivé PAR DÉFAUT via le panneau (data/settings.json), pas ici
+  plate:
+    file: models/ciments_eye_plate_best_openvino_model
+    conf: 0.35
+    enabled: true    # entraîné le 01/09/2026 — mAP50 0,970 sur License_Plate
+
   person_animal:
     file: models/ciments_eye_person_animal_best_openvino_model
     conf: 0.4
