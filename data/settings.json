@@ -12,7 +12,7 @@
     "alert": true
   },
   "fire_smoke": {
-    "detect": false,
+    "detect": true,
     "alert": true
   },
   "load_control": {

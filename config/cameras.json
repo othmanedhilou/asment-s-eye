@@ -15,11 +15,9 @@
     "bachage": false
   },
   "essai": {
-    "source": "videos/208.jpg",
+    "source": "videos/Screenshot 2026-09-03 124901.png",
     "models": [
-      "arc",
-      "vehicles",
-      "fall"
+      "fire_smoke"
     ],
     "fps": 2.0,
     "enabled": true,

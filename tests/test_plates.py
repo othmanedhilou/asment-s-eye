@@ -324,3 +324,61 @@ def _image(hauteur, largeur):
     import numpy as np
 
     return np.zeros((hauteur, largeur, 3), dtype=np.uint8)
+
+
+def test_une_lettre_arabe_n_est_jamais_prise_pour_un_chiffre():
+    """Une plaque marocaine s'écrit « chiffres · lettre arabe · chiffres ».
+    La table des confusions ne doit jamais toucher la lettre."""
+    from app.plates import corriger_confusions
+
+    assert corriger_confusions("12345\u06486") == "12345\u06486"
+    # Aux extrémités non plus, si jamais l'assemblage la place là.
+    assert corriger_confusions("\u0648123\u0648") == "\u0648123\u0648"
+    # Les confusions latines restent corrigées SUR UNE PLAQUE MAROCAINE.
+    assert corriger_confusions("O123وS") == "0123و5"
+
+
+def test_une_plaque_avec_lettre_arabe_reste_plausible():
+    from app.plates import plausible
+
+    assert plausible("12345\u06486")
+
+
+def test_les_chiffres_arabes_sont_ramenes_en_chiffres_occidentaux():
+    """Le moteur arabe connaît aussi ٠١٢٣ : c'est le même nombre, et un
+    registre doit rester cherchable avec un clavier ordinaire."""
+    from app.plates import normaliser
+
+    assert normaliser("\u0661\u0662\u0663\u0664\u0665\u0648\u0666") == "12345\u06486"
+
+
+def test_la_lettre_arabe_survit_a_la_normalisation():
+    from app.plates import normaliser
+
+    assert normaliser("12345 - \u0648 - 6") == "12345\u06486"
+
+
+def test_le_jeu_de_caracteres_couvre_la_plaque_marocaine():
+    """Restreindre les caractères reconnus est le réglage qui a le plus changé
+    le résultat : le moteur arabe connaît quatre-vingt-sept signes, dont la
+    ponctuation, et chacun est une confusion possible."""
+    from app.plates import CARACTERES_PLAQUE, LETTRES_SERIE
+
+    for c in "0123456789":
+        assert c in CARACTERES_PLAQUE
+    for c in LETTRES_SERIE:
+        assert c in CARACTERES_PLAQUE
+    assert "\u0648" in CARACTERES_PLAQUE          # و, la lettre du signalement
+    assert "\u0660" not in CARACTERES_PLAQUE      # ٠, chiffre arabe : exclu
+    assert "-" not in CARACTERES_PLAQUE and " " not in CARACTERES_PLAQUE
+
+
+def test_une_plaque_etrangere_n_est_pas_corrigee_au_format_marocain():
+    """La correction des extrémités suppose deux bouts en chiffres — vrai au
+    Maroc, faux ailleurs. « SDN7484U », lu correctement par le moteur,
+    ressortait « 5DN7484U »."""
+    from app.plates import corriger_confusions
+
+    assert corriger_confusions("SDN7484U") == "SDN7484U"
+    # Avec la lettre de série, le format est marocain : on corrige.
+    assert corriger_confusions("S1234\u0648O") == "51234\u06480"

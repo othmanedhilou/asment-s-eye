@@ -45,6 +45,24 @@ log = setup_logging()
 # bien plus souvent des chiffres.
 CONFUSIONS = {"O": "0", "Q": "0", "D": "0", "I": "1", "L": "1", "S": "5", "Z": "2", "B": "8"}
 
+# Une plaque marocaine s'écrit « chiffres · lettre arabe · chiffres ». Sans
+# l'arabe, le lecteur rend un caractère latin approchant et le numéro est faux.
+# easyocr accepte l'arabe et l'anglais ensemble ; l'anglais reste nécessaire
+# pour les chiffres et pour les plaques étrangères qui traversent le site.
+LANGUES = ["ar", "en"]
+
+# Lettres de série des plaques marocaines. Restreindre le jeu de caractères
+# reconnus est le seul reglage qui ait vraiment change le resultat : le moteur
+# arabe connait quatre-vingt-sept signes, dont la ponctuation et les chiffres
+# arabes, et chacun est une confusion possible. Mesure sur les images d'essai :
+# « SDN7484U » sortait « 55N74847 » sans restriction, et exactement juste avec.
+#
+# A completer si le site voit passer d'autres series.
+LETTRES_SERIE = "ابجدهوطشمأ"
+CARACTERES_PLAQUE = ("0123456789"
+                     "ABCDEFGHIJKLMNOPQRSTUVWXYZ"  # plaques étrangères
+                     + LETTRES_SERIE)
+
 LONGUEUR_MIN = 4
 LONGUEUR_MAX = 10
 CHIFFRES_MIN = 3
@@ -69,12 +87,23 @@ LECTURES_MIN = 2
 LECTURES_MAX = 8
 
 
+# Le moteur arabe connait aussi les chiffres arabes ٠١٢٣. Une plaque marocaine
+# les imprime en chiffres occidentaux, mais un reflet ou un flou peut faire
+# basculer la lecture. On ramene tout a la meme ecriture : c'est le meme nombre,
+# et un registre doit rester cherchable avec un clavier ordinaire.
+CHIFFRES_ARABES = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "01234567890123456789")
+
+
 def normaliser(texte: str) -> str:
-    """Met le texte en forme de plaque : majuscules, sans séparateurs."""
+    """Met le texte en forme de plaque : majuscules, sans séparateurs.
+
+    La lettre arabe centrale est conservée telle quelle — c'est elle qui
+    identifie la série, et la traduire en latin donnerait un numéro faux.
+    """
     if not texte:
         return ""
     propre = "".join(c for c in texte.upper() if c.isalnum())
-    return propre
+    return propre.translate(CHIFFRES_ARABES)
 
 
 def plausible(texte: str) -> bool:
@@ -99,8 +128,29 @@ def corriger_confusions(texte: str) -> str:
     """
     if len(texte) < 3:
         return texte
+
+    # La correction ne vaut QUE pour une plaque marocaine, dont les deux bouts
+    # sont des chiffres. Sur une plaque etrangere commencant par des lettres,
+    # elle rend un numero faux : « SDN7484U », lu correctement par le moteur,
+    # ressortait « 5DN7484U ».
+    #
+    # On reconnait le format a sa FORME et non a son alphabet : le dernier
+    # caractere est un chiffre. Se fier a la presence d'une lettre arabe
+    # marcherait aujourd'hui, mais plus le jour ou le modele arabe manque et
+    # ou le repli anglais rend la lettre en latin.
+    # Le dernier caractere doit etre un chiffre — ou une lettre qu'on sait etre
+    # un chiffre mal lu, sans quoi la regle ne se declencherait jamais dans le
+    # cas meme qu'elle doit reparer : un « 0 » final rendu « O ».
+    if not (texte[-1].isdigit() or texte[-1] in CONFUSIONS):
+        return texte
+
     caracteres = list(texte)
     for i in (0, len(caracteres) - 1):
+        # Une lettre arabe n'est jamais une confusion de chiffre : la table ne
+        # contient que des lettres latines, mais on le dit explicitement pour
+        # que personne n'y ajoute un jour « و » ou « ب ».
+        if not caracteres[i].isascii():
+            continue
         caracteres[i] = CONFUSIONS.get(caracteres[i], caracteres[i])
     return "".join(caracteres)
 
@@ -194,10 +244,25 @@ class PlateReader:
         try:
             import easyocr
 
+            # Une plaque marocaine porte une LETTRE ARABE entre ses chiffres.
+            # En anglais seul, le lecteur ne peut pas la produire : il rend le
+            # caractère latin le plus proche — un « و » sortait en « 3 ». Le
+            # numéro devenait faux sans que rien ne le signale.
+            #
             # Chargement long (modèles à télécharger la première fois) : il n'a
             # lieu qu'au premier véhicule rencontré, pas au démarrage.
-            self._ocr = easyocr.Reader(["en"], gpu=False, verbose=False)
-            log.info("lecture de plaques : moteur easyocr chargé")
+            try:
+                self._ocr = easyocr.Reader(LANGUES, gpu=False, verbose=False)
+                log.info(f"lecture de plaques : moteur easyocr chargé ({'+'.join(LANGUES)})")
+            except Exception as e:
+                # Le modèle arabe se télécharge au premier usage : sur un site
+                # coupé d'Internet, il manquera. Mieux vaut lire les chiffres
+                # que ne rien lire — mais il faut le DIRE, sans quoi on croira
+                # à une plaque mal lue là où c'est l'alphabet qui manque.
+                log.warning(f"lecture de plaques : alphabet arabe indisponible ({e}) — "
+                            "lecture en chiffres latins seulement, la lettre centrale "
+                            "sera fausse")
+                self._ocr = easyocr.Reader(["en"], gpu=False, verbose=False)
         except ImportError:
             log.info("lecture de plaques : easyocr absent, plaques localisées mais non lues")
         except Exception as e:
@@ -238,7 +303,8 @@ class PlateReader:
                 facteur = 48 / max(h, 1)
                 image = cv2.resize(image, (int(w * facteur), 48), interpolation=cv2.INTER_CUBIC)
 
-            lectures = self._ocr.readtext(image, detail=1, paragraph=False)
+            lectures = self._ocr.readtext(image, detail=1, paragraph=False,
+                                          allowlist=CARACTERES_PLAQUE)
         except Exception as e:
             log.error(f"échec de lecture de plaque : {e}")
             return "", 0.0
