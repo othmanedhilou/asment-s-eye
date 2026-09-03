@@ -152,13 +152,20 @@
         </div>
 
         <div class="filtres">
+          <div class="filtres-tete" style="padding-bottom:0;border-bottom:none">
+            <span class="groupe" id="registre">
+              <button class="bouton actif" data-registre="alertes">Alertes</button>
+              <button class="bouton" data-registre="passages">Passages de véhicules</button>
+            </span>
+          </div>
           <div class="filtres-tete">
             <span class="filtres-titre">FILTRES</span>
             <span class="filtres-resume" id="filtres-resume">24 heures · toutes caméras · toutes gravités</span>
             <span class="filtres-actions">
               <button class="bouton" id="btn-filtres">Déplier</button>
               <a class="bouton" href="/api/export/csv">Export CSV</a>
-              <a class="bouton" href="/api/export/pdf?days=7">Rapport PDF</a>
+              <a class="bouton" href="/api/export/pdf?days=7">PDF 7 j</a>
+            <a class="bouton" href="/api/export/pdf?days=30">PDF 30 j</a>
               <button class="bouton danger" id="btn-effacer">Effacer</button>
             </span>
           </div>
@@ -230,14 +237,6 @@
             <div class="bloc-tete">FAUSSES ALERTES PAR CAMÉRA
               <span class="bloc-tete-fin bloc-note">objectif : moins de 2 par jour</span></div>
             <div class="bloc-corps"><div id="rangs-fausses"></div></div>
-          </div>
-          <div class="bloc large">
-            <div class="bloc-tete">EXPORTS</div>
-            <div class="bloc-corps"><div class="exports">
-              <a class="bouton primaire" href="/api/export/pdf?days=7">Rapport PDF — 7 jours</a>
-              <a class="bouton" href="/api/export/pdf?days=30">PDF — 30 jours</a>
-              <a class="bouton" href="/api/export/csv">Historique CSV</a>
-            </div></div>
           </div>
         </div>
       </section>
@@ -477,6 +476,8 @@
     <div class="aide-section">HISTORIQUE</div>
     <div class="aide-item"><b>Frise</b><span>Chaque trait est une alerte, placée à son heure et colorée par gravité. Les flèches changent de journée.</span></div>
     <div class="aide-item"><b>Accuser réception</b><span>Indique que l'alerte a été vue et traitée. Elle disparaît des « alertes en cours ».</span></div>
+    <div class="aide-item"><b>Passages de véhicules</b><span>Le second registre de l'Historique. Chaque plaque lue y laisse une trace : la caméra, l'heure, la capture. Un passage n'est pas un manquement — c'est un fait qu'on garde pour pouvoir y revenir, par exemple pour relier une infraction à un transporteur.</span></div>
+    <div class="aide-item"><b>Aller à une caméra</b><span>Le nom d'une caméra est cliquable partout : dans l'historique, dans les passages, dans les alertes en cours. Un clic l'ouvre en Direct, agrandie.</span></div>
     <div class="aide-item"><b>Effacer</b><span>« Effacer ces alertes » supprime exactement ce que les filtres affichent — captures et clips compris, pour libérer le disque. Dépliez les filtres d'abord : sans filtre, c'est tout l'historique.</span></div>
     <div class="aide-item"><b>Fausse alerte</b><span>À utiliser quand la détection s'est trompée. Ces signalements alimentent la mesure de fiabilité et servent à réentraîner les modèles.</span></div>
 

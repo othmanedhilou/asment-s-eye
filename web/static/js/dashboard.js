@@ -137,7 +137,7 @@ function onglets() {
 
       ({
         direct: chargerCameras,
-        historique: () => { chargerAlertes(); chargerFrise(); },
+        historique: () => { charger(); chargerFrise(); },
         analyse: chargerAnalyse,
         config: () => ouvrirSection(sectionCourante),
       })[vue]?.();
@@ -635,6 +635,99 @@ function filtres() {
   return p;
 }
 
+/* L'historique porte deux registres : ce qui a alerte, et ce qui est passe.
+   Les melanger remplirait l'ecran des alertes de lignes qui n'appellent
+   aucune action. */
+let registre = "alertes";
+
+function brancherRegistre() {
+  el("registre").addEventListener("click", (e) => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    registre = b.dataset.registre;
+    document.querySelectorAll("#registre .bouton").forEach((x) =>
+      x.classList.toggle("actif", x === b));
+    // Les filtres propres aux alertes n'ont pas de sens sur des passages.
+    ["f-modele", "f-gravite", "f-traite", "f-fausse", "f-zone", "f-classe"]
+      .forEach((id) => { const n = el(id); if (n) n.parentElement.hidden = false; });
+    document.querySelectorAll("#filtres-corps > *").forEach((n) => {
+      const id = n.id || "";
+      n.hidden = registre === "passages"
+        && ["f-modele", "f-gravite", "f-traite", "f-fausse", "f-zone", "f-classe"].includes(id);
+    });
+    page = 0;
+    charger();
+  });
+}
+
+function charger() {
+  return registre === "passages" ? chargerPassages() : chargerAlertes();
+}
+
+async function chargerPassages() {
+  const p = new URLSearchParams();
+  const cam = el("f-camera")?.value;
+  if (cam) p.set("camera", cam);
+  const pl = el("f-plaque")?.value.trim();
+  if (pl) p.set("plaque", pl);
+  const h = el("f-periode")?.value;
+  if (h) p.set("since_hours", h);
+  p.set("limit", PAR_PAGE);
+  p.set("offset", page * PAR_PAGE);
+
+  resumerFiltres();
+  let d;
+  try { d = await api(`/api/plates?${p}`); }
+  catch (e) { vide("tableau-alertes", "Registre indisponible", ech(e.message)); return; }
+
+  if (!d.items.length) {
+    vide("tableau-alertes", "Aucun passage enregistré",
+      "Une plaque lue par une caméra apparaît ici. Activez la lecture des plaques sur une caméra qui voit le portail.");
+    el("pagination").innerHTML = "";
+    majBoutonEffacer(0, false);
+    return;
+  }
+
+  el("tableau-alertes").innerHTML = `
+    <table class="liste">
+      <thead><tr><th style="width:118px">CAPTURE</th><th style="width:180px">PLAQUE</th>
+      <th>CAMÉRA</th><th style="width:110px">LECTURES</th><th style="width:100px">CONFIANCE</th>
+      <th style="width:170px">HORODATAGE</th></tr></thead>
+      <tbody>${d.items.map((x) => `
+        <tr>
+          <td>${x.snapshot
+    ? `<img class="vignette" src="/api/snapshot?path=${encodeURIComponent(x.snapshot)}"
+              data-img="/api/snapshot?path=${encodeURIComponent(x.snapshot)}" alt="" />`
+    : '<span class="msg">—</span>'}</td>
+          <td><span class="etiq plaque" style="font-size:14px">${ech(x.plaque)}</span></td>
+          <td><button class="lien" data-aller="${ech(x.camera)}">${ech(x.camera)}</button></td>
+          <td class="num">${x.lectures || "—"}</td>
+          <td class="num">${x.confidence ? x.confidence.toFixed(2) : "—"}</td>
+          <td class="num">${dateHeure(x.timestamp)}</td>
+        </tr>`).join("")}</tbody>
+    </table>`;
+
+  brancherAller("tableau-alertes");
+  el("tableau-alertes").querySelectorAll("[data-img]").forEach((n) =>
+    n.addEventListener("click", () => window.open(n.dataset.img, "_blank")));
+  pagination(d);
+  majBoutonEffacer(d.total, [...p.keys()].some((k) => !["limit", "offset"].includes(k)));
+}
+
+/* Le nom d'une camera est cliquable partout : un clic l'ouvre en Direct,
+   agrandie. C'est le chemin le plus court entre « il s'est passe quelque
+   chose la » et « montre-moi ». */
+function brancherAller(cible) {
+  el(cible).querySelectorAll("[data-aller]").forEach((n) =>
+    n.addEventListener("click", (e) => {
+      e.stopPropagation();
+      allerA("direct");
+      selection = n.dataset.aller;
+      dessinerMur();
+      majActions();
+    }));
+}
+
 function resumerFiltres() {
   const lu = (id, defaut) => {
     const n = el(id);
@@ -688,6 +781,8 @@ async function chargerAlertes() {
     b.addEventListener("click", () => marquer(b.dataset.faux, true)));
   el("tableau-alertes").querySelectorAll("[data-vrai]").forEach((b) =>
     b.addEventListener("click", () => marquer(b.dataset.vrai, false)));
+  brancherAller("tableau-alertes");
+
   el("tableau-alertes").querySelectorAll("[data-suppr]").forEach((b) =>
     b.addEventListener("click", async () => {
       try {
@@ -735,7 +830,7 @@ function ligneAlerte(a) {
   return `<tr class="${a.severity}${a.false_positive ? " fausse" : ""}">
     <td>${vign}</td>
     <td>${ech(a.label)}${faux}${zone}${plaque}</td>
-    <td>${ech(a.camera)}<br>${clip}</td>
+    <td><button class="lien" data-aller="${ech(a.camera)}">${ech(a.camera)}</button><br>${clip}</td>
     <td>${nomModele(a.model)}</td>
     <td><span class="sev ${a.severity}">${a.severity}</span></td>
     <td class="num">${a.confidence.toFixed(2)}</td>
@@ -754,8 +849,8 @@ function pagination(d) {
     <button class="bouton" ${page === 0 ? "disabled" : ""} id="page-prec">Précédent</button>
     <span>Page ${page + 1} / ${pages} — ${d.total} alerte(s)</span>
     <button class="bouton" ${page + 1 >= pages ? "disabled" : ""} id="page-suiv">Suivant</button>`;
-  el("page-prec")?.addEventListener("click", () => { page--; chargerAlertes(); });
-  el("page-suiv")?.addEventListener("click", () => { page++; chargerAlertes(); });
+  el("page-prec")?.addEventListener("click", () => { page--; charger(); });
+  el("page-suiv")?.addEventListener("click", () => { page++; charger(); });
 }
 
 async function prendreEnCharge(id, bouton) {
@@ -778,8 +873,8 @@ async function marquer(id, fausse) {
 
 function brancherFiltres() {
   ["f-modele", "f-camera", "f-zone", "f-gravite", "f-traite", "f-fausse", "f-periode", "f-poste"]
-    .forEach((id) => el(id)?.addEventListener("change", () => { page = 0; chargerAlertes(); }));
-  const rech = attendre(() => { page = 0; chargerAlertes(); }, 350);
+    .forEach((id) => el(id)?.addEventListener("change", () => { page = 0; charger(); }));
+  const rech = attendre(() => { page = 0; charger(); }, 350);
   el("f-classe")?.addEventListener("input", rech);
   el("f-plaque")?.addEventListener("input", rech);
 }
@@ -1577,6 +1672,13 @@ async function init() {
     if (!ok) return;
 
     try {
+      if (registre === "passages") {
+        const r = await api(`/api/plates?${p}`, { method: "DELETE" });
+        avis("Passages effacés", `${r.supprimes} passage(s).`, "ok");
+        page = 0;
+        charger();
+        return;
+      }
       const r = await api(`/api/alerts?${p}`, { method: "DELETE" });
       avis("Historique effacé", `${r.supprimees} alerte(s), ${r.fichiers} fichier(s).`, "ok");
       page = 0;
@@ -1593,6 +1695,7 @@ async function init() {
     e.currentTarget.textContent = corps.hidden ? "Déplier" : "Replier";
   });
   outilsDirect();
+  brancherRegistre();
   brancherSon();
   formCamera();
   brancherFiltres();

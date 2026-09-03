@@ -1,0 +1,217 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+  <style>
+    :root {
+      --bg:#0a0a0b; --panel:#111113; --panel2:#17171a; --panel3:#1d1d21;
+      --line:#26262b; --line2:#33333a;
+      --text:#f3f0e9; --text2:#c9c4ba; --muted:#8e8981;
+      --or:#d4a942; --or-doux:rgba(212,169,66,.13); --or-trait:rgba(212,169,66,.38);
+      --crit:#e04b3f; --haute:#d9822b; --moy:#4d86c4; --ok:#4f9d69;
+      --arete:inset 0 1px 0 rgba(255,255,255,.045);
+      --ui:'Sora',system-ui,sans-serif; --mono:'IBM Plex Mono',ui-monospace,monospace;
+    }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font-family:var(--ui);
+           font-size:15px; -webkit-font-smoothing:antialiased; letter-spacing:-.003em; }
+    a { color:var(--or); } a:hover { color:var(--text); }
+    .mono { font-family:var(--mono); font-variant-numeric:tabular-nums; }
+    .lab { font-size:11px; letter-spacing:.14em; color:var(--muted); font-weight:600; }
+    .bloc { background:var(--panel); border:1px solid var(--line); box-shadow:var(--arete); }
+    .th { text-align:left; padding:13px 18px; font-size:12px; letter-spacing:.085em;
+          font-weight:600; color:var(--muted); white-space:nowrap; }
+    .td { padding:13px 18px; border-top:1px solid #1e1e23; font-size:14.5px; }
+    .btn { padding:9px 15px; border:1px solid var(--line2); color:var(--text2); font-size:14.5px; }
+    .champ > span { display:block; font-size:12px; letter-spacing:.085em; font-weight:600;
+                    color:var(--muted); margin-bottom:8px; }
+    .saisie { width:100%; padding:10px 13px; background:var(--panel2);
+              border:1px solid var(--line2); color:var(--text); font-size:14.5px; }
+  </style>
+</helmet>
+
+<div style="display:flex;width:1440px;height:900px;overflow:hidden">
+
+  <nav style="width:214px;flex:none;display:flex;flex-direction:column;background:var(--panel);border-right:1px solid var(--line);box-shadow:var(--arete)">
+    <div style="display:flex;align-items:center;gap:11px;padding:20px 18px 18px;border-bottom:1px solid var(--line)">
+      <svg width="30" height="30" viewBox="0 0 48 48" fill="none" stroke="#d4a942" stroke-width="2.2" style="flex:none">
+        <path d="M2 24C2 24 10 10 24 10s22 14 22 14-8 14-22 14S2 24 2 24z" stroke-linejoin="round"/>
+        <circle cx="24" cy="24" r="9.5"/><circle cx="24" cy="24" r="2.6" fill="#d4a942"/>
+      </svg>
+      <div>
+        <div style="font-size:14px;font-weight:700;letter-spacing:.14em">CIMENT'S EYE</div>
+        <div style="font-size:11px;letter-spacing:.09em;color:var(--muted);margin-top:3px">CIMENTS DU MAROC</div>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:3px;padding:14px 10px">
+      <div style="display:flex;align-items:center;gap:11px;padding:12px;font-size:15px;color:var(--text2);border-left:3px solid transparent">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>Direct
+      </div>
+      <div style="display:flex;align-items:center;gap:11px;padding:12px;font-size:15px;color:var(--text2);border-left:3px solid transparent">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+        Historique<span class="mono" style="margin-left:auto;font-size:13px;font-weight:600;color:var(--crit)">4</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:11px;padding:12px;font-size:15px;color:var(--text2);border-left:3px solid transparent">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>Analyse
+      </div>
+      <div style="display:flex;align-items:center;gap:11px;padding:12px;font-size:15px;font-weight:600;color:var(--or);background:var(--or-doux);border-left:3px solid var(--or);box-shadow:var(--arete)">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="3"/><path d="M20.5 13a1.6 1.6 0 00.3 1.8 2 2 0 11-2.8 2.8 1.6 1.6 0 00-2.8 1.1 2 2 0 11-4 0 1.6 1.6 0 00-2.8-1.1 2 2 0 11-2.8-2.8A1.6 1.6 0 003.5 13a2 2 0 110-4 1.6 1.6 0 001.1-2.8 2 2 0 112.8-2.8A1.6 1.6 0 0010.2 3.4a2 2 0 114 0 1.6 1.6 0 002.8 1.1 2 2 0 112.8 2.8A1.6 1.6 0 0020.5 11a2 2 0 110 4z"/></svg>Paramètres
+      </div>
+    </div>
+  </nav>
+
+  <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+    <header style="flex:none;height:64px;display:flex;align-items:center;gap:16px;padding:0 20px;background:var(--panel);border-bottom:1px solid var(--line);box-shadow:var(--arete)">
+      <h1 style="margin:0;font-size:20px;font-weight:620;letter-spacing:-.021em">Paramètres</h1>
+      <span style="font-size:14px;color:var(--muted)">caméras, zones, modèles</span>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:14px">
+        <div class="mono" style="font-size:16.5px;font-weight:600;letter-spacing:.04em">03:25:16</div>
+        <div style="display:flex;align-items:center;justify-content:center;width:36px;height:36px;border:1px solid var(--line2);color:var(--muted)">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="4.6"/><path d="M12 1.6v2.6M12 19.8v2.6M4.2 4.2l1.9 1.9M17.9 17.9l1.9 1.9M1.6 12h2.6M19.8 12h2.6M4.2 19.8l1.9-1.9M17.9 6.1l1.9-1.9"/></svg>
+        </div>
+      </div>
+    </header>
+
+    <div style="flex:1;min-height:0;overflow:hidden;padding:22px">
+
+      <div style="display:flex;gap:6px;margin-bottom:18px">
+        <div style="padding:10px 16px;border:1px solid var(--or);background:var(--or-doux);color:var(--or);font-size:14.5px;font-weight:600">Caméras</div>
+        <div class="btn" style="padding:10px 16px">Zones d'intérêt</div>
+        <div class="btn" style="padding:10px 16px">Fichiers de test</div>
+        <div class="btn" style="padding:10px 16px">Modèles</div>
+        <div class="btn" style="padding:10px 16px">État du système</div>
+      </div>
+
+      <div class="bloc" style="margin-bottom:14px">
+        <div style="display:flex;align-items:center;gap:12px;padding:15px 18px;border-bottom:1px solid var(--line)">
+          <span class="lab">CAMÉRAS DÉCLARÉES</span>
+          <span style="margin-left:auto;display:flex;gap:8px">
+            <span style="padding:9px 15px;border:1px solid var(--or);background:linear-gradient(180deg,rgba(255,255,255,.14),rgba(0,0,0,.06)),var(--or);color:#14100a;font-size:14.5px;font-weight:600">Ajouter</span>
+            <span class="btn">Modifier</span>
+            <span style="padding:9px 15px;border:1px solid #3a2422;color:var(--crit);font-size:14.5px">Supprimer</span>
+          </span>
+        </div>
+        <table style="width:100%;border-collapse:collapse">
+          <thead><tr>
+            <th class="th" style="width:34px"></th><th class="th">NOM</th><th class="th">SOURCE</th>
+            <th class="th" style="width:78px">IMG/S</th><th class="th">MODÈLES</th>
+            <th class="th">ZONES</th><th class="th" style="width:180px">OPTIONS</th><th class="th" style="width:110px">ÉTAT</th>
+          </tr></thead>
+          <tbody>
+            <tr style="background:rgba(212,169,66,.05)">
+              <td class="td"><span style="width:9px;height:9px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 3px rgba(79,157,105,.18);display:inline-block"></span></td>
+              <td class="td">Quai de chargement 1</td>
+              <td class="td mono" style="font-size:13.5px;color:var(--text2)">rtsp://10.4.1.14/s1</td>
+              <td class="td mono" style="color:var(--text2)">2</td>
+              <td class="td">EPI, Véhicules, Plaques</td>
+              <td class="td">le quai, route <span style="color:var(--crit)">(excl.)</span></td>
+              <td class="td" style="font-size:13px;color:var(--muted)">suivi, plaques, enreg.</td>
+              <td class="td" style="color:var(--ok)">en ligne</td>
+            </tr>
+            <tr>
+              <td class="td"><span style="width:9px;height:9px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 3px rgba(79,157,105,.18);display:inline-block"></span></td>
+              <td class="td">Portail nord</td>
+              <td class="td mono" style="font-size:13.5px;color:var(--text2)">rtsp://10.4.1.21/s1</td>
+              <td class="td mono" style="color:var(--text2)">4</td>
+              <td class="td">Véhicules, Plaques, Chargement</td>
+              <td class="td">voie sortie</td>
+              <td class="td" style="font-size:13px;color:var(--muted)">suivi, plaques, collecte</td>
+              <td class="td" style="color:var(--ok)">en ligne</td>
+            </tr>
+            <tr>
+              <td class="td"><span style="width:9px;height:9px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 3px rgba(79,157,105,.18);display:inline-block"></span></td>
+              <td class="td">Four rotatif — sortie</td>
+              <td class="td mono" style="font-size:13.5px;color:var(--text2)">rtsp://10.4.2.7/s1</td>
+              <td class="td mono" style="color:var(--text2)">2</td>
+              <td class="td">Feu et fumée, EPI</td>
+              <td class="td">zone four</td>
+              <td class="td" style="font-size:13px;color:var(--muted)">suivi, enreg.</td>
+              <td class="td" style="color:var(--ok)">en ligne</td>
+            </tr>
+            <tr>
+              <td class="td"><span style="width:9px;height:9px;border-radius:50%;background:var(--crit);box-shadow:0 0 0 3px rgba(224,75,63,.2);display:inline-block"></span></td>
+              <td class="td">Concasseur primaire</td>
+              <td class="td mono" style="font-size:13.5px;color:var(--text2)">rtsp://10.4.2.9/s1</td>
+              <td class="td mono" style="color:var(--text2)">2</td>
+              <td class="td">Convoyeur, Personnes</td>
+              <td class="td">bande B3</td>
+              <td class="td" style="font-size:13px;color:var(--muted)">suivi</td>
+              <td class="td" style="color:var(--crit)">hors ligne</td>
+            </tr>
+            <tr>
+              <td class="td"><span style="width:9px;height:9px;border-radius:50%;background:var(--haute);box-shadow:0 0 0 3px rgba(217,130,43,.2);display:inline-block"></span></td>
+              <td class="td">Parking visiteurs</td>
+              <td class="td mono" style="font-size:13.5px;color:var(--text2)">rtsp://10.4.1.33/s1</td>
+              <td class="td mono" style="color:var(--text2)">1</td>
+              <td class="td">Véhicules</td>
+              <td class="td" style="color:var(--muted)">plein cadre</td>
+              <td class="td" style="font-size:13px;color:var(--muted)">suivi</td>
+              <td class="td" style="color:var(--haute)">en pause</td>
+            </tr>
+          </tbody>
+        </table>
+        <div style="padding:12px 18px;border-top:1px solid var(--line);font-size:13.5px;color:var(--muted)">
+          Sélection : Quai de chargement 1
+        </div>
+      </div>
+
+      <div class="bloc">
+        <div style="padding:15px 18px;border-bottom:1px solid var(--line)"><span class="lab">MODIFIER — QUAI DE CHARGEMENT 1</span></div>
+        <div style="padding:20px 18px">
+          <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px">
+            <label class="champ"><span>NOM</span><div class="saisie">Quai de chargement 1</div></label>
+            <label class="champ" style="grid-column:span 2"><span>SOURCE</span><div class="saisie mono" style="font-size:14px">rtsp://user:•••@10.4.1.14:554/stream1</div></label>
+            <label class="champ"><span>ÉTAT</span><div class="saisie" style="display:flex;align-items:center;justify-content:space-between">Active
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8e8981" stroke-width="2.4"><path d="M6 9l6 6 6-6"/></svg></div></label>
+            <div class="champ" style="grid-column:span 3"><span>MODÈLES ACTIFS</span>
+              <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:3px">
+                <div style="display:flex;align-items:center;gap:10px;padding:9px 10px;font-size:14.5px">
+                  <span style="width:15px;height:15px;border:1px solid var(--or);background:var(--or-doux);display:inline-flex;align-items:center;justify-content:center;flex:none"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#d4a942" stroke-width="3.5" stroke-linecap="round"><path d="M4 12l6 6L20 6"/></svg></span>EPI
+                </div>
+                <div style="display:flex;align-items:center;gap:10px;padding:9px 10px;font-size:14.5px">
+                  <span style="width:15px;height:15px;border:1px solid var(--or);background:var(--or-doux);display:inline-flex;align-items:center;justify-content:center;flex:none"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#d4a942" stroke-width="3.5" stroke-linecap="round"><path d="M4 12l6 6L20 6"/></svg></span>Véhicules
+                </div>
+                <div style="display:flex;align-items:center;gap:10px;padding:9px 10px;font-size:14.5px">
+                  <span style="width:15px;height:15px;border:1px solid var(--or);background:var(--or-doux);display:inline-flex;align-items:center;justify-content:center;flex:none"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#d4a942" stroke-width="3.5" stroke-linecap="round"><path d="M4 12l6 6L20 6"/></svg></span>Plaques
+                </div>
+                <div style="display:flex;align-items:center;gap:10px;padding:9px 10px;font-size:14.5px;color:var(--text2)">
+                  <span style="width:15px;height:15px;border:1px solid var(--line2);flex:none"></span>Chute
+                </div>
+                <div style="display:flex;align-items:center;gap:10px;padding:9px 10px;font-size:14.5px;color:var(--text2)">
+                  <span style="width:15px;height:15px;border:1px solid var(--line2);flex:none"></span>Feu et fumée
+                </div>
+                <div style="display:flex;align-items:center;gap:10px;padding:9px 10px;font-size:14.5px;color:var(--text2)">
+                  <span style="width:15px;height:15px;border:1px solid var(--line2);flex:none"></span>Convoyeur
+                </div>
+                <div style="display:flex;align-items:center;gap:10px;padding:9px 10px;font-size:14.5px;color:var(--text2)">
+                  <span style="width:15px;height:15px;border:1px solid var(--line2);flex:none"></span>Chargement
+                </div>
+                <div style="display:flex;align-items:center;gap:10px;padding:9px 10px;font-size:14.5px;color:var(--text2)">
+                  <span style="width:15px;height:15px;border:1px solid var(--line2);flex:none"></span>Arc électrique
+                </div>
+              </div>
+            </div>
+          </div>
+          <div style="margin-top:22px;padding-top:14px;border-top:1px solid #1e1e23;display:flex;align-items:center;gap:8px;color:var(--or);font-size:14.5px">
+            <span style="font-size:12px">▸</span> Options avancées
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;margin-top:22px">
+            <span style="padding:9px 15px;border:1px solid var(--or);background:linear-gradient(180deg,rgba(255,255,255,.14),rgba(0,0,0,.06)),var(--or);color:#14100a;font-size:14.5px;font-weight:600">Enregistrer</span>
+            <span class="btn">Tester la connexion</span>
+            <span class="btn">Annuler</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

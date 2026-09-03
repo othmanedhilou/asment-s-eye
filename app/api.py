@@ -24,13 +24,17 @@ from app.storage import (
     acknowledge_alert,
     alerts_for_day,
     count_alerts,
+    count_plates,
     days_with_alerts,
+    delete_plates,
     delete_alert,
     delete_alerts,
     export_csv,
     mark_false_positive,
+    log_plate,
     quality_stats,
     read_alerts,
+    read_plates,
     stats_summary,
     stats_timeline,
 )
@@ -202,6 +206,30 @@ def api_false_positive(alert_id: int, body: FalsePositiveBody):
     if not mark_false_positive(alert_id, body.is_false, body.operator):
         raise HTTPException(status_code=404, detail="Alerte introuvable")
     return {"ok": True, "id": alert_id, "false_positive": body.is_false}
+
+
+@app.get("/api/plates")
+def api_plates(limit: int = 50, offset: int = 0, camera: str | None = None,
+               plaque: str | None = None, since_hours: int | None = None):
+    """Registre des passages de vehicules.
+
+    Distinct des alertes : un passage n'est pas un manquement, c'est un fait
+    qu'on garde pour pouvoir y revenir.
+    """
+    lignes = read_plates(limit=limit, offset=offset, camera=camera,
+                         plaque=plaque, since_hours=since_hours)
+    items = [x for x in lignes if "plaque" in x]
+    total = lignes[0]["_total"] if lignes else 0
+    for x in items:
+        x.pop("_total", None)
+    return {"items": items, "total": total, "limit": limit, "offset": offset}
+
+
+@app.delete("/api/plates")
+def api_supprimer_plates(camera: str | None = None, plaque: str | None = None,
+                         since_hours: int | None = None):
+    n = delete_plates(camera=camera, plaque=plaque, since_hours=since_hours)
+    return {"ok": True, "supprimes": n}
 
 
 @app.delete("/api/alerts")

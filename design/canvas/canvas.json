@@ -1,0 +1,40 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html", "title": "Direct — mur d'images", "x": 0, "y": 0, "w": 1440, "h": 900 },
+    { "file": "MurSeul.dc.html", "title": "Mode mur — caméras seules", "x": 1560, "y": 0, "w": 1440, "h": 900 },
+    { "file": "Historique.dc.html", "title": "Historique", "x": 0, "y": 1060, "w": 1440, "h": 900 },
+    { "file": "Analyse.dc.html", "title": "Analyse", "x": 1560, "y": 1060, "w": 1440, "h": 900 },
+    { "file": "Parametres.dc.html", "title": "Paramètres", "x": 780, "y": 2120, "w": 1440, "h": 900 }
+  ],
+  "annotations": [
+    {
+      "id": "note-direction",
+      "x": 0,
+      "y": -210,
+      "w": 620,
+      "text": "Ciment's Eye — exécution haut de gamme\n\nMêmes tokens que dashboard.css (noir #0a0a0b, or #d4a942, traits 1 px, angles droits).\nCe qui change : Sora + IBM Plex Mono, dégradés sur les bandeaux de vignette,\nfilet clair sur l'arête haute des surfaces, halos sur les pastilles d'état."
+    },
+    {
+      "id": "note-mode-mur",
+      "x": 1560,
+      "y": -210,
+      "w": 620,
+      "text": "MODE MUR — les caméras seules\n\nPlus de rail, plus d'en-tête, plus de panneau d'alertes : l'image occupe\nl'écran entier. Le bandeau du haut se montre au mouvement de la souris\net s'efface après trois secondes. Le pied de chaque vignette n'apparaît\nqu'au survol de celle-ci.\n\nUne seule chose interrompt le mur : le bandeau rouge du bas, sur une\nalerte critique. Échap pour revenir."
+    },
+    {
+      "id": "note-mur",
+      "x": 0,
+      "y": 940,
+      "w": 460,
+      "text": "Le mur : les quatre états d'une caméra, côte à côte —\nalerte critique (pulsation), suivi avec trajectoire,\nplaque lue, caméra hors ligne (grisée, bordure rouge)."
+    },
+    {
+      "id": "note-plaque",
+      "x": 0,
+      "y": 2000,
+      "w": 460,
+      "text": "Un clip vaut mieux qu'une capture : le chevron sur la\nvignette annonce la vidéo. Une alerte déclarée fausse\nreste visible mais estompée — elle nourrit la fiabilité."
+    }
+  ],
+  "launch": { "view": "canvas" }
+}

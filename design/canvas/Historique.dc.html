@@ -1,0 +1,223 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+  <style>
+    :root {
+      --bg:#0a0a0b; --panel:#111113; --panel2:#17171a; --panel3:#1d1d21;
+      --line:#26262b; --line2:#33333a;
+      --text:#f3f0e9; --text2:#c9c4ba; --muted:#8e8981;
+      --or:#d4a942; --or-doux:rgba(212,169,66,.13); --or-trait:rgba(212,169,66,.38);
+      --crit:#e04b3f; --haute:#d9822b; --moy:#4d86c4; --tech:#7d7d85; --ok:#4f9d69;
+      --arete:inset 0 1px 0 rgba(255,255,255,.045);
+      --ui:'Sora',system-ui,sans-serif; --mono:'IBM Plex Mono',ui-monospace,monospace;
+    }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font-family:var(--ui);
+           font-size:15px; -webkit-font-smoothing:antialiased; letter-spacing:-.003em; }
+    a { color:var(--or); } a:hover { color:var(--text); }
+    .mono { font-family:var(--mono); font-variant-numeric:tabular-nums; }
+    .lab { font-size:11px; letter-spacing:.14em; color:var(--muted); font-weight:600; }
+    .th { text-align:left; padding:13px 18px; font-size:12px; letter-spacing:.085em;
+          font-weight:600; color:var(--muted); white-space:nowrap; }
+    .td { padding:13px 18px; border-top:1px solid #1e1e23; vertical-align:middle; font-size:14.5px; }
+    .sev { display:inline-flex; padding:4px 9px 4px 7px; border-left:3px solid currentColor;
+           font-size:12.5px; font-weight:700; letter-spacing:.04em; }
+    .btn { padding:6px 12px; border:1px solid var(--line2); color:var(--text2); font-size:13.5px; }
+  </style>
+</helmet>
+
+<div style="display:flex;width:1440px;height:900px;overflow:hidden">
+
+  <nav style="width:214px;flex:none;display:flex;flex-direction:column;background:var(--panel);border-right:1px solid var(--line);box-shadow:var(--arete)">
+    <div style="display:flex;align-items:center;gap:11px;padding:20px 18px 18px;border-bottom:1px solid var(--line)">
+      <svg width="30" height="30" viewBox="0 0 48 48" fill="none" stroke="#d4a942" stroke-width="2.2" style="flex:none">
+        <path d="M2 24C2 24 10 10 24 10s22 14 22 14-8 14-22 14S2 24 2 24z" stroke-linejoin="round"/>
+        <circle cx="24" cy="24" r="9.5"/><circle cx="24" cy="24" r="2.6" fill="#d4a942"/>
+      </svg>
+      <div>
+        <div style="font-size:14px;font-weight:700;letter-spacing:.14em">CIMENT'S EYE</div>
+        <div style="font-size:11px;letter-spacing:.09em;color:var(--muted);margin-top:3px">CIMENTS DU MAROC</div>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:3px;padding:14px 10px">
+      <div style="display:flex;align-items:center;gap:11px;padding:12px;font-size:15px;color:var(--text2);border-left:3px solid transparent">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>Direct
+      </div>
+      <div style="display:flex;align-items:center;gap:11px;padding:12px;font-size:15px;font-weight:600;color:var(--or);background:var(--or-doux);border-left:3px solid var(--or);box-shadow:var(--arete)">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+        Historique<span class="mono" style="margin-left:auto;font-size:13px;font-weight:600;color:var(--crit)">4</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:11px;padding:12px;font-size:15px;color:var(--text2);border-left:3px solid transparent">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>Analyse
+      </div>
+      <div style="display:flex;align-items:center;gap:11px;padding:12px;font-size:15px;color:var(--text2);border-left:3px solid transparent">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="3"/><path d="M20.5 13a1.6 1.6 0 00.3 1.8 2 2 0 11-2.8 2.8 1.6 1.6 0 00-2.8 1.1 2 2 0 11-4 0 1.6 1.6 0 00-2.8-1.1 2 2 0 11-2.8-2.8A1.6 1.6 0 003.5 13a2 2 0 110-4 1.6 1.6 0 001.1-2.8 2 2 0 112.8-2.8A1.6 1.6 0 0010.2 3.4a2 2 0 114 0 1.6 1.6 0 002.8 1.1 2 2 0 112.8 2.8A1.6 1.6 0 0020.5 11a2 2 0 110 4z"/></svg>Paramètres
+      </div>
+    </div>
+  </nav>
+
+  <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+
+    <header style="flex:none;height:64px;display:flex;align-items:center;gap:16px;padding:0 20px;background:var(--panel);border-bottom:1px solid var(--line);box-shadow:var(--arete)">
+      <h1 style="margin:0;font-size:20px;font-weight:620;letter-spacing:-.021em">Historique</h1>
+      <span style="font-size:14px;color:var(--muted)">retrouver un événement</span>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:14px">
+        <div class="mono" style="font-size:16.5px;font-weight:600;letter-spacing:.04em">03:24:07</div>
+        <div style="display:flex;align-items:center;justify-content:center;width:36px;height:36px;border:1px solid var(--line2);color:var(--muted)">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="4.6"/><path d="M12 1.6v2.6M12 19.8v2.6M4.2 4.2l1.9 1.9M17.9 17.9l1.9 1.9M1.6 12h2.6M19.8 12h2.6M4.2 19.8l1.9-1.9M17.9 6.1l1.9-1.9"/></svg>
+        </div>
+      </div>
+    </header>
+
+    <!-- Frise -->
+    <div style="flex:none;padding:16px 20px 18px;background:var(--panel);border-bottom:1px solid var(--line);box-shadow:var(--arete)">
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:12px">
+        <span class="lab">JOURNÉE</span>
+        <div style="padding:8px 12px;border:1px solid var(--line2);background:var(--panel2);font-size:14.5px">jeu. 31 août</div>
+        <div style="padding:8px 12px;border:1px solid var(--line2);background:var(--panel2);font-size:14.5px;color:var(--text2)">Toutes caméras</div>
+        <div style="margin-left:auto;display:flex;align-items:center;gap:16px;font-size:13.5px;color:var(--muted)">
+          <span style="display:inline-flex;align-items:center;gap:6px"><i style="width:12px;height:12px;background:var(--crit);display:inline-block"></i>critique</span>
+          <span style="display:inline-flex;align-items:center;gap:6px"><i style="width:12px;height:12px;background:var(--haute);display:inline-block"></i>haute</span>
+          <span style="display:inline-flex;align-items:center;gap:6px"><i style="width:12px;height:12px;background:var(--moy);display:inline-block"></i>moyenne</span>
+          <span style="display:inline-flex;align-items:center;gap:6px"><i style="width:12px;height:12px;background:var(--tech);display:inline-block"></i>technique</span>
+        </div>
+      </div>
+      <div style="position:relative;height:44px;background:var(--panel2);border:1px solid var(--line)">
+        <div style="position:absolute;left:6.2%;top:6px;width:3px;height:30px;background:var(--tech)"></div>
+        <div style="position:absolute;left:11%;top:6px;width:3px;height:30px;background:var(--moy)"></div>
+        <div style="position:absolute;left:24.5%;top:6px;width:3px;height:30px;background:var(--crit)"></div>
+        <div style="position:absolute;left:25.6%;top:6px;width:3px;height:30px;background:var(--crit);outline:2px solid var(--or);outline-offset:2px"></div>
+        <div style="position:absolute;left:27%;top:6px;width:3px;height:30px;background:var(--haute)"></div>
+        <div style="position:absolute;left:33%;top:6px;width:3px;height:30px;background:var(--haute)"></div>
+        <div style="position:absolute;left:41%;top:6px;width:3px;height:30px;background:var(--moy);opacity:.3"></div>
+        <div style="position:absolute;left:52%;top:6px;width:3px;height:30px;background:var(--haute)"></div>
+        <div style="position:absolute;left:58%;top:6px;width:3px;height:30px;background:var(--crit)"></div>
+        <div style="position:absolute;left:63%;top:6px;width:3px;height:30px;background:var(--moy)"></div>
+        <div style="position:absolute;left:71%;top:6px;width:3px;height:30px;background:var(--haute)"></div>
+        <div style="position:absolute;left:79%;top:6px;width:3px;height:30px;background:var(--tech)"></div>
+        <div style="position:absolute;left:88%;top:6px;width:3px;height:30px;background:var(--moy)"></div>
+      </div>
+      <div class="mono" style="position:relative;height:18px;margin-top:5px;font-size:12px;color:var(--muted)">
+        <span style="position:absolute;left:0">00h</span><span style="position:absolute;left:12.5%">03h</span>
+        <span style="position:absolute;left:25%">06h</span><span style="position:absolute;left:37.5%">09h</span>
+        <span style="position:absolute;left:50%">12h</span><span style="position:absolute;left:62.5%">15h</span>
+        <span style="position:absolute;left:75%">18h</span><span style="position:absolute;left:87.5%">21h</span>
+        <span style="position:absolute;right:0">24h</span>
+      </div>
+    </div>
+
+    <!-- Filtres -->
+    <div style="flex:none;display:flex;align-items:center;gap:14px;padding:12px 20px;background:var(--panel);border-bottom:1px solid var(--line);box-shadow:var(--arete)">
+      <span class="lab">FILTRES</span>
+      <span style="font-size:14.5px;color:var(--text2)">24 heures · toutes caméras · toutes gravités</span>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+        <div class="btn" style="padding:9px 15px;font-size:14.5px">Déplier</div>
+        <div class="btn" style="padding:9px 15px;font-size:14.5px">Export CSV</div>
+        <div class="btn" style="padding:9px 15px;font-size:14.5px">Rapport PDF</div>
+        <div style="padding:9px 15px;border:1px solid #3a2422;color:var(--crit);font-size:14.5px">Effacer (47)</div>
+      </div>
+    </div>
+
+    <!-- Tableau -->
+    <div style="flex:1;min-height:0;overflow:hidden">
+      <table style="width:100%;border-collapse:collapse">
+        <thead>
+          <tr style="background:var(--panel);box-shadow:inset 0 -1px 0 var(--line)">
+            <th class="th" style="width:118px">CAPTURE</th><th class="th">DÉTECTION</th>
+            <th class="th" style="width:210px">CAMÉRA</th><th class="th" style="width:130px">MODÈLE</th>
+            <th class="th" style="width:120px">GRAVITÉ</th><th class="th" style="width:80px">CONF.</th>
+            <th class="th" style="width:100px">HEURE</th><th class="th" style="width:250px">ACTIONS</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="background:rgba(212,169,66,.05)">
+            <td class="td"><div style="position:relative;width:92px;height:52px;background:#1c2027;border:1px solid var(--line)">
+              <svg width="92" height="52" viewBox="0 0 92 52"><rect width="92" height="52" fill="#20252c"/><path d="M0 40h92" stroke="#333a43"/><circle cx="46" cy="24" r="10" fill="#3a2422"/></svg>
+              <span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:17px;text-shadow:0 1px 6px rgba(0,0,0,.9)">▶</span>
+            </div></td>
+            <td class="td">fumée</td>
+            <td class="td">Four rotatif — sortie<br><span style="font-size:13px;color:var(--muted)">zone four</span></td>
+            <td class="td mono" style="font-size:13.5px;color:var(--text2)">fire_smoke</td>
+            <td class="td"><span class="sev" style="color:var(--crit);background:rgba(224,75,63,.16)">CRITIQUE</span></td>
+            <td class="td mono" style="color:var(--text2)">0,78</td>
+            <td class="td mono" style="color:var(--text2)">06:12:44</td>
+            <td class="td"><div style="display:flex;gap:8px">
+              <span class="btn">Prendre en charge</span><span class="btn" style="color:var(--crit);border-color:#3a2422">Fausse</span>
+            </div></td>
+          </tr>
+          <tr>
+            <td class="td"><div style="position:relative;width:92px;height:52px;background:#1c2027;border:1px solid var(--line)">
+              <svg width="92" height="52" viewBox="0 0 92 52"><rect width="92" height="52" fill="#1d2229"/><path d="M0 40h92" stroke="#333a43"/><rect x="38" y="16" width="14" height="24" fill="none" stroke="#64d2ff"/></svg>
+              <span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:17px;text-shadow:0 1px 6px rgba(0,0,0,.9)">▶</span>
+            </div></td>
+            <td class="td">down</td>
+            <td class="td">Atelier mécanique</td>
+            <td class="td mono" style="font-size:13.5px;color:var(--text2)">fall</td>
+            <td class="td"><span class="sev" style="color:var(--crit);background:rgba(224,75,63,.16)">CRITIQUE</span></td>
+            <td class="td mono" style="color:var(--text2)">0,84</td>
+            <td class="td mono" style="color:var(--text2)">06:08:19</td>
+            <td class="td"><div style="display:flex;gap:8px">
+              <span class="btn">Prendre en charge</span><span class="btn" style="color:var(--crit);border-color:#3a2422">Fausse</span>
+            </div></td>
+          </tr>
+          <tr>
+            <td class="td"><div style="position:relative;width:92px;height:52px;background:#1c2027;border:1px solid var(--line)">
+              <svg width="92" height="52" viewBox="0 0 92 52"><rect width="92" height="52" fill="#1f242b"/><path d="M0 40h92" stroke="#333a43"/><rect x="30" y="14" width="32" height="26" fill="#2a3038"/></svg>
+              <span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:17px;text-shadow:0 1px 6px rgba(0,0,0,.9)">▶</span>
+            </div></td>
+            <td class="td">NO-Hardhat <span style="margin-left:6px;padding:3px 9px;border:1px solid var(--haute);color:var(--haute);font-size:12.5px">ensachage</span></td>
+            <td class="td">Quai de chargement 1</td>
+            <td class="td mono" style="font-size:13.5px;color:var(--text2)">epi</td>
+            <td class="td"><span class="sev" style="color:var(--haute);background:rgba(217,130,43,.16)">HAUTE</span></td>
+            <td class="td mono" style="color:var(--text2)">0,71</td>
+            <td class="td mono" style="color:var(--text2)">05:57:02</td>
+            <td class="td"><div style="display:flex;gap:8px">
+              <span class="btn">Prendre en charge</span><span class="btn" style="color:var(--crit);border-color:#3a2422">Fausse</span>
+            </div></td>
+          </tr>
+          <tr>
+            <td class="td"><div style="position:relative;width:92px;height:52px;background:#1c2027;border:1px solid var(--line)">
+              <svg width="92" height="52" viewBox="0 0 92 52"><rect width="92" height="52" fill="#22272e"/><rect x="26" y="20" width="40" height="14" fill="#d4a942"/></svg>
+              <span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:17px;text-shadow:0 1px 6px rgba(0,0,0,.9)">▶</span>
+            </div></td>
+            <td class="td">camion non bâché <span style="margin-left:6px;padding:3px 9px;border:1px solid var(--or-trait);color:var(--or);font-family:'IBM Plex Mono',monospace;font-size:12.5px">12345-A-6</span></td>
+            <td class="td">Portail nord</td>
+            <td class="td mono" style="font-size:13.5px;color:var(--text2)">load_control</td>
+            <td class="td"><span class="sev" style="color:var(--haute);background:rgba(217,130,43,.16)">HAUTE</span></td>
+            <td class="td mono" style="color:var(--text2)">0,66</td>
+            <td class="td mono" style="color:var(--text2)">05:41:38</td>
+            <td class="td"><div style="display:flex;gap:8px">
+              <span style="font-size:13.5px;color:var(--muted)">traitée — chef_poste</span>
+            </div></td>
+          </tr>
+          <tr style="opacity:.45">
+            <td class="td"><div style="width:92px;height:52px;background:#1c2027;border:1px solid var(--line)"></div></td>
+            <td class="td">car <span style="margin-left:6px;padding:3px 9px;background:var(--panel3);color:var(--text2);font-size:12.5px">fausse</span></td>
+            <td class="td">Parking visiteurs</td>
+            <td class="td mono" style="font-size:13.5px;color:var(--text2)">vehicles</td>
+            <td class="td"><span class="sev" style="color:var(--moy);background:rgba(77,134,196,.16)">MOYENNE</span></td>
+            <td class="td mono" style="color:var(--text2)">0,61</td>
+            <td class="td mono" style="color:var(--text2)">04:22:10</td>
+            <td class="td"><span class="btn">Vraie</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div style="flex:none;display:flex;align-items:center;justify-content:center;gap:18px;padding:16px;border-top:1px solid var(--line);font-size:14px;color:var(--muted)">
+      <span class="btn">Précédent</span>
+      <span>Page 1 / 2 — 47 alerte(s)</span>
+      <span class="btn">Suivant</span>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

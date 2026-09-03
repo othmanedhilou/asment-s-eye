@@ -1,0 +1,217 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+  <style>
+    :root {
+      --or:#d4a942; --crit:#e04b3f; --ok:#4f9d69; --haute:#d9822b;
+      --ui:'Sora',system-ui,sans-serif; --mono:'IBM Plex Mono',ui-monospace,monospace;
+    }
+    * { box-sizing:border-box; }
+    body { margin:0; background:#000; color:#f3f0e9; font-family:var(--ui);
+           font-size:15px; -webkit-font-smoothing:antialiased; letter-spacing:-.003em; }
+    a { color:var(--or); } a:hover { color:#f3f0e9; }
+    .mono { font-family:var(--mono); font-variant-numeric:tabular-nums; }
+    /* Le pied de vignette ne s'affiche qu'au survol : un mur regarde des
+       images, pas des libelles. */
+    .tuile .pied { opacity:0; transition:opacity 140ms cubic-bezier(.32,.72,0,1); }
+    .tuile:hover .pied { opacity:1; }
+    .tuile:hover { outline:1px solid rgba(212,169,66,.38); outline-offset:-1px; }
+  </style>
+</helmet>
+
+<div style="position:relative;width:1440px;height:900px;background:#000;overflow:hidden">
+
+  <!-- ══ Le mur, bord à bord ══ -->
+  <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-template-rows:repeat(3,minmax(0,1fr));gap:2px;width:100%;height:100%;background:#141518">
+
+    <!-- 1 · alerte critique -->
+    <div class="tuile" style="position:relative;background:#0d0e10;box-shadow:inset 0 0 0 3px var(--crit);overflow:hidden">
+      <div style="position:absolute;inset:0;background:linear-gradient(150deg,#1c1f24,#0e1013 55%,#15181d)"></div>
+      <svg style="position:absolute;left:50%;top:46%;transform:translate(-50%,-50%)" width="200" height="128" viewBox="0 0 200 128" fill="none">
+        <rect x="10" y="40" width="84" height="64" fill="#242a31"/><rect x="94" y="24" width="40" height="80" fill="#2c333b"/>
+        <rect x="134" y="56" width="56" height="48" fill="#20262c"/><path d="M0 104h200" stroke="#343b44" stroke-width="2"/>
+        <path d="M112 24c6-12 2-18-2-22 10 4 18 14 14 26" fill="none" stroke="#e0918a" stroke-width="2"/>
+        <rect x="62" y="58" width="26" height="46" fill="none" stroke="#e04b3f" stroke-width="2"/>
+      </svg>
+      <div style="position:absolute;left:14px;top:14px;display:inline-flex;align-items:center;padding:5px 10px 5px 8px;border-left:3px solid var(--crit);background:rgba(224,75,63,.24);color:#ff9f97;font-size:12.5px;font-weight:700;letter-spacing:.05em">CRITIQUE · FUMÉE</div>
+      <div class="pied" style="position:absolute;left:0;right:0;bottom:0;display:flex;align-items:center;gap:9px;padding:26px 14px 11px;background:linear-gradient(0deg,rgba(6,7,9,.94),rgba(6,7,9,.7) 55%,rgba(6,7,9,0))">
+        <span style="width:9px;height:9px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 3px rgba(79,157,105,.18);flex:none"></span>
+        <span style="font-size:14px">Four rotatif — sortie</span>
+        <span class="mono" style="margin-left:auto;font-size:13px;color:#a9b0b8">486 ms</span>
+      </div>
+    </div>
+
+    <!-- 2 · suivi -->
+    <div class="tuile" style="position:relative;background:#0d0e10;overflow:hidden">
+      <div style="position:absolute;inset:0;background:linear-gradient(150deg,#191d22,#0d0f12 60%,#131619)"></div>
+      <svg style="position:absolute;left:50%;top:46%;transform:translate(-50%,-50%)" width="220" height="130" viewBox="0 0 220 130" fill="none">
+        <path d="M0 98h220" stroke="#333a43" stroke-width="2"/><rect x="146" y="26" width="60" height="72" fill="#232930"/>
+        <path d="M28 110 L74 88 L124 76" stroke="#64d2ff" stroke-width="2" stroke-linecap="round"/>
+        <circle cx="124" cy="76" r="3.6" fill="#64d2ff"/>
+        <rect x="112" y="40" width="26" height="54" fill="none" stroke="#64d2ff" stroke-width="2"/>
+        <rect x="112" y="28" width="72" height="12" fill="#64d2ff"/>
+        <text x="116" y="37" font-family="IBM Plex Mono" font-size="8.5" fill="#0b0d10">#7 Person 0.91</text>
+      </svg>
+      <div class="pied" style="position:absolute;left:0;right:0;bottom:0;display:flex;align-items:center;gap:9px;padding:26px 14px 11px;background:linear-gradient(0deg,rgba(6,7,9,.94),rgba(6,7,9,.7) 55%,rgba(6,7,9,0))">
+        <span style="width:9px;height:9px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 3px rgba(79,157,105,.18);flex:none"></span>
+        <span style="font-size:14px">Quai de chargement 1</span>
+        <span class="mono" style="margin-left:auto;font-size:13px;color:#a9b0b8">512 ms</span>
+      </div>
+    </div>
+
+    <!-- 3 · plaque -->
+    <div class="tuile" style="position:relative;background:#0d0e10;overflow:hidden">
+      <div style="position:absolute;inset:0;background:linear-gradient(150deg,#1a1e23,#0d0f12 60%,#121519)"></div>
+      <svg style="position:absolute;left:50%;top:46%;transform:translate(-50%,-50%)" width="220" height="124" viewBox="0 0 220 124" fill="none">
+        <path d="M0 94h220" stroke="#333a43" stroke-width="2"/>
+        <rect x="52" y="32" width="118" height="62" rx="5" fill="#262d35"/><rect x="70" y="18" width="82" height="18" rx="4" fill="#2f3740"/>
+        <rect x="80" y="66" width="62" height="14" fill="#d4a942"/>
+        <text x="84" y="76.5" font-family="IBM Plex Mono" font-size="9" fill="#14100a">12345-A-6</text>
+      </svg>
+      <div class="pied" style="position:absolute;left:0;right:0;bottom:0;display:flex;align-items:center;gap:9px;padding:26px 14px 11px;background:linear-gradient(0deg,rgba(6,7,9,.94),rgba(6,7,9,.7) 55%,rgba(6,7,9,0))">
+        <span style="width:9px;height:9px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 3px rgba(79,157,105,.18);flex:none"></span>
+        <span style="font-size:14px">Portail nord</span>
+        <span style="margin-left:auto;padding:3px 9px;border:1px solid rgba(212,169,66,.38);color:var(--or);font-family:'IBM Plex Mono',monospace;font-size:12.5px">12345-A-6</span>
+      </div>
+    </div>
+
+    <!-- 4 -->
+    <div class="tuile" style="position:relative;background:#0d0e10;overflow:hidden">
+      <div style="position:absolute;inset:0;background:linear-gradient(160deg,#181c21,#0c0e11 60%,#111417)"></div>
+      <svg style="position:absolute;left:50%;top:46%;transform:translate(-50%,-50%)" width="220" height="120" viewBox="0 0 220 120" fill="none">
+        <path d="M0 92h220" stroke="#333a43" stroke-width="2"/>
+        <path d="M14 92 L14 34 L206 20 L206 92" fill="#1f242a"/>
+        <rect x="30" y="52" width="176" height="14" fill="#2b323a" transform="rotate(-3 30 52)"/>
+        <circle cx="46" cy="72" r="9" fill="#252b32"/><circle cx="184" cy="66" r="9" fill="#252b32"/>
+      </svg>
+      <div class="pied" style="position:absolute;left:0;right:0;bottom:0;display:flex;align-items:center;gap:9px;padding:26px 14px 11px;background:linear-gradient(0deg,rgba(6,7,9,.94),rgba(6,7,9,.7) 55%,rgba(6,7,9,0))">
+        <span style="width:9px;height:9px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 3px rgba(79,157,105,.18);flex:none"></span>
+        <span style="font-size:14px">Convoyeur B3</span>
+        <span class="mono" style="margin-left:auto;font-size:13px;color:#a9b0b8">398 ms</span>
+      </div>
+    </div>
+
+    <!-- 5 -->
+    <div class="tuile" style="position:relative;background:#0d0e10;overflow:hidden">
+      <div style="position:absolute;inset:0;background:linear-gradient(140deg,#1b2026,#0d0f12 62%,#141719)"></div>
+      <svg style="position:absolute;left:50%;top:46%;transform:translate(-50%,-50%)" width="220" height="124" viewBox="0 0 220 124" fill="none">
+        <path d="M0 96h220" stroke="#333a43" stroke-width="2"/>
+        <rect x="24" y="24" width="70" height="72" fill="#222831"/><rect x="126" y="44" width="70" height="52" fill="#1e242b"/>
+        <rect x="102" y="56" width="20" height="40" fill="none" stroke="#7fe0a8" stroke-width="2"/>
+        <rect x="102" y="46" width="52" height="10" fill="#7fe0a8"/>
+        <text x="105" y="54" font-family="IBM Plex Mono" font-size="7.5" fill="#0b0d10">#3 up 0.88</text>
+      </svg>
+      <div class="pied" style="position:absolute;left:0;right:0;bottom:0;display:flex;align-items:center;gap:9px;padding:26px 14px 11px;background:linear-gradient(0deg,rgba(6,7,9,.94),rgba(6,7,9,.7) 55%,rgba(6,7,9,0))">
+        <span style="width:9px;height:9px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 3px rgba(79,157,105,.18);flex:none"></span>
+        <span style="font-size:14px">Atelier mécanique</span>
+        <span class="mono" style="margin-left:auto;font-size:13px;color:#a9b0b8">441 ms</span>
+      </div>
+    </div>
+
+    <!-- 6 · hors ligne -->
+    <div class="tuile" style="position:relative;background:#0d0e10;box-shadow:inset 0 0 0 2px var(--crit);overflow:hidden">
+      <div style="position:absolute;inset:0;background:linear-gradient(150deg,#141619,#0b0c0e);filter:grayscale(1);opacity:.45"></div>
+      <div style="position:absolute;left:50%;top:44%;transform:translate(-50%,-50%);text-align:center">
+        <svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="#e04b3f" stroke-width="1.5" style="opacity:.75"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/><path d="M2 2l20 20" stroke-width="1.8"/></svg>
+        <div style="margin-top:12px;font-size:13px;color:#e0918a">ne répond plus depuis 4 min</div>
+      </div>
+      <div class="pied" style="position:absolute;left:0;right:0;bottom:0;display:flex;align-items:center;gap:9px;padding:26px 14px 11px;background:linear-gradient(0deg,rgba(6,7,9,.94),rgba(6,7,9,.7) 55%,rgba(6,7,9,0))">
+        <span style="width:9px;height:9px;border-radius:50%;background:var(--crit);box-shadow:0 0 0 3px rgba(224,75,63,.2);flex:none"></span>
+        <span style="font-size:14px;color:var(--crit)">Concasseur primaire</span>
+      </div>
+    </div>
+
+    <!-- 7 -->
+    <div class="tuile" style="position:relative;background:#0d0e10;overflow:hidden">
+      <div style="position:absolute;inset:0;background:linear-gradient(155deg,#171b20,#0c0e10 60%,#12151a)"></div>
+      <svg style="position:absolute;left:50%;top:46%;transform:translate(-50%,-50%)" width="220" height="120" viewBox="0 0 220 120" fill="none">
+        <path d="M0 92h220" stroke="#333a43" stroke-width="2"/>
+        <path d="M40 92 V30 h44 v62" fill="#212730"/><path d="M120 92 V44 h60 v48" fill="#1d232a"/>
+        <circle cx="62" cy="24" r="7" fill="#2a323b"/>
+      </svg>
+      <div class="pied" style="position:absolute;left:0;right:0;bottom:0;display:flex;align-items:center;gap:9px;padding:26px 14px 11px;background:linear-gradient(0deg,rgba(6,7,9,.94),rgba(6,7,9,.7) 55%,rgba(6,7,9,0))">
+        <span style="width:9px;height:9px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 3px rgba(79,157,105,.18);flex:none"></span>
+        <span style="font-size:14px">Silo 2 — pied</span>
+        <span class="mono" style="margin-left:auto;font-size:13px;color:#a9b0b8">376 ms</span>
+      </div>
+    </div>
+
+    <!-- 8 · en pause -->
+    <div class="tuile" style="position:relative;background:#0d0e10;overflow:hidden">
+      <div style="position:absolute;inset:0;background:linear-gradient(150deg,#16191d,#0c0e10);opacity:.6"></div>
+      <div style="position:absolute;left:50%;top:44%;transform:translate(-50%,-50%);text-align:center">
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#d9822b" stroke-width="1.8" stroke-linecap="round" style="opacity:.8"><path d="M9 4v16M15 4v16"/></svg>
+        <div style="margin-top:12px;font-size:13px;color:#c99a63">en pause</div>
+      </div>
+      <div class="pied" style="position:absolute;left:0;right:0;bottom:0;display:flex;align-items:center;gap:9px;padding:26px 14px 11px;background:linear-gradient(0deg,rgba(6,7,9,.94),rgba(6,7,9,.7) 55%,rgba(6,7,9,0))">
+        <span style="width:9px;height:9px;border-radius:50%;background:var(--haute);box-shadow:0 0 0 3px rgba(217,130,43,.2);flex:none"></span>
+        <span style="font-size:14px;color:#c99a63">Parking visiteurs</span>
+      </div>
+    </div>
+
+    <!-- 9 -->
+    <div class="tuile" style="position:relative;background:#0d0e10;overflow:hidden">
+      <div style="position:absolute;inset:0;background:linear-gradient(145deg,#1a1f25,#0c0e11 60%,#12161a)"></div>
+      <svg style="position:absolute;left:50%;top:46%;transform:translate(-50%,-50%)" width="220" height="120" viewBox="0 0 220 120" fill="none">
+        <path d="M0 90h220" stroke="#333a43" stroke-width="2"/>
+        <rect x="18" y="36" width="184" height="54" rx="4" fill="#1f252c"/>
+        <rect x="34" y="48" width="46" height="30" fill="#2a313a"/><rect x="92" y="48" width="46" height="30" fill="#2a313a"/><rect x="150" y="48" width="36" height="30" fill="#2a313a"/>
+      </svg>
+      <div class="pied" style="position:absolute;left:0;right:0;bottom:0;display:flex;align-items:center;gap:9px;padding:26px 14px 11px;background:linear-gradient(0deg,rgba(6,7,9,.94),rgba(6,7,9,.7) 55%,rgba(6,7,9,0))">
+        <span style="width:9px;height:9px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 3px rgba(79,157,105,.18);flex:none"></span>
+        <span style="font-size:14px">Ensachage — ligne 2</span>
+        <span class="mono" style="margin-left:auto;font-size:13px;color:#a9b0b8">505 ms</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ Bandeau flottant : apparaît au mouvement de la souris, disparaît après trois secondes ══ -->
+  <div style="position:absolute;left:0;right:0;top:0;display:flex;align-items:center;gap:16px;padding:14px 20px;background:linear-gradient(180deg,rgba(6,7,9,.9),rgba(6,7,9,.55) 65%,rgba(6,7,9,0))">
+    <svg width="24" height="24" viewBox="0 0 48 48" fill="none" stroke="#d4a942" stroke-width="2.4" style="flex:none">
+      <path d="M2 24C2 24 10 10 24 10s22 14 22 14-8 14-22 14S2 24 2 24z" stroke-linejoin="round"/>
+      <circle cx="24" cy="24" r="9.5"/><circle cx="24" cy="24" r="2.6" fill="#d4a942"/>
+    </svg>
+    <span style="font-size:13px;font-weight:700;letter-spacing:.14em;color:#d4a942">MODE MUR</span>
+    <div style="display:flex;align-items:center;gap:8px;padding:7px 11px;border:1px solid rgba(255,255,255,.16);background:rgba(6,7,9,.5);font-size:13.5px;color:#c9c4ba">
+      <span style="width:8px;height:8px;border-radius:50%;background:var(--ok)"></span>12 caméras · 11 en ligne
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;padding:7px 11px;border:1px solid var(--crit);color:var(--crit);font-size:13.5px;font-weight:600;background:rgba(224,75,63,.12)">
+      <span style="width:8px;height:8px;background:var(--crit)"></span>2 critiques
+    </div>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:12px">
+      <div style="display:flex;gap:4px">
+        <span style="padding:5px 11px;border:1px solid rgba(255,255,255,.16);color:#c9c4ba;font-size:13.5px;background:rgba(6,7,9,.5)">2×2</span>
+        <span style="padding:5px 11px;border:1px solid var(--or);background:rgba(212,169,66,.18);color:var(--or);font-size:13.5px;font-weight:600">3×3</span>
+        <span style="padding:5px 11px;border:1px solid rgba(255,255,255,.16);color:#c9c4ba;font-size:13.5px;background:rgba(6,7,9,.5)">4×4</span>
+      </div>
+      <div class="mono" style="font-size:16px;font-weight:600;letter-spacing:.04em">03:26:02</div>
+      <span style="display:flex;align-items:center;gap:8px;padding:7px 13px;border:1px solid rgba(255,255,255,.16);background:rgba(6,7,9,.5);color:#c9c4ba;font-size:13.5px">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        Quitter — Échap
+      </span>
+    </div>
+  </div>
+
+  <!-- Bandeau d'alerte critique, glissé en bas : la seule chose qui interrompt le mur -->
+  <div style="position:absolute;left:0;right:0;bottom:0;display:flex;align-items:center;gap:14px;padding:13px 20px;background:linear-gradient(0deg,rgba(224,75,63,.22),rgba(6,7,9,.86) 60%,rgba(6,7,9,0));border-top:1px solid rgba(224,75,63,.5)">
+    <span style="display:inline-flex;padding:4px 10px 4px 8px;border-left:3px solid var(--crit);background:rgba(224,75,63,.24);color:#ff9f97;font-size:12.5px;font-weight:700;letter-spacing:.05em">CRITIQUE</span>
+    <span style="font-size:15px;font-weight:600">Fumée détectée</span>
+    <span style="font-size:14px;color:#c9c4ba">Four rotatif — sortie</span>
+    <span class="mono" style="font-size:13.5px;color:#8e8981">06:12:44</span>
+    <span style="margin-left:auto;display:flex;gap:8px">
+      <span style="padding:7px 13px;border:1px solid rgba(255,255,255,.16);background:rgba(6,7,9,.5);color:#c9c4ba;font-size:13.5px">Voir le clip</span>
+      <span style="padding:7px 13px;border:1px solid var(--or);background:linear-gradient(180deg,rgba(255,255,255,.14),rgba(0,0,0,.06)),var(--or);color:#14100a;font-size:13.5px;font-weight:600">Prendre en charge</span>
+    </span>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

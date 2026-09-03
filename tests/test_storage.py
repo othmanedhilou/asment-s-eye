@@ -213,3 +213,45 @@ def test_un_chemin_hors_du_dossier_clips_n_est_jamais_efface(tmp_path):
     assert _effacer_media(str(etranger)) is False
     assert etranger.exists()
     assert _effacer_media(None) is False
+
+
+# ── Registre des passages ────────────────────────────────────────────
+
+
+def test_un_passage_est_conserve():
+    """Zéro plaque en base sur vingt-huit alertes : le modèle `plate` n'est pas
+    dans ALERT_LABELS — et ne doit pas y être, un véhicule qui passe n'est pas
+    une infraction. La plaque s'affichait donc et disparaissait."""
+    from app.storage import count_plates, log_plate, read_plates
+
+    identifiant = log_plate("12345A6", "portail", confidence=0.88, lectures=3)
+    assert identifiant is not None
+    lignes = [x for x in read_plates(limit=10) if "plaque" in x]
+    assert any(x["plaque"] == "12345A6" and x["camera"] == "portail" for x in lignes)
+    assert count_plates() >= 1
+
+
+def test_le_meme_camion_ne_compte_qu_un_passage():
+    """Un camion reste visible plusieurs dizaines de secondes, et le suiveur
+    peut perdre puis reprendre sa piste. Deux lectures rapprochées de la même
+    plaque sur la même caméra sont le MÊME passage."""
+    from app.storage import log_plate
+
+    assert log_plate("77777B7", "quai", confidence=0.70) is not None
+    assert log_plate("77777B7", "quai", confidence=0.91) is None
+
+
+def test_la_meilleure_lecture_du_passage_est_retenue():
+    from app.storage import log_plate, read_plates
+
+    log_plate("88888C8", "quai", confidence=0.60)
+    log_plate("88888C8", "quai", confidence=0.93)
+    ligne = next(x for x in read_plates(limit=50) if x.get("plaque") == "88888C8")
+    assert ligne["confidence"] == 0.93
+
+
+def test_deux_cameras_font_deux_passages():
+    from app.storage import log_plate
+
+    assert log_plate("99999D9", "portail") is not None
+    assert log_plate("99999D9", "quai") is not None

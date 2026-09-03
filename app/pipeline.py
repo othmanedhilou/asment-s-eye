@@ -103,6 +103,42 @@ def _draw_detection(frame, detection: Detection):
                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, (20, 20, 20), 1, cv2.LINE_AA)
 
 
+def _consigner_passage(camera_name: str, lue: dict, frame, bbox) -> None:
+    """Enregistre un passage de vehicule, avec la capture du moment.
+
+    La plaque s'affichait a l'ecran et disparaissait : rien n'en gardait trace.
+    Or c'est precisement ce qu'une cimenterie veut conserver — quel camion est
+    sorti, a quelle heure, par quel portail.
+    """
+    try:
+        from app.storage import log_plate
+
+        chemin = None
+        try:
+            dossier = Path(__file__).resolve().parent.parent / "clips" / "snapshots"
+            dossier.mkdir(parents=True, exist_ok=True)
+            horodatage = datetime.now().strftime("%Y%m%d_%H%M%S")
+            nom = f"{camera_name}_passage_{lue['texte']}_{horodatage}.jpg"
+            x1, y1, x2, y2 = [int(v) for v in bbox]
+            marge = 40
+            h, w = frame.shape[:2]
+            crop = frame[max(y1 - marge, 0):min(y2 + marge, h),
+                         max(x1 - marge, 0):min(x2 + marge, w)]
+            if crop.size and cv2.imwrite(str(dossier / nom), crop):
+                chemin = str(dossier / nom)
+        except Exception as e:
+            log.debug(f"[{camera_name}] capture de passage impossible : {e}")
+
+        identifiant = log_plate(
+            plaque=lue["texte"], camera=camera_name,
+            confidence=float(lue.get("score") or 0),
+            lectures=int(lue.get("lectures") or 0), snapshot=chemin)
+        if identifiant is not None:
+            log.info(f"[{camera_name}] passage consigne : {lue['texte']}")
+    except Exception as e:
+        log.error(f"[{camera_name}] passage non consigne : {e}")
+
+
 def _draw_traces(frame, tracker):
     """Trace le chemin parcouru par chaque objet suivi."""
     for track_id, points in tracker.traces():
@@ -329,6 +365,7 @@ def run_camera(camera_name: str, cam_cfg: dict, config: dict, registry: ModelReg
 
     offline_since = None
     incident_signale = False
+    passages_consignes: set = set()
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         while stop_event is None or not stop_event.is_set():
@@ -410,6 +447,14 @@ def run_camera(camera_name: str, cam_cfg: dict, config: dict, registry: ModelReg
                                     lue = lecteur_plaques.plaque(camera_name, d.track_id)
                                     if lue and lue.get("texte"):
                                         d.plaque = lue["texte"]
+                                        # Un passage se consigne UNE fois par
+                                        # piste : sans cette memoire, chaque
+                                        # image du meme camion en creerait un.
+                                        cle = (camera_name, d.track_id)
+                                        if cle not in passages_consignes:
+                                            passages_consignes.add(cle)
+                                            _consigner_passage(
+                                                camera_name, lue, frame, d.bbox)
 
                             for detection in detections:
                                 matched = zone_filter.match(detection.model, detection.bbox, w, h)

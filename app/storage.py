@@ -81,6 +81,112 @@ class AlertRecord(Base):
 _engine = None
 
 
+class PlateRecord(Base):
+    """Un passage de vehicule : une plaque lue, une camera, un instant.
+
+    Distinct des alertes a dessein. Un passage n'est pas un manquement : c'est
+    un fait, qu'on garde pour pouvoir y revenir. Melanger les deux remplirait
+    l'ecran des alertes de lignes qui n'appellent aucune action.
+    """
+
+    __tablename__ = "plates"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    plaque: Mapped[str] = mapped_column(String(20), index=True)
+    camera: Mapped[str] = mapped_column(String(100), index=True)
+    timestamp: Mapped[datetime] = mapped_column(DateTime, index=True)
+    confidence: Mapped[float] = mapped_column(Float, default=0.0)
+    lectures: Mapped[int] = mapped_column(Integer, default=0)
+    snapshot: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    sens: Mapped[str | None] = mapped_column(String(20), nullable=True)
+
+
+# Deux lectures de la meme plaque sur la meme camera a moins de cette distance
+# sont le MEME passage : un camion reste visible plusieurs dizaines de secondes,
+# et le suiveur peut perdre puis reprendre sa piste.
+FENETRE_PASSAGE_S = 120
+
+
+def log_plate(plaque: str, camera: str, confidence: float = 0.0,
+              lectures: int = 0, snapshot: str | None = None,
+              sens: str | None = None) -> int | None:
+    """Enregistre un passage. Renvoie None si c'est le meme que le precedent."""
+    engine = _get_engine()
+    maintenant = datetime.now()
+    with Session(engine) as session:
+        recent = session.scalars(
+            select(PlateRecord)
+            .where(PlateRecord.plaque == plaque, PlateRecord.camera == camera,
+                   PlateRecord.timestamp >= maintenant - timedelta(seconds=FENETRE_PASSAGE_S))
+            .order_by(PlateRecord.timestamp.desc()).limit(1)
+        ).first()
+        if recent is not None:
+            # On garde la meilleure lecture du passage plutot que la premiere.
+            if confidence > (recent.confidence or 0):
+                recent.confidence = confidence
+                recent.lectures = lectures
+                if snapshot:
+                    recent.snapshot = snapshot
+                session.commit()
+            return None
+
+        r = PlateRecord(plaque=plaque, camera=camera, timestamp=maintenant,
+                        confidence=confidence, lectures=lectures,
+                        snapshot=snapshot, sens=sens)
+        session.add(r)
+        session.commit()
+        return r.id
+
+
+def read_plates(limit: int = 100, offset: int = 0, camera: str | None = None,
+                plaque: str | None = None, since_hours: int | None = None) -> list[dict]:
+    engine = _get_engine()
+    with Session(engine) as session:
+        stmt = select(PlateRecord)
+        if camera:
+            stmt = stmt.where(PlateRecord.camera == camera)
+        if plaque:
+            stmt = stmt.where(PlateRecord.plaque.like(f"%{plaque.upper()}%"))
+        if since_hours:
+            stmt = stmt.where(PlateRecord.timestamp >= datetime.now() - timedelta(hours=since_hours))
+        total = session.scalar(
+            select(func.count()).select_from(stmt.subquery())) or 0
+        lignes = session.scalars(
+            stmt.order_by(PlateRecord.timestamp.desc()).offset(offset).limit(limit)).all()
+        return [{
+            "id": r.id, "plaque": r.plaque, "camera": r.camera,
+            "timestamp": r.timestamp.isoformat(), "confidence": round(r.confidence or 0, 2),
+            "lectures": r.lectures, "snapshot": r.snapshot, "sens": r.sens,
+            "_total": total,
+        } for r in lignes] or ([{"_total": total}] if total else [])
+
+
+def count_plates(**filtres) -> int:
+    lignes = read_plates(limit=1, **filtres)
+    return lignes[0]["_total"] if lignes else 0
+
+
+def delete_plates(**filtres) -> int:
+    """Efface des passages. Les captures partent avec, comme pour les alertes."""
+    engine = _get_engine()
+    with Session(engine) as session:
+        stmt = select(PlateRecord)
+        if filtres.get("camera"):
+            stmt = stmt.where(PlateRecord.camera == filtres["camera"])
+        if filtres.get("plaque"):
+            stmt = stmt.where(PlateRecord.plaque.like(f"%{filtres['plaque'].upper()}%"))
+        if filtres.get("since_hours"):
+            stmt = stmt.where(PlateRecord.timestamp
+                              >= datetime.now() - timedelta(hours=filtres["since_hours"]))
+        n = 0
+        for r in session.scalars(stmt).all():
+            _effacer_media(r.snapshot)
+            session.delete(r)
+            n += 1
+        session.commit()
+        return n
+
+
 def _migrate(engine):
     """Ajoute les colonnes manquantes sur une base créée avant cette version."""
     with engine.connect() as conn:
