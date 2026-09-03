@@ -47,6 +47,7 @@
   <symbol id="i-pause" viewBox="0 0 24 24"><path d="M9 4v16M15 4v16"/></symbol>
   <symbol id="i-son" viewBox="0 0 24 24"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 010 7M19 5a9 9 0 010 14"/></symbol>
   <symbol id="i-pouls" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></symbol>
+  <symbol id="i-frise" viewBox="0 0 24 24"><path d="M2 19h20M5 5v10M9 9v6M13 3v12M17 11v4M21 7v8"/></symbol>
 </svg>
 
 <div class="app" id="app">
@@ -130,38 +131,25 @@
 
       <!-- ══ Historique ══ -->
       <section class="page" id="vue-historique">
-        <div class="frise-zone">
-          <div class="frise-tete">
-            <span class="filtres-titre">JOURNÉE</span>
-            <select id="frise-jour"></select>
-            <select id="frise-camera"><option value="">Toutes caméras</option></select>
-            <div class="frise-legende">
-              <span><i style="background:var(--crit)"></i>critique</span>
-              <span><i style="background:var(--haute)"></i>haute</span>
-              <span><i style="background:var(--moy)"></i>moyenne</span>
-              <span><i style="background:var(--tech)"></i>technique</span>
-            </div>
-          </div>
-          <div class="frise" id="frise"></div>
-          <div class="frise-heures" id="frise-heures"></div>
-          <p class="msg" id="frise-detail"></p>
-        </div>
-
+        <!-- Une seule rangée : registres, résumé des filtres, actions. -->
         <div class="filtres">
-          <div class="filtres-tete" style="padding-bottom:0;border-bottom:none">
+          <div class="filtres-tete">
             <span class="groupe" id="registre">
               <button class="bouton actif" data-registre="alertes">Alertes</button>
-              <button class="bouton" data-registre="passages">Passages de véhicules</button>
+              <button class="bouton" data-registre="passages">Passages</button>
             </span>
-          </div>
-          <div class="filtres-tete">
-            <span class="filtres-titre">FILTRES</span>
             <span class="filtres-resume" id="filtres-resume">24 heures · toutes caméras · toutes gravités</span>
             <span class="filtres-actions">
-              <button class="bouton" id="btn-filtres">Déplier</button>
-              <a class="bouton" href="/api/export/csv">Export CSV</a>
-              <a class="bouton" href="/api/export/pdf?days=7">PDF 7 j</a>
-            <a class="bouton" href="/api/export/pdf?days=30">PDF 30 j</a>
+              <button class="bouton icone" id="btn-frise" title="Afficher la frise de la journée"><svg class="ico"><use href="#i-frise"/></svg></button>
+              <button class="bouton" id="btn-filtres">Filtres</button>
+              <span class="menu">
+                <button class="bouton" id="btn-export">Exporter</button>
+                <span class="menu-liste" id="export-liste" hidden>
+                  <a href="/api/export/csv">Historique en CSV</a>
+                  <a href="/api/export/pdf?days=7">Rapport PDF — 7 jours</a>
+                  <a href="/api/export/pdf?days=30">Rapport PDF — 30 jours</a>
+                </span>
+              </span>
               <button class="bouton danger" id="btn-effacer">Effacer</button>
             </span>
           </div>
@@ -202,6 +190,22 @@
             <input type="search" id="f-classe" placeholder="Classe…" />
             <input type="search" id="f-plaque" placeholder="Plaque…" />
           </div>
+        </div>
+
+        <div class="frise-zone" id="frise-zone" hidden>
+          <div class="frise-tete">
+            <select id="frise-jour"></select>
+            <select id="frise-camera"><option value="">Toutes caméras</option></select>
+            <p class="msg" id="frise-detail" style="margin:0"></p>
+            <div class="frise-legende">
+              <span><i style="background:var(--crit)"></i>critique</span>
+              <span><i style="background:var(--haute)"></i>haute</span>
+              <span><i style="background:var(--moy)"></i>moyenne</span>
+              <span><i style="background:var(--tech)"></i>technique</span>
+            </div>
+          </div>
+          <div class="frise" id="frise"></div>
+          <div class="frise-heures" id="frise-heures"></div>
         </div>
 
         <div class="zone-table" id="tableau-alertes"></div>
@@ -470,7 +474,7 @@
     <div class="aide-item"><b>Alertes en cours</b><span>La pastille rouge de l'en-tête ouvre le tiroir des alertes non traitées. Il se referme d'un clic ou par Échap : le mur reste un mur.</span></div>
 
     <div class="aide-section">HISTORIQUE</div>
-    <div class="aide-item"><b>Frise</b><span>Chaque trait est une alerte, placée à son heure et colorée par gravité. Les flèches changent de journée.</span></div>
+    <div class="aide-item"><b>Frise</b><span>L'icône en barres l'affiche : chaque trait est une alerte, placée à son heure et colorée par gravité. Repliée par défaut — elle sert à enquêter, pas à consulter — et son état est retenu.</span></div>
     <div class="aide-item"><b>Accuser réception</b><span>Indique que l'alerte a été vue et traitée. Elle disparaît des « alertes en cours ».</span></div>
     <div class="aide-item"><b>Passages de véhicules</b><span>Le second registre de l'Historique. Chaque plaque lue y laisse une trace : la caméra, l'heure, la capture. Un passage n'est pas un manquement — c'est un fait qu'on garde pour pouvoir y revenir, par exemple pour relier une infraction à un transporteur.</span></div>
     <div class="aide-item"><b>Aller à une caméra</b><span>Le nom d'une caméra est cliquable partout : dans l'historique, dans les passages, dans les alertes en cours. Un clic l'ouvre en Direct, agrandie.</span></div>

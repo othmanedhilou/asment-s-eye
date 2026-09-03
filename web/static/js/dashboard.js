@@ -137,7 +137,10 @@ function onglets() {
 
       ({
         direct: chargerCameras,
-        historique: () => { charger(); chargerFrise(); },
+        historique: () => {
+          charger();
+          if (!el("frise-zone").hidden) chargerFrise();
+        },
         analyse: chargerAnalyse,
         config: () => ouvrirSection(sectionCourante),
       })[vue]?.();
@@ -800,7 +803,7 @@ async function chargerAlertes() {
       try {
         await api(`/api/alerts/${b.dataset.suppr}`, { method: "DELETE" });
         chargerAlertes();
-        chargerFrise();
+        if (!el("frise-zone").hidden) chargerFrise();
       } catch (e) { avis("Suppression impossible", e.message, "err"); }
     }));
 
@@ -1700,16 +1703,38 @@ async function init() {
       avis("Historique effacé", `${r.supprimees} alerte(s), ${r.fichiers} fichier(s).`, "ok");
       page = 0;
       chargerAlertes();
-      chargerFrise();
+      if (!el("frise-zone").hidden) chargerFrise();
       chargerEvenements();
     } catch (e) { avis("Suppression impossible", e.message, "err"); }
   });
+
+  // La frise se replie, et son etat est retenu : celui qui enquete la garde
+  // ouverte, celui qui consulte ne la voit jamais.
+  const friseVisible = () => localStorage.getItem("ciments_eye-frise") === "oui";
+  const rendreFrise = () => {
+    el("frise-zone").hidden = !friseVisible();
+    el("btn-frise").classList.toggle("actif", friseVisible());
+    el("btn-frise").title = friseVisible()
+      ? "Masquer la frise de la journée" : "Afficher la frise de la journée";
+  };
+  rendreFrise();
+  el("btn-frise").addEventListener("click", () => {
+    localStorage.setItem("ciments_eye-frise", friseVisible() ? "non" : "oui");
+    rendreFrise();
+    if (friseVisible()) chargerFrise();
+  });
+
+  el("btn-export").addEventListener("click", (e) => {
+    e.stopPropagation();
+    el("export-liste").hidden = !el("export-liste").hidden;
+  });
+  document.addEventListener("click", () => { el("export-liste").hidden = true; });
 
   el("btn-filtres").addEventListener("click", (e) => {
     const corps = el("filtres-corps");
     corps.hidden = !corps.hidden;
     e.currentTarget.classList.toggle("actif", !corps.hidden);
-    e.currentTarget.textContent = corps.hidden ? "Déplier" : "Replier";
+    e.currentTarget.textContent = corps.hidden ? "Filtres" : "Replier";
   });
   outilsDirect();
   brancherRegistre();
@@ -1727,6 +1752,7 @@ async function init() {
   await chargerReglages();
   await chargerEvenements();
   await majBarreEtat();
+  if (!el("frise-zone").hidden) await chargerFrise();
 
   setInterval(tick, 1000);
   setInterval(rafraichirFlux, 700);

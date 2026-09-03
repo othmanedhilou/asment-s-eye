@@ -862,6 +862,28 @@ input:focus, select:focus {
    Quatre commandes secondaires deviennent quatre icônes sans libellé : elles
    restent atteignables sans occuper la ligne. */
 .bouton.icone { padding: 9px; }
+
+/* ── Un menu plutot que trois boutons ──
+   Trois exports alignes pour un meme geste : l'oeil doit choisir avant de
+   savoir qu'il choisit. Un bouton, un menu. */
+.menu { position: relative; display: inline-flex; }
+.menu-liste {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 40;
+  display: flex; flex-direction: column; min-width: 210px;
+  background: var(--panel); border: 1px solid var(--line2);
+  box-shadow: var(--ombre-forte, 0 14px 40px rgba(0,0,0,.55));
+}
+.menu-liste[hidden] { display: none; }
+.menu-liste a {
+  padding: 11px 15px; font-size: 14.5px; color: var(--text2);
+  border-bottom: 1px solid var(--trait-doux, var(--line));
+}
+.menu-liste a:last-child { border-bottom: none; }
+.menu-liste a:hover { background: var(--panel2); color: var(--or); }
+
+/* La frise se replie : utile pour enqueter, encombrante pour consulter. */
+.frise-zone[hidden] { display: none; }
+.frise-zone .frise-tete { margin-bottom: 10px; }
 .bouton.icone .ico { width: 18px; height: 18px; }
 
 /* Le panneau d'alertes n'occupe plus le tiers de l'écran : il est devenu un
