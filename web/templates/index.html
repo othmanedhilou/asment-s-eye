@@ -220,13 +220,16 @@
             <div class="bloc-tete">ALERTES PAR HEURE — 24 DERNIÈRES HEURES</div>
             <div class="bloc-corps"><div class="histo" id="histo-24h"></div></div>
           </div>
-          <div class="bloc">
-            <div class="bloc-tete">PAR MODÈLE — 7 JOURS</div>
-            <div class="bloc-corps"><div id="rangs-modele"></div></div>
-          </div>
-          <div class="bloc">
-            <div class="bloc-tete">PAR ZONE — 7 JOURS</div>
-            <div class="bloc-corps"><div id="rangs-zone"></div></div>
+          <div class="bloc large">
+            <div class="bloc-tete">RÉPARTITION — 7 JOURS
+              <span class="bloc-tete-fin">
+                <span class="groupe" id="repartition">
+                  <button class="bouton actif" data-vue-rep="modele">Par modèle</button>
+                  <button class="bouton" data-vue-rep="zone">Par zone</button>
+                </span>
+              </span>
+            </div>
+            <div class="bloc-corps"><div id="rangs-repartition"></div></div>
           </div>
           <div class="bloc">
             <div class="bloc-tete">FIABILITÉ — 30 JOURS

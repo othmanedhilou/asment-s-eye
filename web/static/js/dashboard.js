@@ -1122,18 +1122,23 @@ async function chargerAnalyse() {
   ]);
 
   const mtta = qualite.delai_prise_en_charge_s;
-  const parCam = Object.values(qualite.par_camera || {});
-  const pire = parCam.length ? Math.max(...parCam.map((c) => c.fausses_par_jour)) : null;
 
+  // Quatre chiffres, pas six. « Critiques 24 h » est deja dans l'en-tete en
+  // permanence, « Alertes 7 jours » repete l'histogramme en moins precis, et
+  // « pire camera » repete le classement qui se trouve juste dessous.
+  // L'API ne publie pas de taux global : on le calcule sur l'ensemble des
+  // modeles plutot que d'ajouter un champ pour une seule division.
+  const parModele = Object.values(qualite.par_modele || {});
+  const alertes = parModele.reduce((n, m) => n + (m.alertes || 0), 0);
+  const fausses = parModele.reduce((n, m) => n + (m.fausses || 0), 0);
+  const taux = alertes ? fausses / alertes : null;
   el("indicateurs").innerHTML = `
     ${indic("Alertes 24 h", resume.total_24h)}
-    ${indic("Critiques 24 h", resume.critiques_24h, resume.critiques_24h > 0)}
     ${indic("À traiter", resume.non_acquittees, resume.non_acquittees > 0)}
-    ${indic("Alertes 7 jours", resume.total_7d)}
+    ${indic("Taux de fausses alertes",
+    taux == null ? "–" : `${Math.round(taux * 100)} %`, (taux ?? 0) > 0.15)}
     ${indic("Délai moyen de prise en charge",
-    mtta == null ? "–" : mtta < 90 ? `${mtta} s` : `${Math.round(mtta / 60)} min`)}
-    ${indic("Fausses alertes / jour / caméra (pire)",
-      pire == null ? "–" : pire.toFixed(1), pire > 2)}`;
+    mtta == null ? "–" : mtta < 90 ? `${mtta} s` : `${Math.round(mtta / 60)} min`)}`;
 
   const max = Math.max(1, ...frise.map((t) => t.total));
   el("histo-24h").innerHTML = frise.map((t) => `
@@ -1142,8 +1147,10 @@ async function chargerAnalyse() {
       <div class="colonne-lab">${t.heure}</div>
     </div>`).join("");
 
-  rangs("rangs-modele", resume.par_modele_7j, nomModele);
-  rangs("rangs-zone", resume.par_zone_7j, (k) => k || "plein cadre");
+  // « Par modele » et « par zone » sont la meme question — une repartition —
+  // posee deux fois. Un bloc, deux angles.
+  repartition = { modele: resume.par_modele_7j, zone: resume.par_zone_7j };
+  dessinerRepartition();
   fiabilite(qualite);
   faussesParCamera(qualite);
 
@@ -1154,6 +1161,25 @@ function indic(nom, valeur, alarme = false) {
     <div class="indic-lab">${ech(String(nom)).toUpperCase()}</div>
     <div class="indic-val ${alarme ? "crit" : ""}">${valeur}</div>
   </div>`;
+}
+
+let repartition = { modele: {}, zone: {} };
+let angleRepartition = "modele";
+
+function dessinerRepartition() {
+  rangs("rangs-repartition", repartition[angleRepartition],
+    angleRepartition === "modele" ? nomModele : (k) => k || "plein cadre");
+}
+
+function brancherRepartition() {
+  el("repartition").addEventListener("click", (e) => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    angleRepartition = b.dataset.vueRep;
+    document.querySelectorAll("#repartition .bouton").forEach((x) =>
+      x.classList.toggle("actif", x === b));
+    dessinerRepartition();
+  });
 }
 
 function rangs(cible, data, libelle) {
@@ -1738,6 +1764,7 @@ async function init() {
   });
   outilsDirect();
   brancherRegistre();
+  brancherRepartition();
   brancherSon();
   formCamera();
   brancherFiltres();

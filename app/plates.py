@@ -243,6 +243,45 @@ class PlateReader:
             log.error(f"échec de lecture de plaque : {e}")
             return "", 0.0
 
+        # Une plaque marocaine se lit en TROIS groupes separes : le numero de
+        # serie, la lettre arabe, le numero de region. easyocr en fait trois
+        # boites distinctes — et ne garder que la mieux notee ne rendait que le
+        # premier groupe. On les assemble dans l'ordre ou ils sont ecrits.
+        groupes = []
+        for boite, texte, score in lectures:
+            morceau = normaliser(texte)
+            if not morceau:
+                continue
+            try:
+                xs = [float(point[0]) for point in boite]
+                ys = [float(point[1]) for point in boite]
+                gauche, milieu, hauteur = min(xs), sum(ys) / len(ys), max(ys) - min(ys)
+            except (TypeError, IndexError, ZeroDivisionError):
+                gauche, milieu, hauteur = 0.0, 0.0, 1.0
+            groupes.append([gauche, milieu, hauteur, morceau, float(score)])
+
+        if groupes:
+            # Ordonner sur l'abscisse seule suffit pour une plaque d'une ligne,
+            # mais met tout dans le desordre des qu'elle en a deux : le second
+            # groupe de la ligne du haut se retrouve apres le premier de celle
+            # du bas. On regroupe donc d'abord par ligne, puis de gauche a
+            # droite dans chaque ligne — l'ordre de lecture.
+            hauteur_type = sorted(g[2] for g in groupes)[len(groupes) // 2] or 1.0
+            groupes.sort(key=lambda g: g[1])
+            ligne, base = 0, groupes[0][1]
+            for g in groupes:
+                if g[1] - base > hauteur_type * 0.6:
+                    ligne += 1
+                    base = g[1]
+                g.append(ligne)
+            groupes.sort(key=lambda g: (g[5], g[0]))
+            assemble = corriger_confusions("".join(g[3] for g in groupes))
+            if plausible(assemble):
+                # La confiance d'une plaque assemblee est celle de son maillon
+                # le plus faible : un groupe mal lu suffit a la fausser.
+                return assemble, min(g[4] for g in groupes)
+
+        # Repli : la meilleure boite seule, quand l'assemblage ne tient pas.
         meilleur, meilleur_score = "", 0.0
         for _, texte, score in lectures:
             candidat = corriger_confusions(normaliser(texte))

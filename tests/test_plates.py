@@ -260,3 +260,67 @@ def test_une_plaque_cadree_trop_petite_est_comptee_sans_etre_lue():
     d = lecteur.diagnostic("portail")
     assert d["trop_petites"] == 1 and d["lectures_tentees"] == 0
     assert "trop petite" in d["raison"]
+
+
+# ── Une plaque se lit en entier ──────────────────────────────────────
+
+
+class _OcrFactice:
+    """Rend des boîtes comme easyocr : (polygone, texte, score)."""
+
+    def __init__(self, boites):
+        self.boites = boites
+
+    def readtext(self, image, **kw):
+        return self.boites
+
+
+def _boite(x, y, w=40, h=18):
+    return [[x, y], [x + w, y], [x + w, y + h], [x, y + h]]
+
+
+def test_les_trois_groupes_d_une_plaque_sont_assembles():
+    """Une plaque marocaine se lit en trois groupes : le numéro de série, la
+    lettre, le numéro de région. easyocr en fait trois boîtes distinctes — et
+    ne garder que la mieux notée ne rendait que le premier groupe.
+    """
+    from app.plates import PlateReader
+
+    lecteur = PlateReader(asynchrone=False)
+    lecteur._ocr_teste = True
+    lecteur._ocr = _OcrFactice([
+        (_boite(120, 10, 20), "6", 0.88),      # région, à droite
+        (_boite(10, 10, 60), "12345", 0.95),   # série, à gauche
+        (_boite(85, 10, 22), "A", 0.91),       # lettre, au milieu
+    ])
+
+    texte, score = lecteur.lire_region(_image(100, 260))
+    assert texte == "12345A6", f"lu {texte!r}"
+    # La confiance est celle du maillon le plus faible : un groupe mal lu
+    # suffit à fausser la plaque entière.
+    assert score == 0.88
+
+
+def test_une_plaque_sur_deux_lignes_se_lit_ligne_par_ligne():
+    """Ordonner sur l'abscisse seule met tout dans le désordre dès qu'une
+    plaque a deux lignes : le second groupe du haut passe après le premier du
+    bas."""
+    from app.plates import PlateReader
+
+    lecteur = PlateReader(asynchrone=False)
+    lecteur._ocr_teste = True
+    lecteur._ocr = _OcrFactice([
+        (_boite(70, 40, 40), "678", 0.90),   # bas droite
+        (_boite(70, 5, 40), "234", 0.93),    # haut droite
+        (_boite(10, 40, 40), "5", 0.92),     # bas gauche
+        (_boite(10, 5, 40), "1", 0.94),      # haut gauche
+    ])
+
+    texte, _ = lecteur.lire_region(_image(120, 200))
+    assert texte == "1234" + "5678", f"lu {texte!r}"
+
+
+def _image(hauteur, largeur):
+    import numpy as np
+
+    return np.zeros((hauteur, largeur, 3), dtype=np.uint8)
