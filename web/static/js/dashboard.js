@@ -468,7 +468,13 @@ function outilsDirect() {
 
 /* ═══ Configuration d'une caméra ═══ */
 
+// Le nom sous lequel le formulaire a ete ouvert. Sans lui, changer le nom
+// d'une camera en creait une SECONDE et laissait l'ancienne en place — la
+// route de renommage existait, mais rien ne l'appelait.
+let camEnEdition = null;
+
 function ouvrirFormCamera(nom = null) {
+  camEnEdition = nom;
   const f = el("form-camera");
   f.hidden = false;
   el("form-camera-titre").textContent = nom ? `Modifier « ${nom} »` : "Nouvelle caméra";
@@ -570,10 +576,20 @@ function formCamera() {
     const nom = el("cam-nom").value.trim();
     if (!nom) { m.className = "msg err"; m.textContent = "Donnez un nom."; return; }
     try {
+      // Renommer d'abord : l'historique, les zones et les enregistrements
+      // suivent la camera, ce qu'une creation sous un nouveau nom perdrait.
+      if (camEnEdition && camEnEdition !== nom) {
+        await api(`/api/cameras/${encodeURIComponent(camEnEdition)}/rename`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ nouveau_nom: nom }),
+        });
+        if (selection === camEnEdition) selection = nom;
+      }
       await api(`/api/cameras/${encodeURIComponent(nom)}`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify(donneesCamera()),
       });
+      camEnEdition = null;
       el("form-camera").hidden = true;
       avis("Caméra enregistrée", "Prise en compte dans quelques secondes.", "ok");
       chargerCameras();

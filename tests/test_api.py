@@ -339,3 +339,36 @@ def test_la_page_versionne_ses_fichiers_statiques(client):
 
 def test_la_page_n_est_pas_mise_en_cache(client):
     assert client.get("/").headers.get("cache-control") == "no-store"
+
+
+def test_renommer_une_camera_ne_la_duplique_pas(client):
+    """L'interface creait une SECONDE camera quand on changeait le nom, et
+    laissait l'ancienne : la route de renommage existait mais rien ne
+    l'appelait."""
+    corps = {"source": "0", "models": [], "enabled": False}
+    client.post("/api/cameras/avant_audit", json=corps)
+
+    r = client.post("/api/cameras/avant_audit/rename", json={"nouveau_nom": "apres_audit"})
+    assert r.status_code == 200, r.text
+
+    noms = [c["name"] for c in client.get("/api/cameras").json()["cameras"]]
+    assert "apres_audit" in noms
+    assert "avant_audit" not in noms
+
+    client.delete("/api/cameras/apres_audit")
+
+
+def test_renommer_une_camera_inconnue_renvoie_404(client):
+    r = client.post("/api/cameras/zzz_inexistante/rename", json={"nouveau_nom": "x"})
+    assert r.status_code == 404
+
+
+def test_renommer_vers_un_nom_deja_pris_renvoie_409(client):
+    """Nom inconnu et nom deja pris renvoyaient le meme 400 : l'appelant ne
+    pouvait pas savoir quel geste faire."""
+    client.post("/api/cameras/audit_a", json={"source": "0", "models": [], "enabled": False})
+    client.post("/api/cameras/audit_b", json={"source": "0", "models": [], "enabled": False})
+    assert client.post("/api/cameras/audit_a/rename",
+                       json={"nouveau_nom": "audit_b"}).status_code == 409
+    client.delete("/api/cameras/audit_a")
+    client.delete("/api/cameras/audit_b")

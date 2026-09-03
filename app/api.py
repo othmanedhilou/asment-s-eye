@@ -456,8 +456,16 @@ def api_upsert_camera(name: str, body: CameraBody):
 
 @app.post("/api/cameras/{name}/rename")
 def api_rename_camera(name: str, body: RenameBody):
+    # Deux echecs distincts renvoyaient le meme 400 : l'appelant ne pouvait pas
+    # savoir s'il avait vise une camera inexistante ou un nom deja pris, alors
+    # que le geste a faire n'est pas le meme.
+    cameras = load_cameras()
+    if name not in cameras:
+        raise HTTPException(status_code=404, detail="Caméra inconnue")
+    if body.nouveau_nom in cameras:
+        raise HTTPException(status_code=409, detail="Ce nom est déjà pris")
     if not rename_camera(name, body.nouveau_nom):
-        raise HTTPException(status_code=400, detail="Renommage impossible (nom inconnu ou déjà pris)")
+        raise HTTPException(status_code=400, detail="Renommage impossible")
     return {"ok": True, "name": body.nouveau_nom}
 
 

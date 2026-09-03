@@ -1,4 +1,32 @@
 {
   "webcam_test": [],
-  "webcam": []
+  "webcam": [],
+  "audit_y": [
+    {
+      "name": "essai",
+      "polygon": [
+        [
+          0.1,
+          0.1
+        ],
+        [
+          0.9,
+          0.1
+        ],
+        [
+          0.9,
+          0.9
+        ],
+        [
+          0.1,
+          0.9
+        ]
+      ],
+      "models": [],
+      "type": "surveillance",
+      "schedule": null,
+      "conf": null,
+      "cooldown": null
+    }
+  ]
 }
