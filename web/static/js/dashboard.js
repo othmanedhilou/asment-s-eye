@@ -225,20 +225,27 @@ function dessinerTableCameras() {
       + "<td>" + (c.models.length ? c.models.map(nomModele).join(", ") : "aucun") + "</td>"
       + "<td>" + (c.zones?.length ? ech(c.zones.join(", ")) : "plein cadre") + "</td>"
       + "<td class=\"msg\">" + options + "</td>"
-      + "<td>" + etat + "</td></tr>";
+      + "<td class=\"num\">" + (c.cycle_ms ? c.cycle_ms + " ms" : "—") + "</td>"
+      + "<td" + (c.error ? " title=\"" + ech(c.error) + "\"" : "") + ">" + etat + "</td>"
+      + "<td><button class=\"bouton danger\" data-suppr-cam=\"" + ech(c.name)
+      + "\" title=\"Supprimer cette caméra\" style=\"padding:3px 9px\">✕</button></td></tr>";
   }).join("");
 
   t.innerHTML = '<thead><tr><th style="width:26px"></th><th>Nom</th><th>Source</th>'
     + '<th style="width:70px">Img/s</th><th>Modèles</th><th>Zones</th>'
-    + '<th style="width:160px">Options</th><th style="width:90px">État</th></tr></thead>'
+    + '<th style="width:150px">Options</th><th style="width:80px">Cycle</th>'
+    + '<th style="width:90px">État</th><th style="width:40px"></th></tr></thead>'
     + "<tbody>" + lignes + "</tbody>";
 
+  // Un clic sur la ligne ouvre le formulaire. Il fallait auparavant
+  // selectionner, puis viser un bouton « Modifier » qui n'etait actif
+  // qu'ensuite : trois gestes pour un.
   t.querySelectorAll("[data-cam]").forEach((r) =>
-    r.addEventListener("click", () => {
-      selection = selection === r.dataset.cam ? null : r.dataset.cam;
-      dessinerTableCameras();
-      dessinerMur();
-      majActions();
+    r.addEventListener("click", () => ouvrirFormCamera(r.dataset.cam)));
+  t.querySelectorAll("[data-suppr-cam]").forEach((b) =>
+    b.addEventListener("click", (e) => {
+      e.stopPropagation();
+      supprimerCamera(b.dataset.supprCam);
     }));
 }
 
@@ -247,16 +254,9 @@ function etatCamera(c) {
   return c.online ? "en-ligne" : "hors-ligne";
 }
 
-function majActions() {
-  const actif = Boolean(selection);
-  const modifier = el("btn-modifier");
-  if (!modifier) return;
-  modifier.disabled = !actif;
-  el("btn-supprimer").disabled = !actif;
-  el("config-selection").textContent = actif
-    ? "Sélection : " + selection
-    : "Sélectionnez une caméra dans la liste pour la modifier.";
-}
+/* La selection ne pilote plus de boutons : elle ne sert qu'a savoir quelle
+   camera est agrandie sur le mur. */
+function majActions() {}
 
 let vuePage = 0;
 let colonnes = 2;
@@ -453,8 +453,6 @@ function outilsDirect() {
   el("vers-historique").addEventListener("click", () => allerA("historique"));
 
   el("btn-recharger").addEventListener("click", chargerCameras);
-  el("btn-modifier").addEventListener("click", () => selection && ouvrirFormCamera(selection));
-  el("btn-supprimer").addEventListener("click", () => selection && supprimerCamera(selection));
   el("visionneuse-fermer").addEventListener("click", fermerVisionneuse);
 
   el("btn-aide").addEventListener("click", () => { el("aide").hidden = false; });
@@ -1244,20 +1242,9 @@ async function chargerSysteme() {
     ${indic("Mémoire", m.memory_percent != null ? `${m.memory_percent} %` : "–", (m.memory_percent ?? 0) > 90)}
     ${indic("Disque libre", m.disk_free_gb != null ? `${m.disk_free_gb} Go` : "–", (m.disk_free_gb ?? 99) < 5)}`;
 
-  const lignes = Object.entries(h.cameras || {});
-  el("systeme-cameras").innerHTML = lignes.length ? `
-    <thead><tr><th>Caméra</th><th style="width:110px">État</th><th style="width:90px">Cycle</th>
-    <th style="width:90px">Modèles</th><th style="width:90px">Objets</th><th>Erreur</th></tr></thead>
-    <tbody>${lignes.map(([n, c]) => `
-      <tr>
-        <td>${ech(n)}</td>
-        <td><span class="sev ${c.state === "en ligne" ? "moyenne" : "critique"}">${ech(c.state || "inconnu")}</span></td>
-        <td class="num">${c.cycle_ms ? c.cycle_ms + " ms" : "–"}</td>
-        <td class="num">${c.modeles_actifs ?? "–"}</td>
-        <td class="num">${c.objets_suivis ?? "–"}</td>
-        <td class="msg">${ech(c.error || "")}</td>
-      </tr>`).join("")}</tbody>`
-    : '<tbody><tr><td class="msg">Le pipeline n\'a publié aucun état.</td></tr></tbody>';
+  // La liste des cameras vit desormais dans Parametres -> Cameras, avec son
+  // cycle et son erreur. La redire ici obligeait a deviner lequel des deux
+  // tableaux regarder.
 
   const avecPlaques = Object.entries(h.cameras || {})
     .filter(([, c]) => c.lecture_plaques);

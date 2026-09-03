@@ -257,17 +257,11 @@
         <!-- Caméras -->
         <div class="section actif" id="config-cameras">
           <div class="bloc">
-            <div class="bloc-tete">CAMÉRAS DÉCLARÉES
-              <span class="bloc-tete-fin">
-                <button class="bouton primaire" id="btn-ajout-camera"><svg class="ico"><use href="#i-plus"/></svg>Ajouter</button>
-                <button class="bouton" id="btn-modifier" disabled>Modifier</button>
-                <button class="bouton danger" id="btn-supprimer" disabled>Supprimer</button>
-              </span>
+            <div class="bloc-tete">CAMÉRAS
+              <span class="bloc-tete-fin bloc-note">cliquez une ligne pour la modifier</span>
+              <button class="bouton primaire" id="btn-ajout-camera" style="margin-left:14px"><svg class="ico"><use href="#i-plus"/></svg>Ajouter</button>
             </div>
             <table class="liste" id="table-cameras"></table>
-            <div class="bloc-corps" style="padding:12px 18px;border-top:1px solid var(--line)">
-              <span class="msg" id="config-selection"></span>
-            </div>
           </div>
 
           <div class="bloc" id="form-camera" hidden>
@@ -395,7 +389,8 @@
         <!-- Fichiers de test -->
         <div class="section" id="config-fichiers">
           <div class="bloc">
-            <div class="bloc-tete">DÉPOSER UN FICHIER</div>
+            <div class="bloc-tete">FICHIERS DE TEST
+              <span class="bloc-tete-fin bloc-note">déposer une vidéo lance l'analyse aussitôt</span></div>
             <div class="bloc-corps">
               <div class="depot" id="depot">
                 Glisser une vidéo ou une image ici, ou cliquer pour parcourir
@@ -406,10 +401,7 @@
               <div class="jauge" id="jauge" hidden><span></span></div>
               <p class="msg" id="depot-msg"></p>
             </div>
-          </div>
-          <div class="bloc">
-            <div class="bloc-tete">FICHIERS DISPONIBLES</div>
-            <div class="bloc-corps"><div id="liste-fichiers"></div></div>
+            <div id="liste-fichiers"></div>
           </div>
         </div>
 
@@ -427,10 +419,6 @@
           <div class="bloc">
             <div class="bloc-tete">MACHINE</div>
             <div class="bloc-corps"><div class="indics" id="systeme-machine" style="margin:0"></div></div>
-          </div>
-          <div class="bloc">
-            <div class="bloc-tete">CAMÉRAS</div>
-            <table class="liste" id="systeme-cameras"></table>
           </div>
           <div class="bloc">
             <div class="bloc-tete">LECTURE DES PLAQUES</div>
