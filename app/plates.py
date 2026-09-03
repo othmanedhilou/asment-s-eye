@@ -356,6 +356,50 @@ class PlateReader:
             "raison": self.raison(camera),
         }
 
+    def observer_plaque(self, camera: str, track_id, zone) -> None:
+        """Soumet une zone DEJA cadree sur la plaque, sans re-localiser.
+
+        Le modele `plate` cadre serre ; refaire une localisation par traitement
+        d'image dessus ne ferait que degrader ce qu'il a trouve.
+        """
+        if track_id is None or zone is None or zone.size == 0:
+            return
+        if not self.a_lire(camera, track_id):
+            return
+
+        largeur = zone.shape[1]
+        with self._lock:
+            self._largeur_vue[camera] = max(self._largeur_vue.get(camera, 0), largeur)
+        if largeur < LARGEUR_MIN_PLAQUE:
+            with self._lock:
+                self._diagnostic[camera]["regions"] += 1
+                self._diagnostic[camera]["trop_petite"] += 1
+            return
+
+        self._tentatives[(camera, track_id)] += 1
+
+        def travail(image):
+            try:
+                texte, score = self.lire_region(image)
+                with self._lock:
+                    self._diagnostic[camera]["regions"] += 1
+                    self._diagnostic[camera]["lectures"] += 1
+                    if texte:
+                        self._diagnostic[camera]["lues"] += 1
+                        self._votes[(camera, track_id)][texte] += 1
+                        self._scores[(camera, track_id)].append(score)
+                    else:
+                        self._diagnostic[camera]["illisibles"] += 1
+            finally:
+                self._en_cours = False
+
+        if self._executor is None:
+            self._en_cours = True
+            travail(zone)
+        elif not self._en_cours:
+            self._en_cours = True
+            self._executor.submit(travail, zone.copy())
+
     def plaque(self, camera: str, track_id) -> dict | None:
         """Lecture retenue pour ce véhicule, une fois assez d'images accumulées."""
         with self._lock:

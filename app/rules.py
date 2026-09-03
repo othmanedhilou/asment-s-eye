@@ -16,7 +16,6 @@ ALERT_LABELS = {
     # chute vaut mieux qu'après.
     "fall": {"fallen", "falling", "down"},
     "fire_smoke": {"Fire", "Smoke"},
-    "gloves_glasses": {"NO-Gloves", "NO-Goggles", "Fall-Detected"},
     # Contrôle de sortie des camions. Les deux premières classes viennent du
     # modèle actuel ; les suivantes sont celles du modèle cible, entraîné sur le
     # portail. Déclarer les deux permet de remplacer le modèle sans toucher au
@@ -69,7 +68,6 @@ LABELS_FUSIONNES = {
 MIN_VUES_AVANT_ALERTE = 3
 
 MIN_CONFIDENCE_OVERRIDE = {
-    ("gloves_glasses", "Fall-Detected"): 0.80,
     # La classe la plus faible du modèle EPI, et la moins pertinente pour une
     # cimenterie : elle produisait l'essentiel des fausses alertes.
     ("epi", "NO-Mask"): 0.55,
@@ -100,24 +98,6 @@ COOLDOWN_BY_SEVERITY = {
 }
 
 
-_chute_dediee: bool | None = None
-
-
-def _modele_chute_dedie_actif() -> bool:
-    """Le modèle `fall` est-il déclaré et activé ?
-
-    Lu une fois : activer un modèle demande de toute façon un redémarrage du
-    pipeline, puisqu'il faut le charger.
-    """
-    global _chute_dediee
-    if _chute_dediee is None:
-        try:
-            from app.config import load_config
-
-            _chute_dediee = bool(load_config()["models"].get("fall", {}).get("enabled"))
-        except Exception:
-            _chute_dediee = False
-    return _chute_dediee
 
 
 class AlertEngine:
@@ -154,12 +134,6 @@ class AlertEngine:
         if labels is None or detection.label not in labels:
             return None
 
-        # Tant que le modèle de chute dédié n'existe pas, la chute est assurée
-        # par gloves_glasses. Dès qu'il est activé, cette classe se tait : sans
-        # cela, une même personne au sol déclencherait deux alertes, et les
-        # opérateurs perdraient confiance dans le décompte.
-        if detection.model == "gloves_glasses" and detection.label == "Fall-Detected"                 and _modele_chute_dedie_actif():
-            return None
 
         if not is_alert_enabled(detection.model):
             return None

@@ -72,7 +72,6 @@ SCENES = {
     "epi": ["construction worker safety helmet vest",
             "construction workers without helmets"],
     "fire_smoke": ["industrial fire", "wildfire smoke plume"],
-    "gloves_glasses": ["worker safety gloves goggles", "hands wearing work gloves"],
     "person_animal": ["people walking city street", "dog outdoors"],
     "vehicles": ["dump truck construction site", "heavy truck highway"],
     "arc": ["arc welding sparks", "welder shielded metal arc welding"],

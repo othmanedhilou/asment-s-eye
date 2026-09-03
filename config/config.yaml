@@ -11,7 +11,6 @@ cameras:
       - conveyor
       - epi
       - fire_smoke
-      - gloves_glasses
       - load_control
       - person_animal
       - vehicles
@@ -31,9 +30,7 @@ models:
     file: models/ciments_eye_epi_best_openvino_model
     conf: 0.4
     enabled: true
-  # Détection de personne au sol, modèle dédié. Aujourd'hui la chute est une
-  # classe du modèle gloves_glasses, où elle est peu fiable. Passer à false
-  # une fois ce modèle entraîné : les alertes basculent automatiquement.
+  # Détection de personne au sol. Modèle dédié, entraîné le 01/09/2026.
   fall:
     file: models/ciments_eye_fall_best_openvino_model
     conf: 0.4
@@ -42,10 +39,6 @@ models:
   fire_smoke:
     file: models/ciments_eye_fire_smoke_best_openvino_model
     conf: 0.35
-    enabled: true
-  gloves_glasses:
-    file: models/ciments_eye_gloves_glasses_best_openvino_model
-    conf: 0.4
     enabled: true
   load_control:
     file: models/ciments_eye_load_control_best_openvino_model

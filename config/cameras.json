@@ -2,15 +2,29 @@
   "webcam": {
     "source": "0",
     "models": [
-      "fall",
       "epi",
-      "person_animal"
+      "person_animal",
+      "fall"
     ],
     "fps": 2.0,
     "enabled": true,
     "tracking": true,
     "recording": false,
-    "plates": false,
+    "plates": true,
+    "collecte": false,
+    "bachage": false
+  },
+  "essai": {
+    "source": "videos/360_F_313082223_HEofzWR1LRslBxZRYLuD1qnc53OnsqMz_1.jpg",
+    "models": [
+      "arc",
+      "fall"
+    ],
+    "fps": 2.0,
+    "enabled": true,
+    "tracking": true,
+    "recording": false,
+    "plates": true,
     "collecte": false,
     "bachage": false
   }

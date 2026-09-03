@@ -219,3 +219,44 @@ def test_sans_moteur_la_raison_le_dit():
     lecteur._ocr_teste = True
     lecteur._ocr = None
     assert "moteur" in lecteur.raison("portail")
+
+
+def test_une_plaque_deja_cadree_est_lue_sans_relocalisation():
+    """Le modele `plate` cadre serre ; refaire une localisation par traitement
+    d'image dessus ne ferait que degrader ce qu'il a trouve.
+
+    Avant ce correctif, la lecture ne se declenchait que sur une detection du
+    modele `vehicles` : une camera qui ne le faisait pas tourner ne lisait
+    aucune plaque, sans que rien ne le dise.
+    """
+    import numpy as np
+
+    from app.plates import PlateReader
+
+    lecteur = PlateReader(asynchrone=False)
+    lecteur._ocr_teste = True
+    lecteur._ocr = object()
+    lecteur.lire_region = lambda img: ("12345A6", 0.9)
+
+    zone = np.zeros((40, 200, 3), dtype=np.uint8)      # 200 px : au-dessus du minimum
+    for _ in range(3):
+        lecteur.observer_plaque("portail", 1, zone)
+
+    assert lecteur.diagnostic("portail")["lectures_abouties"] >= 2
+    assert lecteur.plaque("portail", 1)["texte"] == "12345A6"
+
+
+def test_une_plaque_cadree_trop_petite_est_comptee_sans_etre_lue():
+    import numpy as np
+
+    from app.plates import PlateReader
+
+    lecteur = PlateReader(asynchrone=False)
+    lecteur._ocr_teste = True
+    lecteur._ocr = object()
+    lecteur.lire_region = lambda img: ("NE-DOIT-PAS-ETRE-APPELE", 1.0)
+
+    lecteur.observer_plaque("portail", 1, np.zeros((20, 60, 3), dtype=np.uint8))
+    d = lecteur.diagnostic("portail")
+    assert d["trop_petites"] == 1 and d["lectures_tentees"] == 0
+    assert "trop petite" in d["raison"]

@@ -600,6 +600,61 @@ async def api_upload(file: UploadFile = File(...)):
             "taille_mo": round(ecrits / 1024 / 1024, 1), "apercu": sonde}
 
 
+@app.post("/api/detect-plate")
+async def api_detect_plate(file: UploadFile = File(...)):
+    """Détecte et lit le matricule d'une image de voiture."""
+    import cv2
+    import numpy as np
+
+    suffixe = Path(file.filename or "").suffix.lower()
+    if suffixe not in EXTENSIONS_IMAGE:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Format non accepté ({suffixe or 'sans extension'}). "
+                   "Images acceptées : jpg, png, bmp, webp.")
+
+    try:
+        # Lire l'image depuis le fichier uploadé
+        contenu = await file.read()
+        image_array = np.frombuffer(contenu, np.uint8)
+        image = cv2.imdecode(image_array, cv2.IMREAD_COLOR)
+
+        if image is None:
+            raise HTTPException(status_code=400, detail="Image illisible")
+
+        # Créer une instance de PlateReader
+        from app.plates import PlateReader
+        lecteur = PlateReader(plate_model=None, asynchrone=False)
+
+        # Détecter les plaques
+        boites = lecteur.localiser(image)
+
+        if not boites:
+            return {
+                "ok": True,
+                "detecte": False,
+                "raison": "Aucune plaque détectée"
+            }
+
+        # Lire la première plaque détectée
+        x, y, w, h = boites[0]
+        zone = image[max(y, 0):y + h, max(x, 0):x + w]
+        texte, score = lecteur.lire_region(zone)
+
+        return {
+            "ok": True,
+            "detecte": texte != "",
+            "matricule": texte if texte else None,
+            "confiance": float(score),
+            "plaques_found": len(boites)
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur de traitement : {e}")
+
+
 @app.delete("/api/uploads/{nom}")
 def api_delete_upload(nom: str):
     chemin = UPLOADS_DIR / _nom_sur(nom)

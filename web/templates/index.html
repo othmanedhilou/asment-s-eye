@@ -19,6 +19,18 @@
 <!-- Icônes vectorielles écrites dans la page. Un site industriel peut être
      coupé d'Internet : rien ne doit être chargé depuis un serveur distant. -->
 <svg style="display:none">
+  <symbol id="i-marque" viewBox="0 0 48 48">
+    <path d="M2 24C2 24 10 10 24 10s22 14 22 14-8 14-22 14S2 24 2 24z"
+          fill="none" stroke="currentColor" stroke-width="2.6"
+          stroke-linejoin="round"/>
+    <circle cx="24" cy="24" r="9.5" fill="none" stroke="currentColor" stroke-width="2.2"/>
+    <g stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+      <path d="M24 14.5 29 22"/><path d="M32.2 19.2 28.5 27.5"/>
+      <path d="M32.2 28.8 23.5 28"/><path d="M24 33.5 19 26"/>
+      <path d="M15.8 28.8 19.5 20.5"/><path d="M15.8 19.2 24.5 20"/>
+    </g>
+    <circle cx="24" cy="24" r="2.6" fill="currentColor"/>
+  </symbol>
   <symbol id="i-logo" viewBox="0 0 24 24"><path d="M2 7h13v10H2z"/><path d="M15 10l7-3v10l-7-3z"/><circle cx="8.5" cy="12" r="2.6"/></symbol>
   <symbol id="i-cam" viewBox="0 0 24 24"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></symbol>
   <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></symbol>
@@ -28,6 +40,8 @@
   <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
   <symbol id="i-full" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 00-2 2v3M21 8V5a2 2 0 00-2-2h-3M16 21h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/></symbol>
   <symbol id="i-close" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></symbol>
+  <symbol id="i-soleil" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.6"/><path d="M12 1.6v2.6M12 19.8v2.6M4.2 4.2l1.9 1.9M17.9 17.9l1.9 1.9M1.6 12h2.6M19.8 12h2.6M4.2 19.8l1.9-1.9M17.9 6.1l1.9-1.9"/></symbol>
+  <symbol id="i-lune" viewBox="0 0 24 24"><path d="M21 13.2A9 9 0 1110.8 3a7 7 0 1010.2 10.2z"/></symbol>
   <symbol id="i-zone" viewBox="0 0 24 24"><path d="M3 5l7-2 5 2 6-2v16l-6 2-5-2-7 2z"/><path d="M10 3v16M15 5v16"/></symbol>
   <symbol id="i-photo" viewBox="0 0 24 24"><rect x="2.5" y="5" width="19" height="14" rx="2"/><circle cx="12" cy="12" r="3.2"/></symbol>
   <symbol id="i-pause" viewBox="0 0 24 24"><path d="M9 4v16M15 4v16"/></symbol>
@@ -40,7 +54,7 @@
   <nav class="rail">
     <div class="rail-marque">
       <div>
-        <svg class="ico" style="width:23px;height:23px;color:var(--or)"><use href="#i-logo"/></svg>
+        <svg class="ico marque-logo"><use href="#i-marque"/></svg>
         <div>
           <div class="rail-nom">CIMENT'S EYE</div>
           <div class="rail-site">CIMENTS DU MAROC</div>
@@ -60,11 +74,6 @@
     </div>
 
     <div class="rail-bas">
-      <div class="rail-titre">AFFICHAGE</div>
-      <div class="themes" id="themes">
-        <button data-theme-choix="noir" title="Fond noir — poste de garde peu éclairé">Noir</button>
-        <button data-theme-choix="clair" title="Fond clair — bureau en plein jour">Clair</button>
-      </div>
       <button class="btn-aide" id="btn-aide"><span class="rond">?</span>Aide</button>
     </div>
   </nav>
@@ -78,6 +87,9 @@
         <div class="puce"><span class="pastille" id="puce-pastille"></span><span id="puce-cameras">—</span></div>
         <button class="puce-crit" id="puce-crit" hidden></button>
         <div id="horloge">--:--:--</div>
+        <button class="btn-theme" id="btn-theme" title="Changer de thème" aria-label="Changer de thème">
+          <svg class="ico"><use href="#i-soleil" id="theme-ico"/></svg>
+        </button>
       </div>
     </header>
 

@@ -25,7 +25,6 @@ SEVERITY_BY_MODEL = {
     "fall": "critique",         # personne au sol : secours immédiat
     "arc": "critique",
     "conveyor": "haute",       # bande déchirée : arrêt production + risque opérateur
-    "gloves_glasses": "haute",   # inclut Fall-Detected
     "epi": "haute",
     "load_control": "haute",     # camion non bâché : risque routier, et amende
     "person_animal": "moyenne",

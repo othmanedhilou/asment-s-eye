@@ -100,17 +100,19 @@ function theme() {
 
   const appliquer = () => {
     document.documentElement.dataset.theme = courant;
-    document.querySelectorAll("[data-theme-choix]").forEach((b) =>
-      b.classList.toggle("actif", b.dataset.themeChoix === courant));
+    // L'icone montre ce vers quoi l'on va, pas l'etat courant : c'est ce que
+    // fait tout le monde, et ce que l'oeil attend d'un bouton.
+    el("theme-ico").setAttribute("href", courant === "clair" ? "#i-lune" : "#i-soleil");
+    el("btn-theme").title = courant === "clair"
+      ? "Passer en thème sombre" : "Passer en thème clair";
   };
   appliquer();
 
-  document.querySelectorAll("[data-theme-choix]").forEach((b) =>
-    b.addEventListener("click", () => {
-      courant = b.dataset.themeChoix;
-      localStorage.setItem("ciments_eye-theme", courant);
-      appliquer();
-    }));
+  el("btn-theme").addEventListener("click", () => {
+    courant = courant === "clair" ? "noir" : "clair";
+    localStorage.setItem("ciments_eye-theme", courant);
+    appliquer();
+  });
 }
 
 const ECRANS = {

@@ -4,19 +4,15 @@
     "alert": true
   },
   "conveyor": {
-    "detect": true,
+    "detect": false,
     "alert": true
   },
   "epi": {
-    "detect": true,
+    "detect": false,
     "alert": true
   },
   "fire_smoke": {
-    "detect": true,
-    "alert": true
-  },
-  "gloves_glasses": {
-    "detect": true,
+    "detect": false,
     "alert": true
   },
   "load_control": {
@@ -24,11 +20,11 @@
     "alert": false
   },
   "person_animal": {
-    "detect": true,
+    "detect": false,
     "alert": true
   },
   "vehicles": {
-    "detect": true,
+    "detect": false,
     "alert": true
   },
   "fall": {

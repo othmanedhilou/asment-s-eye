@@ -7,8 +7,7 @@ from pathlib import Path
 
 SETTINGS_PATH = Path(__file__).resolve().parent.parent / "data" / "settings.json"
 
-PIPELINE_MODELS = ["arc", "conveyor", "epi", "fall", "fire_smoke", "gloves_glasses",
-                   "load_control", "person_animal", "vehicles"]
+PIPELINE_MODELS = ["arc", "conveyor", "epi", "fall", "fire_smoke",                    "load_control", "person_animal", "vehicles"]
 
 # Le pipeline interroge ces réglages pour chaque détection (plusieurs dizaines de
 # fois par seconde) : on garde le contenu en cache une seconde pour éviter de

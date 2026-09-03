@@ -303,6 +303,15 @@ def run_camera(camera_name: str, cam_cfg: dict, config: dict, registry: ModelReg
         log.warning(f"[{camera_name}] lecture de plaques demandée mais suivi désactivé : "
                     "sans suivi, aucun vote possible, la lecture serait peu fiable")
 
+    # Le modele de plaques doit tourner sur l'image ENTIERE, pas seulement dans
+    # la boite d'un vehicule. Auparavant la lecture ne se declenchait que sur
+    # une detection du modele `vehicles` : une camera qui ne le faisait pas
+    # tourner ne lisait aucune plaque, sans que rien ne le dise. Depuis que le
+    # modele `plate` existe et localise a 0,97, cette dependance n'a plus lieu
+    # d'etre.
+    if lecteur_plaques is not None and "plate" in models_cfg             and "plate" not in available_models             and (racine / models_cfg["plate"]["file"]).exists():
+        available_models.append("plate")
+
     log.info(f"[{camera_name}] modèles : {available_models} | fps={fps} imgsz={imgsz} workers={max_workers}")
     update_camera(camera_name, state="demarrage", models=available_models, fps_cible=fps)
 
@@ -389,6 +398,18 @@ def run_camera(camera_name: str, cam_cfg: dict, config: dict, registry: ModelReg
                             # prise isolément.
                             if controle_bachage is not None and model_name == "load_control":
                                 detections = detections + controle_bachage.analyser(detections, w, h)
+
+                            # Une plaque reperee par le modele dedie part droit
+                            # a la lecture : elle est deja cadree serre.
+                            if model_name == "plate" and lecteur_plaques is not None:
+                                for d in detections:
+                                    x1, y1, x2, y2 = [int(v) for v in d.bbox]
+                                    zone = frame[max(y1, 0):y2, max(x1, 0):x2]
+                                    lecteur_plaques.observer_plaque(
+                                        camera_name, d.track_id, zone)
+                                    lue = lecteur_plaques.plaque(camera_name, d.track_id)
+                                    if lue and lue.get("texte"):
+                                        d.plaque = lue["texte"]
 
                             for detection in detections:
                                 matched = zone_filter.match(detection.model, detection.bbox, w, h)
