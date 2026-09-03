@@ -45,6 +45,8 @@
   <symbol id="i-zone" viewBox="0 0 24 24"><path d="M3 5l7-2 5 2 6-2v16l-6 2-5-2-7 2z"/><path d="M10 3v16M15 5v16"/></symbol>
   <symbol id="i-photo" viewBox="0 0 24 24"><rect x="2.5" y="5" width="19" height="14" rx="2"/><circle cx="12" cy="12" r="3.2"/></symbol>
   <symbol id="i-pause" viewBox="0 0 24 24"><path d="M9 4v16M15 4v16"/></symbol>
+  <symbol id="i-son" viewBox="0 0 24 24"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 010 7M19 5a9 9 0 010 14"/></symbol>
+  <symbol id="i-pouls" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></symbol>
 </svg>
 
 <div class="app" id="app">
@@ -97,38 +99,32 @@
 
       <!-- ══ Direct ══ -->
       <section class="page actif" id="vue-direct">
+        <!-- Deux controles visibles, quatre icones. Le reste vit dans le
+             tiroir des alertes : ce ne sont pas des gestes quotidiens. -->
         <div class="outils">
-          <span class="outils-titre">DISPOSITION</span>
           <div class="groupe" id="disposition">
             <button class="bouton" data-cols="1">1</button>
-            <button class="bouton actif" data-cols="2">2×2</button>
-            <button class="bouton" data-cols="3">3×3</button>
-            <button class="bouton" data-cols="4">4×4</button>
+            <button class="bouton actif" data-cols="2">4</button>
+            <button class="bouton" data-cols="3">9</button>
+            <button class="bouton" data-cols="4">16</button>
           </div>
-          <span class="msg" id="mur-page">—</span>
           <div class="groupe">
             <button class="bouton" id="prec-vue" title="Vue précédente">‹</button>
             <button class="bouton" id="suiv-vue" title="Vue suivante">›</button>
           </div>
+          <span class="msg" id="mur-page">—</span>
           <div class="outils-fin">
-            <label class="bascule" title="Met en avant la caméra concernée dès qu'une alerte critique arrive">
-              <input type="checkbox" id="suivi-alertes" checked /> Suivi des alertes
-            </label>
-            <button class="bouton" id="btn-son" title="Son des alertes critiques">Son</button>
-            <button class="bouton" id="btn-tech">Infos techniques</button>
-            <button class="bouton" id="btn-recharger"><svg class="ico"><use href="#i-refresh"/></svg></button>
-            <button class="bouton" id="btn-plein-ecran"><svg class="ico"><use href="#i-full"/></svg>Plein écran</button>
+            <button class="bouton icone" id="btn-recharger" title="Rafraîchir la liste des caméras"><svg class="ico"><use href="#i-refresh"/></svg></button>
+            <button class="bouton icone" id="btn-son" title="Son des alertes critiques"><svg class="ico"><use href="#i-son"/></svg></button>
+            <button class="bouton icone" id="btn-tech" title="Afficher le temps de calcul sur chaque vignette"><svg class="ico"><use href="#i-pouls"/></svg></button>
+            <button class="bouton icone" id="btn-plein-ecran" title="Plein écran — le mur seul"><svg class="ico"><use href="#i-full"/></svg></button>
           </div>
         </div>
 
+        <!-- Le mur, et rien d'autre. -->
         <div class="direct" id="direct-plan">
           <div class="mur c2" id="mur"></div>
           <div class="bande" id="bande"></div>
-          <aside class="vivantes">
-            <div class="vivantes-tete">ALERTES EN COURS<b id="vivantes-compte">0</b></div>
-            <div class="vivantes-liste" id="evenements"></div>
-            <button class="vivantes-pied" id="vers-historique">Ouvrir l'historique complet</button>
-          </aside>
         </div>
       </section>
 
@@ -471,7 +467,7 @@
     <div class="aide-item"><b>Survol d'une vignette</b><span>Un bandeau descend et affiche les modèles actifs, la mise en pause et le plein écran.</span></div>
     <div class="aide-item"><b>Clic sur une caméra</b><span>Elle s'agrandit ; les autres se rangent en colonne à droite et restent visibles. Un second clic revient à la mosaïque.</span></div>
     <div class="aide-item"><b>Bordure rouge clignotante</b><span>Une alerte critique vient de tomber sur cette caméra.</span></div>
-    <div class="aide-item"><b>Alertes en cours</b><span>Les derniers événements non traités. Cliquer une carte met la caméra concernée en avant.</span></div>
+    <div class="aide-item"><b>Alertes en cours</b><span>La pastille rouge de l'en-tête ouvre le tiroir des alertes non traitées. Il se referme d'un clic ou par Échap : le mur reste un mur.</span></div>
 
     <div class="aide-section">HISTORIQUE</div>
     <div class="aide-item"><b>Frise</b><span>Chaque trait est une alerte, placée à son heure et colorée par gravité. Les flèches changent de journée.</span></div>
@@ -495,6 +491,24 @@
     <div class="aide-section">RACCOURCIS</div>
     <div class="aide-item"><b>1 · 2 · 3 · 4</b><span>Direct, Historique, Analyse, Paramètres.</span></div>
     <div class="aide-item"><b>Échap</b><span>Quitte le plein écran ou ferme l'aide.</span></div>
+  </div>
+</div>
+
+<!-- Les alertes en cours quittent le mur pour un tiroir. Elles restent a un
+     clic — la pastille rouge de l'en-tete — mais ne prennent plus le tiers de
+     l'ecran en permanence. -->
+<div class="aide-tiroir" id="tiroir-alertes" hidden>
+  <div class="aide-barre">
+    <b>Alertes en cours</b>
+    <span class="mono" id="vivantes-compte" style="font-size:15px;font-weight:600;color:var(--or)">0</span>
+    <button id="tiroir-fermer" title="Fermer">✕</button>
+  </div>
+  <div style="flex:1;min-height:0;overflow-y:auto" id="evenements"></div>
+  <div style="flex:none;border-top:1px solid var(--line);padding:14px 20px;display:flex;flex-direction:column;gap:12px">
+    <label class="bascule" title="Met en avant la caméra concernée dès qu'une alerte critique arrive">
+      <input type="checkbox" id="suivi-alertes" checked /> Mettre la caméra en avant
+    </label>
+    <button class="bouton" id="vers-historique">Ouvrir l'historique complet</button>
   </div>
 </div>
 

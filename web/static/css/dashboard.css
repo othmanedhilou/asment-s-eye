@@ -856,3 +856,25 @@ input:focus, select:focus {
 @keyframes entre {
   from { opacity: 0; transform: translateX(16px); }
 }
+
+/* ── Le mur seul ──
+   Une barre d'outils se juge au nombre de choses qu'on peut y lire d'un coup.
+   Quatre commandes secondaires deviennent quatre icônes sans libellé : elles
+   restent atteignables sans occuper la ligne. */
+.bouton.icone { padding: 9px; }
+.bouton.icone .ico { width: 18px; height: 18px; }
+
+/* Le panneau d'alertes n'occupe plus le tiers de l'écran : il est devenu un
+   tiroir, et le mur prend toute la largeur. */
+.direct > .vivantes { display: none; }
+
+/* La pastille d'alertes de l'en-tête devient le bouton du tiroir. Elle reste
+   donc visible même sans alerte critique — mais cesse alors de crier. */
+.puce-crit { cursor: pointer; }
+.puce-crit:hover { background: rgba(224, 75, 63, 0.14); }
+.puce-crit.calme { border-color: var(--line2); color: var(--text2); font-weight: 400; animation: none; }
+.puce-crit.calme::before { background: var(--muted); }
+.puce-crit.calme:hover { background: var(--panel2); }
+
+#tiroir-alertes .aide-barre b { margin-right: auto; }
+#tiroir-alertes .carte:last-child { border-bottom: none; }

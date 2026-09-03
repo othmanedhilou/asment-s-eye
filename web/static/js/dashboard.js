@@ -152,7 +152,11 @@ function onglets() {
     if (e.target.matches("input, select, textarea")) return;
     const vues = ["direct", "historique", "analyse", "config"];
     if (vues[Number(e.key) - 1]) allerA(vues[Number(e.key) - 1]);
-    if (e.key === "Escape") { fermerVisionneuse(); el("aide").hidden = true; }
+    if (e.key === "Escape") {
+      fermerVisionneuse();
+      el("aide").hidden = true;
+      el("tiroir-alertes").hidden = true;
+    }
   });
 }
 
@@ -452,6 +456,13 @@ function outilsDirect() {
 
   el("btn-aide").addEventListener("click", () => { el("aide").hidden = false; });
   el("aide-fermer").addEventListener("click", () => { el("aide").hidden = true; });
+
+  // Le tiroir des alertes s'ouvre par la pastille de l'en-tete. Il ne prend la
+  // place du mur que le temps qu'on le consulte.
+  el("puce-crit").addEventListener("click", () => {
+    el("tiroir-alertes").hidden = !el("tiroir-alertes").hidden;
+  });
+  el("tiroir-fermer").addEventListener("click", () => { el("tiroir-alertes").hidden = true; });
 }
 
 /* ═══ Configuration d'une caméra ═══ */
@@ -608,6 +619,7 @@ async function chargerEvenements() {
   box.querySelectorAll("[data-cam]").forEach((n) =>
     n.addEventListener("click", () => {
       allerA("direct");
+      el("tiroir-alertes").hidden = true;
       selection = n.dataset.cam;
       dessinerMur();
       majActions();
@@ -1266,10 +1278,15 @@ async function majBarreEtat() {
       ? `${cameras.length} caméra${cameras.length > 1 ? "s" : ""} · ${enLigne} en ligne`
       : "détection arrêtée";
 
+    // La pastille sert aussi de bouton au tiroir : elle reste visible meme
+    // sans alerte critique, mais cesse alors de crier.
     const crit = resume.critiques_24h || 0;
     const puce = el("puce-crit");
-    puce.hidden = crit === 0;
-    puce.textContent = `${crit} alerte${crit > 1 ? "s" : ""} critique${crit > 1 ? "s" : ""}`;
+    puce.hidden = false;
+    puce.classList.toggle("calme", crit === 0);
+    puce.textContent = crit
+      ? `${crit} alerte${crit > 1 ? "s" : ""} critique${crit > 1 ? "s" : ""}`
+      : `${resume.non_acquittees || 0} à traiter`;
 
     el("badge-alertes").textContent = resume.non_acquittees || "";
   } catch {
@@ -1287,8 +1304,8 @@ function brancherSon() {
   const b = el("btn-son");
   const rendre = () => {
     b.classList.toggle("actif", sonActif);
-    b.textContent = sonActif ? "Son activé" : "Son coupé";
-    b.title = sonActif ? "Couper le son des alertes" : "Rétablir le son des alertes";
+    b.title = sonActif ? "Couper le son des alertes critiques"
+      : "Rétablir le son des alertes critiques";
   };
   rendre();
   b.addEventListener("click", () => {
