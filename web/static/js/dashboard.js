@@ -701,6 +701,14 @@ async function chargerPassages() {
   if (pl) p.set("plaque", pl);
   const h = el("f-periode")?.value;
   if (h) p.set("since_hours", h);
+  // La tranche horaire manquait ici : choisir « Matin » ne changeait rien au
+  // registre des passages, alors qu'elle agissait sur les alertes.
+  const poste = el("f-poste")?.value;
+  if (poste) {
+    const [a, b] = poste.split("-");
+    p.set("hour_from", a);
+    p.set("hour_to", b);
+  }
   p.set("limit", PAR_PAGE);
   p.set("offset", page * PAR_PAGE);
 
@@ -763,11 +771,26 @@ function resumerFiltres() {
     if (!n || !n.value) return defaut;
     return n.selectedOptions ? n.selectedOptions[0].textContent.trim() : n.value;
   };
-  el("filtres-resume").textContent = [
+  // Tous les filtres actifs, pas trois sur dix. Un filtre qui agit sans se
+  // montrer donne un tableau qu'on ne s'explique pas — c'est ce qui faisait
+  // croire que la tranche horaire ne marchait pas.
+  const morceaux = [
     lu("f-periode", "tout l'historique"),
     lu("f-camera", "toutes caméras"),
-    lu("f-gravite", "toutes gravités"),
-  ].join(" · ");
+  ];
+  if (registre === "alertes") morceaux.push(lu("f-gravite", "toutes gravités"));
+
+  for (const [id, defaut] of [["f-poste", "toute la journée"], ["f-modele", ""],
+    ["f-zone", ""], ["f-traite", ""], ["f-fausse", ""]]) {
+    if (registre === "passages" && id !== "f-poste") continue;
+    const v = lu(id, "");
+    if (v && v !== defaut) morceaux.push(v);
+  }
+  for (const id of ["f-classe", "f-plaque"]) {
+    const v = el(id)?.value.trim();
+    if (v) morceaux.push(`« ${v} »`);
+  }
+  el("filtres-resume").textContent = morceaux.join(" · ");
 }
 
 function majBoutonEffacer(total, filtre) {

@@ -138,8 +138,23 @@ def log_plate(plaque: str, camera: str, confidence: float = 0.0,
         return r.id
 
 
+def _heures_plates(stmt, hour_from, hour_to):
+    """Restreint a une tranche horaire, minuit compris.
+
+    « Nuit 22 h - 6 h » traverse minuit : la plage est alors l'UNION de deux
+    intervalles, pas leur intersection — qui serait vide.
+    """
+    if hour_from is None or hour_to is None:
+        return stmt
+    heure = func.cast(func.strftime("%H", PlateRecord.timestamp), Integer)
+    if hour_from <= hour_to:
+        return stmt.where(heure >= hour_from, heure < hour_to)
+    return stmt.where((heure >= hour_from) | (heure < hour_to))
+
+
 def read_plates(limit: int = 100, offset: int = 0, camera: str | None = None,
-                plaque: str | None = None, since_hours: int | None = None) -> list[dict]:
+                plaque: str | None = None, since_hours: int | None = None,
+                hour_from: int | None = None, hour_to: int | None = None) -> list[dict]:
     engine = _get_engine()
     with Session(engine) as session:
         stmt = select(PlateRecord)
@@ -149,6 +164,7 @@ def read_plates(limit: int = 100, offset: int = 0, camera: str | None = None,
             stmt = stmt.where(PlateRecord.plaque.like(f"%{plaque.upper()}%"))
         if since_hours:
             stmt = stmt.where(PlateRecord.timestamp >= datetime.now() - timedelta(hours=since_hours))
+        stmt = _heures_plates(stmt, hour_from, hour_to)
         total = session.scalar(
             select(func.count()).select_from(stmt.subquery())) or 0
         lignes = session.scalars(
@@ -178,6 +194,7 @@ def delete_plates(**filtres) -> int:
         if filtres.get("since_hours"):
             stmt = stmt.where(PlateRecord.timestamp
                               >= datetime.now() - timedelta(hours=filtres["since_hours"]))
+        stmt = _heures_plates(stmt, filtres.get("hour_from"), filtres.get("hour_to"))
         n = 0
         for r in session.scalars(stmt).all():
             _effacer_media(r.snapshot)

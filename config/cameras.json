@@ -15,9 +15,10 @@
     "bachage": false
   },
   "essai": {
-    "source": "videos/208_1.jpg",
+    "source": "videos/208.jpg",
     "models": [
       "arc",
+      "vehicles",
       "fall"
     ],
     "fps": 2.0,

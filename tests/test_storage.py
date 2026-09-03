@@ -255,3 +255,27 @@ def test_deux_cameras_font_deux_passages():
 
     assert log_plate("99999D9", "portail") is not None
     assert log_plate("99999D9", "quai") is not None
+
+
+def test_la_tranche_horaire_des_passages_traverse_minuit():
+    """« Nuit 22 h – 6 h » traverse minuit : la plage est l'UNION de deux
+    intervalles, pas leur intersection — qui serait vide."""
+    from datetime import datetime, timedelta
+
+    from app.storage import PlateRecord, Session, _get_engine, read_plates
+
+    with Session(_get_engine()) as s:
+        base = datetime.now().replace(minute=0, second=0, microsecond=0)
+        for heure, plaque in ((23, "NUIT23A1"), (2, "NUIT02A2"), (10, "JOUR10A3")):
+            s.add(PlateRecord(plaque=plaque, camera="portail-nuit",
+                              timestamp=base.replace(hour=heure) - timedelta(days=1),
+                              confidence=0.9))
+        s.commit()
+
+    nuit = {x["plaque"] for x in read_plates(limit=99, camera="portail-nuit",
+                                             hour_from=22, hour_to=6) if "plaque" in x}
+    assert nuit == {"NUIT23A1", "NUIT02A2"}, nuit
+
+    jour = {x["plaque"] for x in read_plates(limit=99, camera="portail-nuit",
+                                             hour_from=6, hour_to=14) if "plaque" in x}
+    assert jour == {"JOUR10A3"}, jour

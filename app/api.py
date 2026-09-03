@@ -210,14 +210,16 @@ def api_false_positive(alert_id: int, body: FalsePositiveBody):
 
 @app.get("/api/plates")
 def api_plates(limit: int = 50, offset: int = 0, camera: str | None = None,
-               plaque: str | None = None, since_hours: int | None = None):
+               plaque: str | None = None, since_hours: int | None = None,
+               hour_from: int | None = None, hour_to: int | None = None):
     """Registre des passages de vehicules.
 
     Distinct des alertes : un passage n'est pas un manquement, c'est un fait
     qu'on garde pour pouvoir y revenir.
     """
     lignes = read_plates(limit=limit, offset=offset, camera=camera,
-                         plaque=plaque, since_hours=since_hours)
+                         plaque=plaque, since_hours=since_hours,
+                         hour_from=hour_from, hour_to=hour_to)
     items = [x for x in lignes if "plaque" in x]
     total = lignes[0]["_total"] if lignes else 0
     for x in items:
@@ -227,8 +229,10 @@ def api_plates(limit: int = 50, offset: int = 0, camera: str | None = None,
 
 @app.delete("/api/plates")
 def api_supprimer_plates(camera: str | None = None, plaque: str | None = None,
-                         since_hours: int | None = None):
-    n = delete_plates(camera=camera, plaque=plaque, since_hours=since_hours)
+                         since_hours: int | None = None,
+                         hour_from: int | None = None, hour_to: int | None = None):
+    n = delete_plates(camera=camera, plaque=plaque, since_hours=since_hours,
+                      hour_from=hour_from, hour_to=hour_to)
     return {"ok": True, "supprimes": n}
 
 

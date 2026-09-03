@@ -468,7 +468,16 @@ table.liste tr.fausse td { opacity: 0.45; }
 
 .etiq { display: inline-block; padding: 3px 9px; background: var(--panel3); color: var(--text2); font-size: 13px; white-space: nowrap; }
 .etiq.zone { color: var(--haute); border: 1px solid var(--haute); background: none; }
-.etiq.plaque { font-family: var(--mono); color: var(--or); border: 1px solid var(--or-trait); background: none; }
+/* La plaque ne se comprime jamais. Etiquette flex sans « flex: none », elle
+   se faisait rogner des que la vignette etait etroite — et une plaque a
+   moitie lisible ne vaut pas mieux qu'aucune plaque. */
+.etiq.plaque {
+  font-family: var(--mono); color: var(--or);
+  border: 1px solid var(--or-trait); background: none;
+  flex: none; white-space: nowrap; overflow: visible;
+  letter-spacing: 0.04em;
+}
+.tuile-bas .etiq.plaque { font-size: 13px; }
 
 .pagination { flex: none; display: flex; align-items: center; justify-content: center; gap: 18px; padding: 14px; font-size: 14px; color: var(--muted); border-top: 1px solid var(--line); }
 
