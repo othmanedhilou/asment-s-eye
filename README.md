@@ -108,11 +108,29 @@ sur processeur (aucun GPU requis) :
 | `fire_smoke` | Fire, Smoke | validée |
 | `arc` | Arc Flash, Sparks | correcte |
 | `epi` | Hardhat, Mask, Safety Vest et leurs absences | rappel ~54 % sur NO-Hardhat |
-| `gloves_glasses` | Gloves, Goggles et leurs absences, Fall-Detected | chute peu fiable |
+| `fall` | up, bending, down | mAP50 0,901 — jamais éprouvé sur une chute réelle |
+| `plate` | License_Plate | mAP50 0,970 — localisation seule, la lecture est à part |
 | `conveyor` | crack (déchirure de bande) | jamais éprouvée sur site |
 | `person_animal` | person, animal | correcte |
-| `vehicles` | car, truck, bus, motorcycle, bicycle | plaque non lue |
-| `load_control` | intact, torn, empty | **désactivé** — faux positifs confiants |
+| `vehicles` | car, truck, bus, motorcycle, bicycle | correcte |
+
+Deux modèles ont été **retirés du projet**.
+
+`load_control` (cas d'usage 10, contrôle de sortie des camions) décrivait l'état
+d'une bâche — intact / torn / empty — et non la conformité d'un chargement : pas
+de classe « surchargé », pas de classe « conforme », donc rien qui puisse dire
+qu'un camion est en règle. Sur deux photographies intitulées « Overloaded
+truck », il n'a rien vu ; sur une scène de bureau, il affirmait `empty` à 0,89.
+Le cas d'usage 10 est retiré du périmètre couvert ; les numéros des autres cas
+sont inchangés, ils suivent le cahier des charges.
+
+`gloves_glasses`, ensuite. Éprouvé sur
+sept photographies d'ouvriers portant gants et lunettes, ses quatre classes
+nominales n'ont produit aucune détection — alors que `epi` lisait correctement
+les mêmes images, ce qui écarte la piste d'un mauvais cadrage. Seule se
+déclenchait `Fall-Detected`, toujours à tort. Les cas d'usage 6 (lunettes) et 7
+(gants) sont donc aujourd'hui **non couverts**, et la chute est passée à un
+modèle dédié.
 
 Outils : `scripts/export_openvino.py` (conversion), `scripts/inspect_models.py`
 (classes de chaque modèle), `scripts/run_inference.py` (essai sur une image).
@@ -140,7 +158,7 @@ Le vrai danger n'est pas de stagner : c'est de reculer sans le voir.
 ## Ré-entraîner un modèle
 
 ```powershell
-.\venv\Scripts\python.exe scripts\export_dataset.py --model load_control --days 90
+.\venv\Scripts\python.exe scripts\export_dataset.py --model epi --days 90
 ```
 
 Produit un jeu de données YOLO issu de l'exploitation réelle : les alertes
@@ -222,7 +240,7 @@ le suivi est actif. Chaque zone peut imposer son propre délai.
 .\venv\Scripts\python.exe -m pytest tests -q
 ```
 
-179 tests couvrent les sources vidéo, la géométrie des zones et leurs horaires,
+352 tests couvrent les sources vidéo, la géométrie des zones et leurs horaires,
 le suivi d'objets et le comptage, le moteur d'alerte, la persistance, les
 indicateurs de qualité, l'API, le banc de test, l'enregistrement continu et le
 rapport PDF. Ils s'exécutent aussi à chaque
@@ -242,18 +260,21 @@ exclu : une archive circule, un secret ne doit pas voyager avec.
 
 - Validé sur webcam et vidéos rejouées ; les caméras IP du site ne sont pas
   encore branchées.
-- `load_control` produit des faux positifs confiants hors de son contexte
-  d'entraînement : désactivé par défaut, ré-entraînement requis avec des images
-  négatives.
-- `Fall-Detected` peu représenté dans son dataset : seuil relevé à 0,80.
+- Cas d'usage 6 (lunettes) et 7 (gants) **non couverts** : le seul modèle qui
+  s'en chargeait ne détectait rien, et a été retiré. Un modèle dédié reste à
+  entraîner.
+- Cas d'usage 10 (contrôle de sortie des camions) **retiré du projet** : le
+  modèle disponible ne répondait pas à la question posée.
+- Le modèle de chute (`fall`) distingue up / bending / down avec un mAP50 de
+  0,901, mais n'a jamais été confronté à une chute réelle sur le site.
 - Rappel `NO-Hardhat` / `NO-Mask` d'environ 54 % : à renforcer avec des images du
   site réel.
 - `conveyor` n'a jamais été éprouvé sur une vraie bande transporteuse.
-- Lecture de plaques (cas d'usage 9) non réalisée.
+- Lecture de plaques : la **localisation** est fiable (modèle dédié, mAP50
+  0,970) ; la **lecture** dépend d'easyocr, optionnel, et exige une plaque d'au
+  moins 90 px de large à l'image — en deçà, le système le dit plutôt que
+  d'inventer un numéro. C'est un problème de placement de caméra, pas de code.
 - Interface sans authentification : à réserver au réseau interne.
-- Lecture de plaques sans modèle dédié : la localisation par vision classique
-  tient sur une vue frontale nette, pas sur un angle marqué. Entraîner un modèle
-  `plate` améliorerait nettement le résultat.
 - Le rapprochement entre caméras n'est pas une ré-identification : sans modèle
   d'apparence, deux personnes habillées pareil sont confondues.
 
