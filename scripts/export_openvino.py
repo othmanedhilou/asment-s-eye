@@ -16,7 +16,6 @@ MODEL_NAMES = [
     "epi",
     "fall",
     "fire_smoke",
-    "gloves_glasses",
     "person_animal",
     # Localisation des plaques. Sans lui, la localisation se fait par
     # traitement d'image classique, qui propose beaucoup de faux candidats —

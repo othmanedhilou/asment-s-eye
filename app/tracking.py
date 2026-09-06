@@ -55,12 +55,12 @@ ETATS_EXCLUSIFS = [
     {"Hardhat", "NO-Hardhat"},
     {"Mask", "NO-Mask"},
     {"Safety Vest", "NO-Safety Vest"},
-    {"Gloves", "NO-Gloves"},
-    {"Goggles", "NO-Goggles"},
-    {"up", "bending", "down", "fallen", "falling"},
-    {"truk_odol", "truk_normal", "truck_odol", "normal_truck"},
-    {"covered-trucks", "six-wheel covered-trucks"},
+    {"up", "bending", "down"},
 ]
+# N'y faire figurer que des libelles que les modeles produisent reellement.
+# Y sont restes un temps les gants, les lunettes et les camions baches, dont
+# les modeles ont ete retires : des groupes qui ne pouvaient plus rien
+# apparier, et qui laissaient croire a une couverture inexistante.
 
 _GROUPE_PAR_LABEL = {}
 for _i, _groupe in enumerate(ETATS_EXCLUSIFS):

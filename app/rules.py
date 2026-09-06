@@ -8,27 +8,18 @@ ALERT_LABELS = {
     "arc": {"Arc Flash", "Sparks"},
     "conveyor": {"crack"},
     "epi": {"NO-Hardhat", "NO-Mask", "NO-Safety Vest"},
-    # Modèle de chute dédié. « down » vient du jeu d'entraînement retenu, où les
-    # trois postures sont nommées up / bending / down. Seule la dernière alerte :
-    # « bending » (penché) est justement ce que le modèle actuel confond avec une
-    # chute, et c'est pour l'en distinguer qu'on l'entraîne.
-    # « falling » alerte aussi quand le modèle le distingue : secourir pendant la
-    # chute vaut mieux qu'après.
-    "fall": {"fallen", "falling", "down"},
+    # Modèle de chute dédié. Le modèle entraîné nomme les trois postures
+    # up / bending / down, et seule la dernière alerte : « bending » (penché)
+    # est justement ce qu'il confond avec une chute, et c'est pour l'en
+    # distinguer qu'on l'entraîne.
+    #
+    # N'y déclarer que des classes que le modèle contient. « fallen » et
+    # « falling » y figuraient en prévision d'un modèle futur ; elles ne
+    # correspondaient à rien et faussaient l'audit sans jamais alerter.
+    # Si un ré-entraînement les ajoute, les remettre ici — scripts/audit_modeles.py
+    # compare cette table aux classes réelles de chaque .pt et le signale.
+    "fall": {"down"},
     "fire_smoke": {"Fire", "Smoke"},
-    # Contrôle de sortie des camions. Les deux premières classes viennent du
-    # modèle actuel ; les suivantes sont celles du modèle cible, entraîné sur le
-    # portail. Déclarer les deux permet de remplacer le modèle sans toucher au
-    # code — et « conforme » n'y figure pas : un camion en règle ne doit rien
-    # déclencher, c'est précisément la classe qui manque au modèle actuel.
-    # « truk_odol » vient du jeu d'entraînement retenu : Over Dimension Over
-    # Load, le terme réglementaire indonésien pour un camion hors gabarit ou
-    # surchargé. L'orthographe varie selon la version du jeu — « truk_odol »
-    # dans la v9 téléchargée, « truck_odol » sur la fiche du dépôt. Les deux
-    # sont déclarées : une faute ici et aucune détection ne serait reconnue,
-    # sans le moindre message d'erreur.
-    # « truk_normal » n'y figure pas : un camion conforme ne doit rien
-    # déclencher. Idem pour « roda », les roues, annotées pour compter les essieux.
     "person_animal": {"person", "animal"},
     "vehicles": {"car", "truck", "bus", "motorcycle", "bicycle"},
 }

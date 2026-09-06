@@ -29,6 +29,20 @@ convoyeur a annonce « crack 0,52 » sur un visage humain, puis sur un diagramme
 de circulation oceanique intitule « ocean conveyor belt ». D'ou une regle
 d'exploitation : n'activer un modele que sur une camera qui regarde son sujet.
 
+CE QUE L'ESSAI A REVELE — MODELE DE CHUTE
+-----------------------------------------
+Il ne suffit pas de demander « voit-il une personne au sol ? ». Sur quatre
+photos d'une personne seule etendue, il rend « down » a 0,78 / 0,76 / 0,89 /
+0,31 : il voit. Sur quatre photos de secourisme — meme posture, mais un
+secouriste penche au-dessus — il ne rend plus que « bending », et « down »
+tombe a 0,08 meme en abaissant le seuil a 0,05.
+
+La personne penchee masque celle qui est a terre, et le modele ne retient que
+la premiere. Consequence d'exploitation : l'alerte part quand l'ouvrier tombe
+seul — le cas ou elle est vitale — et cesse des qu'un collegue se penche sur
+lui. Ce n'est pas la ou l'alerte manque le plus, mais il faut le savoir, et
+ne jamais compter sur ce modele pour mesurer la duree d'une intervention.
+
 Deux precautions apprises a l'usage :
   - le Python de la machine peut avoir des certificats expires ; on passe par
     curl, qui a son propre magasin
@@ -75,6 +89,17 @@ SCENES = {
     "vehicles": ["dump truck construction site", "heavy truck highway"],
     "arc": ["arc welding sparks", "welder shielded metal arc welding"],
     "conveyor": ["conveyor belt quarry", "damaged conveyor belt"],
+    # Le modele de chute nomme ses postures up / bending / down, et seule
+    # « down » alerte. Les deux premieres recherches doivent donc declencher,
+    # les deux suivantes NON : un ouvrier debout et un ouvrier penche sont le
+    # quotidien d'une cimenterie, et c'est exactement ce qu'un modele de chute
+    # confond le plus volontiers avec un homme a terre.
+    # Deux familles de scenes, et l'ecart entre elles est le vrai enseignement
+    # de cet essai (voir « CE QUE L'ESSAI A REVELE » plus bas) : une personne
+    # SEULE au sol est vue (« down » 0,76 a 0,89), la meme personne avec un
+    # secouriste penche sur elle ne l'est plus.
+    "fall": ["man lying down grass field", "person sleeping on the ground outdoors",
+             "first aid recovery position", "cardiopulmonary resuscitation training"],
 }
 
 

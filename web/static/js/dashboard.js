@@ -10,7 +10,6 @@ const MODELES = {
   epi: "EPI",
   fall: "Personne au sol",
   fire_smoke: "Fumée / feu",
-  gloves_glasses: "Gants / lunettes",
   person_animal: "Personne / animal",
   vehicles: "Véhicules",
   systeme: "Incident technique",

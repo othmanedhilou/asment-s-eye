@@ -30,11 +30,16 @@ USE_CASES = [
         "num": 3,
         "titre": "Personne KO / horizontale",
         "model": "fall",
-        "classes": ["fallen", "falling"],
-        "etat": "a_entrainer",
-        "note": "Modèle dédié à entraîner (jeu public de 4 497 images disponible). "
-                "En attendant, la chute est assurée par gloves_glasses, dont la "
-                "fiabilité est faible — seuil relevé à 0.80 pour limiter le bruit.",
+        "classes": ["down"],
+        "etat": "partiel",
+        "note": "Modèle dédié entraîné et en service. Il nomme trois postures — "
+                "up / bending / down — et seule « down » alerte : un ouvrier penché "
+                "est le quotidien d'une cimenterie, pas un incident. Éprouvé sur "
+                "images inconnues : une personne seule au sol est vue (0,76 à 0,89), "
+                "un homme debout ne déclenche rien. Limite mesurée : dès qu'un "
+                "secouriste se penche au-dessus, il masque celui qui est à terre et "
+                "l'alerte cesse. Reste à valider à la hauteur et à l'angle des "
+                "caméras du site.",
     },
     {
         "num": 4,
@@ -55,18 +60,23 @@ USE_CASES = [
     {
         "num": 6,
         "titre": "EPI — Lunettes sécurité",
-        "model": "gloves_glasses",
-        "classes": ["Goggles", "NO-Goggles"],
-        "etat": "operationnel",
-        "note": "",
+        "model": None,
+        "classes": [],
+        "etat": "a_entrainer",
+        "note": "Aucun modèle. Celui qui couvrait ce cas annonçait des lunettes sur "
+                "des visages nus et n'en voyait pas sur des visages équipés : il a été "
+                "retiré. Un cas d'usage porté par un modèle qui se trompe est plus "
+                "coûteux qu'un cas ouvert. À entraîner sur les images du site.",
     },
     {
         "num": 7,
         "titre": "EPI — Gants",
-        "model": "gloves_glasses",
-        "classes": ["Gloves", "NO-Gloves"],
-        "etat": "operationnel",
-        "note": "",
+        "model": None,
+        "classes": [],
+        "etat": "a_entrainer",
+        "note": "Aucun modèle, pour la même raison que le cas 6 : les gants et les "
+                "lunettes venaient du même modèle, retiré faute de fiabilité. "
+                "À entraîner sur les images du site.",
     },
     {
         "num": 8,
@@ -82,9 +92,12 @@ USE_CASES = [
         "model": "vehicles",
         "classes": ["car", "truck", "bus", "motorcycle", "bicycle"],
         "etat": "partiel",
-        "note": "Véhicules détectés ; plaques lues par vote sur plusieurs images "
-                "(suivi requis). Localisation par vision classique : un modèle de "
-                "plaque dédié améliorerait nettement le taux de lecture.",
+        "note": "Chaîne complète : modèle de plaque dédié pour la localiser, lecture "
+                "OCR arabe et latine, vote sur plusieurs images du même véhicule, puis "
+                "consignation dans le registre des passages. La lettre de série arabe "
+                "est relue à part — lue avec le reste, « و » ressortait en « 3 ». "
+                "Réserve : le modèle vehicles reconnaît mal les engins de carrière "
+                "(un CAT 797 n'est pas vu), à ré-entraîner sur les images du site.",
     },
     {
         "num": 10,

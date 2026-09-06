@@ -55,3 +55,5 @@ kernel.errors.txt
 # OS
 .DS_Store
 Thumbs.db
+# La plaque de reference est refabriquee par scripts/essai_plaque.py
+data/essais_plaques/

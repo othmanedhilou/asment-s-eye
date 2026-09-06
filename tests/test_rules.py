@@ -182,24 +182,34 @@ def test_la_premiere_alerte_part_meme_si_la_machine_vient_de_demarrer(monkeypatc
 
 def test_chute_est_critique():
     from app.storage import severity_for
-    assert severity_for("fall", "fallen") == "critique"
+    assert severity_for("fall", "down") == "critique"
 
 
-# ── Contrôle de sortie des camions ───────────────────────────────────
-
-
-def test_modele_dedie_alerte_pendant_la_chute():
-    """Secourir pendant la chute vaut mieux qu'après."""
-    assert AlertEngine().process(detection(model="fall", label="falling")) is not None
+# ── Chute : les trois postures du modèle ─────────────────────────────
+#
+# Le modèle entraîné ne connaît que up / bending / down. Ces tests portaient
+# sur « fallen » et « falling », qui n'existent nulle part : ils passaient en
+# vérifiant une table de libellés contre elle-même, sans jamais toucher au
+# modèle. Chaque libellé testé ici sort réellement du .pt.
 
 
 def test_modele_dedie_alerte_sur_personne_au_sol():
-    assert AlertEngine().process(detection(model="fall", label="fallen")) is not None
+    assert AlertEngine().process(detection(model="fall", label="down")) is not None
+
+
+def test_les_libelles_declares_existent_dans_le_modele():
+    """Un libellé mal orthographié n'alerte jamais, et ne dit rien.
+
+    C'est la panne la plus silencieuse du projet : la règle est écrite, le
+    modèle tourne, et rien ne se déclenche jamais. On compare donc la table
+    d'alerte aux classes réelles du fichier de poids.
+    """
+    from app.rules import ALERT_LABELS
+    assert ALERT_LABELS["fall"] <= {"up", "bending", "down"}
 
 
 def test_personne_debout_ne_declenche_rien():
-    """C'est exactement ce que le modèle actuel ne sait pas faire."""
-    assert AlertEngine().process(detection(model="fall", label="standing")) is None
+    assert AlertEngine().process(detection(model="fall", label="up")) is None
 
 
 def test_personne_penchee_ne_declenche_rien():

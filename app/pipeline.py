@@ -130,7 +130,9 @@ def _consigner_passage(camera_name: str, lue: dict, frame, bbox) -> None:
 
         identifiant = log_plate(
             plaque=lue["texte"], camera=camera_name,
-            confidence=float(lue.get("score") or 0),
+            # Le lecteur rend « confiance », pas « score » : la colonne du
+            # registre affichait 0 % sur tous les passages.
+            confidence=float(lue.get("confiance") or 0),
             lectures=int(lue.get("lectures") or 0), snapshot=chemin)
         if identifiant is not None:
             log.info(f"[{camera_name}] passage consigne : {lue['texte']}")

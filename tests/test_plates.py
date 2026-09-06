@@ -428,3 +428,70 @@ def test_sans_troisieme_groupe_rien_n_est_impose():
     texte, _ = lecteur.lire_region(np.zeros((60, 220, 3), dtype=np.uint8))
     assert texte == "659906"
     assert not appele, "la relecture ne doit pas se declencher sur deux groupes"
+
+
+# ── L'ordre d'écriture de la plaque ──────────────────────────────────
+#
+# Dès qu'une lettre arabe figure dans une boîte, le moteur rend la ligne en
+# ordre logique arabe : « 65990 و 6 » revient « 6 و 65990 ». Affichée, elle
+# paraît juste — le navigateur la remet à l'endroit — mais en base c'est un
+# autre numéro. Le défaut n'était visible qu'en comparant les points de code.
+
+
+def test_une_seule_boite_arabe_est_remise_dans_l_ordre_imprime():
+    """Le cas réel : sur une plaque nette, le moteur ne rend qu'UNE boîte.
+
+    L'assemblage par groupes ne protégeait donc de rien — il ne joue qu'à
+    partir de deux boîtes.
+    """
+    import numpy as np
+
+    from app.plates import PlateReader
+
+    lecteur = PlateReader(asynchrone=False)
+    lecteur._ocr_teste = True
+    # Ce que easyocr rend vraiment : tout le numéro, en ordre logique inversé.
+    lecteur._ocr = _OcrFactice([(_boite(10, 10, 200), "6\u064865990", 0.99)])
+
+    texte, _ = lecteur.lire_region(np.zeros((60, 240, 3), dtype=np.uint8))
+    assert [hex(ord(c)) for c in texte] == [hex(ord(c)) for c in "65990\u06486"], \
+        f"lu {[hex(ord(c)) for c in texte]}"
+
+
+def test_une_plaque_latine_n_est_pas_reordonnee():
+    """Sans arabe, rien ne doit bouger : l'algorithme bidi ne s'applique pas."""
+    from app.plates import ordre_visuel
+
+    assert ordre_visuel("7H2340") == "7H2340"
+    assert ordre_visuel("") == ""
+
+
+# ── Le budget de lectures d'un véhicule ──────────────────────────────
+
+
+def test_une_image_sautee_ne_consomme_pas_une_tentative():
+    """Le lecteur occupé saute l'image — elle ne doit pas être décomptée.
+
+    Elle l'était : la première lecture d'un processus charge easyocr pendant
+    une minute, et les images de cette minute étaient toutes abandonnées ici
+    tout en faisant monter le compteur. Au bout de huit, le véhicule était
+    déclaré épuisé alors qu'il n'avait été lu qu'une fois — une lecture unique
+    ne fait pas les deux votes concordants exigés, et la plaque n'était jamais
+    établie. Les caméras restaient sur « lecture en cours », sans erreur nulle
+    part, puisque l'unique lecture faite était juste.
+    """
+    import numpy as np
+
+    from app.plates import PlateReader
+
+    lecteur = PlateReader()
+    lecteur._ocr_teste = True
+    lecteur._ocr = _OcrFactice([])
+    zone = np.zeros((60, 240, 3), dtype=np.uint8)
+
+    lecteur._en_cours = True          # le lecteur travaille déjà
+    for _ in range(20):
+        lecteur.observer_plaque("cam", 1, zone)
+
+    assert lecteur._tentatives[("cam", 1)] == 0
+    assert lecteur.a_lire("cam", 1), "le véhicule doit rester lisible"

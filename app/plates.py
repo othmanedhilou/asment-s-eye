@@ -100,6 +100,41 @@ LECTURES_MAX = 8
 CHIFFRES_ARABES = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "01234567890123456789")
 
 
+# L'algorithme bidirectionnel d'Unicode, livre avec easyocr. Il traduit l'ordre
+# LOGIQUE d'un texte mele d'arabe et de chiffres en son ordre VISUEL.
+try:
+    from bidi.algorithm import get_display as _bidi
+except ImportError:  # pragma: no cover - easyocr l'installe, mais ne pas en dependre
+    _bidi = None
+
+
+def ordre_visuel(texte: str) -> str:
+    """Rend le texte dans l'ordre où il est ÉCRIT sur la plaque.
+
+    Des qu'une lettre arabe figure dans une boite, easyocr rend la ligne en
+    ordre logique arabe, de droite a gauche. La plaque « 65990 و 6 » revient
+    donc « 6 و 65990 » : les memes caracteres, l'ordre inverse. Affichee, elle
+    parait juste — le navigateur la remet a l'endroit tout seul — mais en base
+    c'est un autre numero, qu'aucune recherche ne retrouvera et qu'aucun export
+    ne rendra correctement.
+
+    Le piege est qu'on ne s'en apercoit pas a l'oeil : il a fallu comparer les
+    points de code pour le voir.
+
+    L'assemblage par groupes plus bas ne suffit pas a s'en premunir : il ne
+    joue que si le moteur decoupe la plaque en plusieurs boites, et sur une
+    plaque nette il n'en rend qu'une seule, deja inversee.
+    """
+    if not texte or _bidi is None:
+        return texte
+    if not any("؀" <= c <= "ۿ" for c in texte):
+        return texte  # rien d'arabe : aucun reordonnancement a faire
+    try:
+        return _bidi(texte)
+    except Exception:
+        return texte
+
+
 def normaliser(texte: str) -> str:
     """Met le texte en forme de plaque : majuscules, sans séparateurs.
 
@@ -323,7 +358,7 @@ class PlateReader:
         # premier groupe. On les assemble dans l'ordre ou ils sont ecrits.
         groupes = []
         for boite, texte, score in lectures:
-            morceau = normaliser(texte)
+            morceau = normaliser(ordre_visuel(texte))
             if not morceau:
                 continue
             try:
@@ -368,8 +403,8 @@ class PlateReader:
 
         # Repli : la meilleure boite seule, quand l'assemblage ne tient pas.
         meilleur, meilleur_score = "", 0.0
-        for _, texte, score in lectures:
-            candidat = corriger_confusions(normaliser(texte))
+        for _, texte, score in lectures:  # le repli aussi doit etre remis a l'endroit
+            candidat = corriger_confusions(normaliser(ordre_visuel(texte)))
             if plausible(candidat) and score > meilleur_score:
                 meilleur, meilleur_score = candidat, float(score)
         return meilleur, meilleur_score
@@ -454,12 +489,15 @@ class PlateReader:
             return None
 
         if self.a_lire(camera, track_id):
-            self._tentatives[(camera, track_id)] += 1
             if self._executor is None:
+                self._tentatives[(camera, track_id)] += 1
                 self._travailler(camera, track_id, crop)
             elif not self._en_cours:
                 # Le lecteur est occupé : on saute cette image plutôt que de
                 # faire la queue. Un véhicule reste visible plusieurs images.
+                # L'image sautée ne compte pas comme une tentative — voir la
+                # note dans `observer_plaque`.
+                self._tentatives[(camera, track_id)] += 1
                 self._en_cours = True
                 self._executor.submit(self._travailler, camera, track_id, crop.copy())
 
@@ -522,8 +560,6 @@ class PlateReader:
                 self._diagnostic[camera]["trop_petite"] += 1
             return
 
-        self._tentatives[(camera, track_id)] += 1
-
         def travail(image):
             try:
                 texte, score = self.lire_region(image)
@@ -539,10 +575,25 @@ class PlateReader:
             finally:
                 self._en_cours = False
 
+        # Ne compter une tentative que si l'image part VRAIMENT a la lecture.
+        #
+        # Elle etait comptee avant ce test. Or la premiere lecture d'un
+        # processus charge le moteur easyocr — une minute — pendant laquelle
+        # toutes les images suivantes sont abandonnees ici, sans etre lues. Le
+        # compteur, lui, montait quand meme : au bout de huit images le vehicule
+        # etait declare epuise (`a_lire` rend False) alors qu'il n'avait ete lu
+        # qu'une seule fois. Une lecture unique ne fait pas les deux votes
+        # concordants exiges, et la plaque n'etait jamais etablie.
+        #
+        # C'est ce qui laissait les cameras sur « lecture en cours » sans jamais
+        # rien consigner : la panne ne se voyait nulle part, puisque la lecture
+        # qui avait bien eu lieu etait correcte.
         if self._executor is None:
+            self._tentatives[(camera, track_id)] += 1
             self._en_cours = True
             travail(zone)
         elif not self._en_cours:
+            self._tentatives[(camera, track_id)] += 1
             self._en_cours = True
             self._executor.submit(travail, zone.copy())
 
