@@ -1,6 +1,10 @@
 """Convertit tous les modèles .pt en OpenVINO (accélération CPU) pour le pipeline."""
 
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import app  # noqa: F401  — pose SetErrorMode avant tout chargement OpenVINO
 
 from ultralytics import YOLO
 

@@ -61,3 +61,30 @@ def test_tout_modele_declare_est_reglable_depuis_l_interface():
         f"declares mais non reglables : {declares - set(PIPELINE_MODELS)}"
     assert set(PIPELINE_MODELS) - declares == set(), \
         f"reglables mais non declares : {set(PIPELINE_MODELS) - declares}"
+
+
+def test_le_paquet_neutralise_les_boites_de_dialogue_du_chargeur():
+    """OpenVINO énumère tous ses greffons au premier appel. Sur cette machine,
+    le greffon GPU réclame une fonction OpenCL que le pilote de 2015 ne fournit
+    pas, et Windows affiche une boîte MODALE qui bloque le démarrage. Sur un
+    serveur qui démarre seul au boot, personne ne clique dessus.
+    """
+    import sys
+
+    if sys.platform != "win32":
+        pytest.skip("le mode d'erreur du chargeur est propre à Windows")
+
+    import ctypes
+
+    import app  # noqa: F401 — l'import pose le mode
+
+    mode = ctypes.windll.kernel32.SetErrorMode(0)
+    ctypes.windll.kernel32.SetErrorMode(mode)          # on le remet aussitôt
+    assert mode & 0x0001, "SEM_FAILCRITICALERRORS n'est pas posé"
+
+
+def test_openvino_voit_le_processeur():
+    """Écarter un greffon inutilisable ne doit jamais coûter la détection."""
+    import openvino as ov
+
+    assert "CPU" in ov.Core().available_devices
