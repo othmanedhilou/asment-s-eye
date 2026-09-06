@@ -382,3 +382,49 @@ def test_une_plaque_etrangere_n_est_pas_corrigee_au_format_marocain():
     assert corriger_confusions("SDN7484U") == "SDN7484U"
     # Avec la lettre de série, le format est marocain : on corrige.
     assert corriger_confusions("S1234\u0648O") == "51234\u06480"
+
+
+def test_le_groupe_du_milieu_est_impose_comme_lettre():
+    """Sur « 65990 و 6 », le moteur rendait « 9 » pour la lettre : و ressemble
+    à un 9. Le groupe du milieu d'une plaque marocaine est TOUJOURS une lettre —
+    l'imposer fait passer la lecture de 0,6 sur « 9 » à 0,91 sur « و ».
+
+    C'est la structure de la plaque qui tranche, pas une meilleure
+    reconnaissance.
+    """
+    import numpy as np
+
+    from app.plates import PlateReader
+
+    lecteur = PlateReader(asynchrone=False)
+    lecteur._ocr_teste = True
+    lecteur._ocr = _OcrFactice([
+        (_boite(10, 10, 90), "65990", 0.95),
+        (_boite(120, 10, 24), "9", 0.60),    # la lettre, prise pour un chiffre
+        (_boite(170, 10, 24), "6", 0.92),
+    ])
+    lecteur._relire_en_lettre = lambda image, boite: "\u0648"
+
+    texte, _ = lecteur.lire_region(np.zeros((60, 220, 3), dtype=np.uint8))
+    assert texte == "65990\u06486", f"lu {texte!r}"
+
+
+def test_sans_troisieme_groupe_rien_n_est_impose():
+    """Deux groupes seulement : on ne sait pas lequel serait la lettre, et
+    inventer une lettre serait pire que de n'en pas mettre."""
+    import numpy as np
+
+    from app.plates import PlateReader
+
+    lecteur = PlateReader(asynchrone=False)
+    lecteur._ocr_teste = True
+    lecteur._ocr = _OcrFactice([
+        (_boite(10, 10, 90), "65990", 0.95),
+        (_boite(170, 10, 24), "6", 0.92),
+    ])
+    appele = []
+    lecteur._relire_en_lettre = lambda image, boite: appele.append(1) or "\u0648"
+
+    texte, _ = lecteur.lire_region(np.zeros((60, 220, 3), dtype=np.uint8))
+    assert texte == "659906"
+    assert not appele, "la relecture ne doit pas se declencher sur deux groupes"

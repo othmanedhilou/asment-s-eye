@@ -59,6 +59,12 @@ LANGUES = ["ar", "en"]
 #
 # A completer si le site voit passer d'autres series.
 LETTRES_SERIE = "ابجدهوطشمأ"
+
+# Seuils de detection abaisses. Aux valeurs par defaut, la lettre de serie —
+# un caractere isole entre deux traits — ne produit AUCUNE boite : la plaque
+# « 65990 و 6 » sortait « 659906 ». Abaisses, les trois groupes apparaissent.
+SEUIL_TEXTE = 0.4
+SEUIL_BAS = 0.2
 CARACTERES_PLAQUE = ("0123456789"
                      "ABCDEFGHIJKLMNOPQRSTUVWXYZ"  # plaques étrangères
                      + LETTRES_SERIE)
@@ -304,7 +310,9 @@ class PlateReader:
                 image = cv2.resize(image, (int(w * facteur), 48), interpolation=cv2.INTER_CUBIC)
 
             lectures = self._ocr.readtext(image, detail=1, paragraph=False,
-                                          allowlist=CARACTERES_PLAQUE)
+                                          allowlist=CARACTERES_PLAQUE,
+                                          text_threshold=SEUIL_TEXTE,
+                                          low_text=SEUIL_BAS)
         except Exception as e:
             log.error(f"échec de lecture de plaque : {e}")
             return "", 0.0
@@ -324,7 +332,7 @@ class PlateReader:
                 gauche, milieu, hauteur = min(xs), sum(ys) / len(ys), max(ys) - min(ys)
             except (TypeError, IndexError, ZeroDivisionError):
                 gauche, milieu, hauteur = 0.0, 0.0, 1.0
-            groupes.append([gauche, milieu, hauteur, morceau, float(score)])
+            groupes.append([gauche, milieu, hauteur, morceau, float(score), 0, boite])
 
         if groupes:
             # Ordonner sur l'abscisse seule suffit pour une plaque d'une ligne,
@@ -339,8 +347,19 @@ class PlateReader:
                 if g[1] - base > hauteur_type * 0.6:
                     ligne += 1
                     base = g[1]
-                g.append(ligne)
+                g[5] = ligne
             groupes.sort(key=lambda g: (g[5], g[0]))
+
+            # Le groupe du milieu d'une plaque marocaine est TOUJOURS une
+            # lettre. Le moteur, lui, hesite : « و » ressemble a un 9 et sortait
+            # « 9 » avec 0,6 de confiance. En lui imposant de choisir parmi les
+            # seules lettres de serie, il rend « و » a 0,91 — c'est la structure
+            # de la plaque qui tranche, pas une meilleure reconnaissance.
+            if len(groupes) >= 3:
+                lettre = self._relire_en_lettre(image, groupes[len(groupes) // 2][6])
+                if lettre:
+                    groupes[len(groupes) // 2][3] = lettre
+
             assemble = corriger_confusions("".join(g[3] for g in groupes))
             if plausible(assemble):
                 # La confiance d'une plaque assemblee est celle de son maillon
@@ -354,6 +373,28 @@ class PlateReader:
             if plausible(candidat) and score > meilleur_score:
                 meilleur, meilleur_score = candidat, float(score)
         return meilleur, meilleur_score
+
+    def _relire_en_lettre(self, image, boite) -> str:
+        """Relit une zone en n'autorisant que les lettres de serie."""
+        try:
+            xs = [int(point[0]) for point in boite]
+            ys = [int(point[1]) for point in boite]
+            marge = 8
+            h, w = image.shape[:2]
+            zone = image[max(min(ys) - marge, 0):min(max(ys) + marge, h),
+                         max(min(xs) - marge, 0):min(max(xs) + marge, w)]
+            if zone.size == 0:
+                return ""
+            relu = self._ocr.readtext(zone, detail=1, paragraph=False,
+                                      allowlist=LETTRES_SERIE,
+                                      text_threshold=0.3, low_text=SEUIL_BAS)
+            for _, texte, score in relu:
+                propre = normaliser(texte)
+                if len(propre) == 1 and propre in LETTRES_SERIE:
+                    return propre
+        except Exception as e:
+            log.debug(f"relecture de la lettre de serie impossible : {e}")
+        return ""
 
     def _travailler(self, camera: str, track_id, crop):
         """Localise puis lit — exécuté hors de la boucle vidéo."""
