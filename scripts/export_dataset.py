@@ -1,7 +1,7 @@
 """Exporte un jeu de donnees YOLO a partir des alertes reelles.
 
     python scripts/export_dataset.py --model epi
-    python scripts/export_dataset.py --model load_control --days 90
+    python scripts/export_dataset.py --model epi --days 90
 
 Pourquoi cet outil existe
 -------------------------
@@ -11,7 +11,7 @@ ce que l'exploitation produit chaque jour :
 
   * les alertes marquees FAUSSES par les operateurs deviennent des images de
     fond, sans annotation. C'est ainsi qu'on apprend a un modele a repondre
-    "rien ici" — precisement ce qui manque a load_control, qui affirme `empty`
+    "rien ici" — precisement ce qui manque aux modeles mono-classe
     a 0,89 sur une scene de bureau parce qu'il n'a jamais vu d'image negative.
 
   * les alertes justes fournissent des images pre-annotees, a partir de la

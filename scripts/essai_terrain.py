@@ -18,8 +18,7 @@ ont ete eprouves pour de bon.
 Il ne vaut PAS pour les modeles entraines sur un cadrage etroit et specifique.
 Le modele de convoyeur vient de BeltCrack : des gros plans de la SURFACE de la
 bande. Le juger sur une photo de galerie de convoyeur traversant un champ, ou
-la bande n'est meme pas visible, ne dit rien de lui. Meme chose pour le
-controle de chargement, entraine sur des vues de benne prises au portail.
+la bande n'est meme pas visible, ne dit rien de lui. 
 
 Pour ceux-la, le seul essai valable se fait sur VOTRE camera, cadree comme elle
 le sera en exploitation.
@@ -76,7 +75,6 @@ SCENES = {
     "vehicles": ["dump truck construction site", "heavy truck highway"],
     "arc": ["arc welding sparks", "welder shielded metal arc welding"],
     "conveyor": ["conveyor belt quarry", "damaged conveyor belt"],
-    "load_control": ["truck covered tarpaulin cargo", "overloaded truck"],
 }
 
 

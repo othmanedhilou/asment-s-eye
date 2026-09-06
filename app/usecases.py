@@ -89,7 +89,7 @@ USE_CASES = [
     {
         "num": 10,
         "titre": "Contrôle de sortie des camions (bâchage, surcharge)",
-        "model": "load_control",
+        "model": None,
         "classes": ["intact", "torn", "empty"],
         "etat": "a_entrainer",
         "note": "Le modèle actuel décrit l'état d'une bâche, pas la conformité d'un "

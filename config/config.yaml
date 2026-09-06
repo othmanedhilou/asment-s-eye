@@ -11,7 +11,6 @@ cameras:
       - conveyor
       - epi
       - fire_smoke
-      - load_control
       - person_animal
       - vehicles
     # les 7 modèles sont chargés ; activer/désactiver détection et alertes
@@ -40,10 +39,6 @@ models:
     file: models/ciments_eye_fire_smoke_best_openvino_model
     conf: 0.35
     enabled: true
-  load_control:
-    file: models/ciments_eye_load_control_best_openvino_model
-    conf: 0.4
-    enabled: true  # faux positifs connus (0.89) -> désactivé PAR DÉFAUT via le panneau (data/settings.json), pas ici
   plate:
     file: models/ciments_eye_plate_best_openvino_model
     conf: 0.35

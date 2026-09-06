@@ -29,11 +29,6 @@ ALERT_LABELS = {
     # sans le moindre message d'erreur.
     # « truk_normal » n'y figure pas : un camion conforme ne doit rien
     # déclencher. Idem pour « roda », les roues, annotées pour compter les essieux.
-    # « empty » (benne vide) est retiré : une benne vide n'est pas une
-    # infraction, et le modèle actuel la voyait partout — c'était la première
-    # source de fausses alertes.
-    "load_control": {"torn", "truk_odol", "truck_odol", "overloaded",
-                     "bache_absente", "bache_partielle", "bache_dechiree", "surcharge"},
     "person_animal": {"person", "animal"},
     "vehicles": {"car", "truck", "bus", "motorcycle", "bicycle"},
 }
@@ -71,7 +66,6 @@ MIN_CONFIDENCE_OVERRIDE = {
     # La classe la plus faible du modèle EPI, et la moins pertinente pour une
     # cimenterie : elle produisait l'essentiel des fausses alertes.
     ("epi", "NO-Mask"): 0.55,
-    ("load_control", "torn"): 0.75,
     # Une webcam de bureau braquée sur un visage n'a aucune raison de produire
     # une voiture ou une fissure de convoyeur. Ces classes-là ne sortent d'un
     # modèle mal cadré que sous 60 % de confiance : on les exige franches.

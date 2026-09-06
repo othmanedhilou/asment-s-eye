@@ -15,10 +15,6 @@
     "detect": true,
     "alert": true
   },
-  "load_control": {
-    "detect": false,
-    "alert": false
-  },
   "person_animal": {
     "detect": false,
     "alert": true
@@ -28,6 +24,10 @@
     "alert": true
   },
   "fall": {
+    "detect": true,
+    "alert": true
+  },
+  "load_control": {
     "detect": true,
     "alert": true
   }

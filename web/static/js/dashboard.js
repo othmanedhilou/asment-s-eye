@@ -11,7 +11,6 @@ const MODELES = {
   fall: "Personne au sol",
   fire_smoke: "Fumée / feu",
   gloves_glasses: "Gants / lunettes",
-  load_control: "Chargement camion",
   person_animal: "Personne / animal",
   vehicles: "Véhicules",
   systeme: "Incident technique",
@@ -213,7 +212,7 @@ function dessinerTableCameras() {
 
   const lignes = cameras.map((c) => {
     const options = [c.tracking && "suivi", c.plates && "plaques",
-      c.bachage && "bâchage", c.collecte && "collecte",
+      c.collecte && "collecte",
       c.recording && "enreg."].filter(Boolean).join(", ") || "—";
     const etat = c.enabled ? (c.online ? "en ligne" : "hors ligne") : "en pause";
     return "<tr data-cam=\"" + ech(c.name) + "\" class=\""
@@ -376,7 +375,7 @@ async function basculerPause(nom) {
         source: c.source, models: c.models, fps: c.fps, imgsz: c.imgsz,
         workers: c.workers, enabled: !c.enabled, tracking: c.tracking,
         recording: c.recording, plates: c.plates, collecte: c.collecte,
-        bachage: c.bachage, voisins: c.voisins || [],
+        voisins: c.voisins || [],
         segment_minutes: c.segment_minutes, retention_days: c.retention_days,
       }),
     });
@@ -496,7 +495,6 @@ function ouvrirFormCamera(nom = null) {
   el("cam-actif").value = String(c?.enabled ?? true);
   el("cam-suivi").value = String(c?.tracking ?? false);
   el("cam-plaques").value = String(c?.plates ?? false);
-  el("cam-bachage").value = String(c?.bachage ?? false);
   el("cam-collecte").value = String(c?.collecte ?? false);
   el("cam-enregistrement").value = String(c?.recording ?? false);
   el("cam-voisins").value = (c?.voisins || []).join(", ");
@@ -532,7 +530,6 @@ function donneesCamera() {
     enabled: el("cam-actif").value === "true",
     tracking: el("cam-suivi").value === "true",
     plates: el("cam-plaques").value === "true",
-    bachage: el("cam-bachage").value === "true",
     collecte: el("cam-collecte").value === "true",
     recording: el("cam-enregistrement").value === "true",
     voisins: el("cam-voisins").value.split(",").map((v) => v.trim()).filter(Boolean),
@@ -545,7 +542,7 @@ function formCamera() {
 
   // Ces deux options reposent sur le vote entre plusieurs images du même objet :
   // sans suivi, elles n'ont rien sur quoi voter.
-  for (const id of ["cam-plaques", "cam-bachage"]) {
+  for (const id of ["cam-plaques"]) {
     el(id).addEventListener("change", (e) => {
       if (e.target.value === "true" && el("cam-suivi").value !== "true") {
         el("cam-suivi").value = "true";

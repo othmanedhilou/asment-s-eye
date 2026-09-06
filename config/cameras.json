@@ -11,8 +11,7 @@
     "tracking": true,
     "recording": false,
     "plates": true,
-    "collecte": false,
-    "bachage": false
+    "collecte": false
   },
   "essai": {
     "source": "videos/Screenshot 2026-09-03 124901.png",
@@ -24,7 +23,6 @@
     "tracking": true,
     "recording": false,
     "plates": true,
-    "collecte": false,
-    "bachage": false
+    "collecte": false
   }
 }
