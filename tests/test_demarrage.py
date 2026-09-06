@@ -47,3 +47,17 @@ def test_les_modeles_des_cameras_sont_declares():
     for nom, cfg in load_cameras().items():
         inconnus = set(cfg.get("models", [])) - connus
         assert not inconnus, f"camera « {nom} » demande {inconnus}"
+
+
+def test_tout_modele_declare_est_reglable_depuis_l_interface():
+    """Un modèle absent de PIPELINE_MODELS tourne mais reste invisible dans
+    Paramètres → Modèles : on ne peut ni le couper ni voir qu'il consomme du
+    temps de calcul. C'est ce qui était arrivé à `plate`."""
+    from app.config import load_config
+    from app.settings import PIPELINE_MODELS
+
+    declares = set(load_config()["models"])
+    assert declares - set(PIPELINE_MODELS) == set(), \
+        f"declares mais non reglables : {declares - set(PIPELINE_MODELS)}"
+    assert set(PIPELINE_MODELS) - declares == set(), \
+        f"reglables mais non declares : {set(PIPELINE_MODELS) - declares}"

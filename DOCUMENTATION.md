@@ -457,7 +457,6 @@ ALERT_LABELS = {
     "epi":            {"NO-Hardhat", "NO-Mask", "NO-Safety Vest"},
     "fire_smoke":     {"Fire", "Smoke"},
     "gloves_glasses": {"NO-Gloves", "NO-Goggles", "Fall-Detected"},
-    "load_control":   {"torn", "empty"},
     "person_animal":  {"person", "animal"},
     "vehicles":       {"car", "truck", "bus", "motorcycle", "bicycle"},
 }
@@ -470,8 +469,6 @@ Un ouvrier **avec** casque (`Hardhat`) est détecté mais ne déclenche rien.
 ```python
 MIN_CONFIDENCE_OVERRIDE = {
     ("gloves_glasses", "Fall-Detected"): 0.80,
-    ("load_control", "torn"):            0.75,
-    ("load_control", "empty"):           0.75,
 }
 ```
 
@@ -504,7 +501,7 @@ produit une poignée.
 SEVERITY_BY_MODEL = {
     "fire_smoke": "critique",   "arc":            "critique",
     "conveyor":   "haute",      "gloves_glasses": "haute",
-    "epi":        "haute",      "load_control":   "moyenne",
+    "epi":        "haute",
     "person_animal": "moyenne", "vehicles":       "moyenne",
 }
 SEVERITY_BY_LABEL = {"Fall-Detected": "critique"}   # prime sur le modèle
@@ -677,7 +674,6 @@ Huit modèles YOLO entraînés séparément, convertis en OpenVINO.
 | `conveyor` | crack | haute | jamais validé sur site |
 | `person_animal` | person, animal | moyenne | OK |
 | `vehicles` | car, truck, bus, motorcycle, bicycle | moyenne | OK (plaque non lue) |
-| `load_control` | torn, empty | moyenne | **désactivé** (voir 3.2) |
 
 ### 3.1 Pourquoi OpenVINO
 
@@ -698,23 +694,20 @@ Chaque `.pt` produit un dossier `models/ciments_eye_<nom>_best_openvino_model`.
 `imgsz: 480` dans `config.yaml` fait planter l'inférence — il faut réexporter à
 la taille voulue.
 
-### 3.2 Le cas `load_control`
+### 3.2 Le contrôle des camions, retiré
 
-Ce modèle détecte `empty` avec une confiance de **0,89** sur une scène de bureau
-qui n'a rien à voir avec du chargement de camion. Ce n'est pas un problème de
-seuil : le modèle est confiant *et* faux, donc aucun seuillage ne le corrigera.
+Le modèle `load_control` décrivait l'état d'une bâche — `intact`, `torn`,
+`empty` — et non la conformité d'un chargement. Il ignorait la surcharge,
+n'avait aucune classe « conforme », et affirmait `empty` à 0,81 sur un
+visage humain.
 
-Cause probable : son dataset d'entraînement ne contient aucune image négative
-(sans chargement). Le modèle n'a jamais appris à répondre « rien ici » et force
-une classification parmi `intact` / `torn` / `empty` quoi qu'il voie.
+Il a été **supprimé du projet** plutôt que laissé désactivé. Un modèle qui
+se trompe avec assurance coûte plus cher qu'un modèle absent : le second
+se voit, le premier se croit.
 
-Il est donc **désactivé par défaut** (`data/settings.json`), tout en restant
-visible et activable dans l'interface. Le correctif réel est un ré-entraînement
-avec des images négatives.
-
----
-
-## 4. Configuration
+Le besoin demeure — c'est le cas d'usage 10 du cahier des charges. Il est à
+reprendre depuis des images du portail, avec les classes qui décrivent
+vraiment la règle : bâche absente, partielle, déchirée, surcharge, conforme.
 
 ### 4.1 `config/config.yaml`
 
@@ -724,7 +717,7 @@ cameras:
     source: 0                                   # webcam locale
     rtsp_url: "rtsp://localhost:8554/webcam"    # utilisé si `source` absent
     models: [arc, conveyor, epi, fire_smoke,
-             gloves_glasses, load_control, person_animal, vehicles]
+             person_animal, plate, vehicles]
 
 models:
   fire_smoke:
@@ -973,7 +966,7 @@ selon la rétention : clips et snapshots sont purgés à 30 jours par défaut.
 2. **Zones jamais dessinées sur une scène réelle.** Le mécanisme est testé
    (29 tests unitaires, exclusions et horaires compris), mais les zones utiles
    du site restent à tracer.
-3. **Trois modèles à ré-entraîner** : `load_control` (inutilisable),
+3. **Deux modèles à ré-entraîner** :
    `Fall-Detected` (peu fiable), et le rappel EPI (~54 % sur NO-Hardhat, soit un
    ouvrier sans casque sur deux qui passe inaperçu).
 4. **Modèle `conveyor` jamais éprouvé** : intégré et exporté, mais aucune bande
@@ -1038,7 +1031,7 @@ pour éviter de les redécouvrir.
    EPI, départ de feu, quai de chargement, et surtout une scène banale où il ne
    se passe rien. Sans elles, la qualité des modèles reste une impression.
 2. **Ré-entraîner** le rappel EPI d'abord (54 % : un ouvrier sans casque sur
-   deux passe inaperçu), puis `load_control` avec les images négatives que
+   deux passe inaperçu), puis les modèles restants avec les images négatives que
    produit le bouton « fausse alerte », puis la détection de chute.
    `scripts/export_dataset.py` prépare le jeu de données ; le protocole adapté à
    un GPU modeste figure dans le README.

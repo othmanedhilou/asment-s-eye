@@ -15,7 +15,7 @@ industriel de Ciments du Maroc.
 Il ne se contente pas d'afficher des caméras : huit modèles de vision par
 ordinateur analysent les images en continu et lèvent une **alerte** quand ils
 voient quelque chose d'anormal — un ouvrier sans casque, un départ de feu, un
-camion qui sort sans bâche, une personne au sol.
+une personne au sol, une plaque d'immatriculation à relever.
 
 Le logiciel est une **application web servie en local** par le serveur du site.
 Personne ne l'ouvre depuis Internet. Il tourne dans un navigateur, en plein
@@ -117,14 +117,13 @@ Une seule visible à la fois, choisie dans un menu latéral.
 | Modèle | Ce qu'il détecte |
 |---|---|
 | `epi` | casque, gilet, chaussures — équipements de protection |
-| `gloves_glasses` | gants et lunettes de sécurité |
 | `fire_smoke` | feu et fumée |
 | `person_animal` | présence humaine, intrusion animale |
 | `vehicles` | voitures, camions, engins |
-| `load_control` | camion bâché ou non, surcharge |
 | `arc` | arcs électriques de soudure |
 | `conveyor` | anomalies sur les convoyeurs à bande |
-| `fall` | personne au sol *(en cours d'entraînement)* |
+| `fall` | personne au sol |
+| `plate` | localisation des plaques d'immatriculation |
 
 **Une alerte** porte : identifiant, caméra, modèle, libellé de ce qui a été vu,
 confiance (0 à 1), message, horodatage, chemin de la capture, **gravité**,

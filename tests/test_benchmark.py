@@ -18,19 +18,19 @@ def test_taux_moyenne_sur_les_clips():
 
 def test_fausses_cumulees_sur_les_clips():
     resultats = [
-        clip("a.mp4", fausses={"load_control/empty": {"images_vues": 30, "par_minute": 12.0}}),
-        clip("b.mp4", fausses={"load_control/empty": {"images_vues": 20, "par_minute": 8.0}}),
+        clip("a.mp4", fausses={"conveyor/crack": {"images_vues": 30, "par_minute": 12.0}}),
+        clip("b.mp4", fausses={"conveyor/crack": {"images_vues": 20, "par_minute": 8.0}}),
     ]
-    assert _synthese(resultats)["fausses_par_minute"]["load_control/empty"] == 20.0
+    assert _synthese(resultats)["fausses_par_minute"]["conveyor/crack"] == 20.0
 
 
 def test_fausses_triees_par_gravite():
     resultats = [clip("a.mp4", fausses={
         "epi/NO-Mask": {"images_vues": 1, "par_minute": 2.0},
-        "load_control/empty": {"images_vues": 9, "par_minute": 30.0},
+        "conveyor/crack": {"images_vues": 9, "par_minute": 30.0},
     })]
     ordre = list(_synthese(resultats)["fausses_par_minute"])
-    assert ordre[0] == "load_control/empty"
+    assert ordre[0] == "conveyor/crack"
 
 
 # ── Comparaison avant / après ────────────────────────────────────────
@@ -58,8 +58,8 @@ def test_regression_du_taux_detectee():
 
 def test_moins_de_fausses_detections_est_une_amelioration():
     """Sur le bruit, l'écart s'interprète à l'envers : moins vaut mieux."""
-    diff = compare(rapport({}, {"load_control/empty": 30.0}),
-                   rapport({}, {"load_control/empty": 4.0}))
+    diff = compare(rapport({}, {"conveyor/crack": 30.0}),
+                   rapport({}, {"conveyor/crack": 4.0}))
     ligne = diff["lignes"][0]
     assert ligne["ecart"] == -26.0
     assert ligne["amelioration"] is True

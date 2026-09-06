@@ -27,7 +27,7 @@
     "detect": true,
     "alert": true
   },
-  "load_control": {
+  "plate": {
     "detect": true,
     "alert": true
   }

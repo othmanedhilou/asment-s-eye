@@ -90,13 +90,14 @@ USE_CASES = [
         "num": 10,
         "titre": "Contrôle de sortie des camions (bâchage, surcharge)",
         "model": None,
-        "classes": ["intact", "torn", "empty"],
+        "classes": [],
         "etat": "a_entrainer",
-        "note": "Le modèle actuel décrit l'état d'une bâche, pas la conformité d'un "
-                "chargement : il ignore la surcharge et n'a aucune classe « conforme », "
-                "d'où ses affirmations hors contexte. À remplacer par un modèle entraîné "
-                "sur les images du portail (bâche absente / partielle / déchirée / "
-                "surcharge / conforme) — voir docs/GUIDE_REENTRAINEMENT.md",
+        "note": "Aucun modèle. Le précédent décrivait l'état d'une bâche et non la "
+                "conformité d'un chargement : il ignorait la surcharge, n'avait aucune "
+                "classe « conforme », et affirmait « benne vide » sur à peu près tout. "
+                "Il a été retiré plutôt que conservé en l'état — un modèle qui se trompe "
+                "coûte plus cher qu'un modèle absent. À entraîner sur les images du "
+                "portail : bâche absente / partielle / déchirée / surcharge / conforme.",
     },
     {
         "num": 11,

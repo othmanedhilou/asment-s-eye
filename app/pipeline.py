@@ -315,10 +315,6 @@ def run_camera(camera_name: str, cam_cfg: dict, config: dict, registry: ModelReg
         log.info(f"[{camera_name}] suivi d'objets actif"
                  + (f", {len(compteurs)} ligne(s) de comptage" if compteurs else ""))
 
-    # Contrôle du bâchage : déduit l'absence de bâche de son absence de
-    # détection. Exige le suivi, comme la lecture de plaques : la confirmation
-    # se fait sur plusieurs images du MEME camion.
-
     # Lecture de plaques : n'a de sens qu'avec le suivi, puisque la fiabilité
     # vient du vote sur plusieurs images du MEME vehicule.
     lecteur_plaques = None

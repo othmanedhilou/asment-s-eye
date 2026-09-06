@@ -11,7 +11,7 @@ ouvrez-le dans Google Colab, il fait le reste.
 | Ordre | Modèle | Défaut | Pourquoi cette place |
 |---|---|---|---|
 | **1** | `epi` | rappel ~54 % sur `NO-Hardhat` | Un ouvrier sans casque sur deux passe inaperçu. C'est le défaut le plus grave **et le plus sournois** : une fausse alerte se voit, un cas manqué non. L'interface reste calme, et tout le monde croit que le système fonctionne. |
-| **2** | `load_control` | affirme `empty` à 0,89 sur un bureau | Il est *sûr de lui et faux* : aucun seuil ne corrige cela. Il n'a jamais appris à répondre « rien ici ». |
+| **2** | *contrôle des camions* | **retiré du projet** | Le modèle affirmait `empty` à 0,89 sur un bureau : sûr de lui et faux, ce qu'aucun seuil ne corrige. Il a été supprimé plutôt que conservé — un modèle qui se trompe coûte plus cher qu'un modèle absent. Tout est à reprendre depuis les images du portail. |
 | **3** | `gloves_glasses` | chute peu fiable | Aujourd'hui masquée par un seuil relevé à 0,80 — un pansement, pas un correctif. |
 | **4** | `plate` | modèle inexistant | La localisation par vision classique fonctionne sur une vue frontale nette. Un modèle dédié améliorerait nettement le taux de lecture. |
 | **5** | `conveyor` | jamais éprouvé | Aucun jeu public. Demande des images de vos bandes transporteuses. |
@@ -114,7 +114,7 @@ Deux conseils qui font la différence :
 
 #### Entraîner
 
-Le carnet Colab fonctionne tel quel : renseignez `MODELE = 'load_control'`,
+Le carnet Colab fonctionne tel quel : renseignez le nom du modèle,
 sautez l'étape Roboflow publique, et pointez sur votre archive à l'étape 6.
 
 Partez de `yolov8n` plutôt que du modèle actuel : ses classes ne correspondent
@@ -146,14 +146,14 @@ transporteuse ne bouge pas.
 ## La source qui vaut plus que tout jeu public
 
 ```powershell
-.\venv\Scripts\python.exe scripts\export_dataset.py --model load_control --days 90
+.\venv\Scripts\python.exe scripts\export_dataset.py --model epi --days 90
 ```
 
 Ce script produit un jeu de données issu de **votre exploitation réelle** :
 
 - les alertes **marquées fausses** par les opérateurs deviennent des **images de
   fond**, sans annotation. C'est ainsi qu'on apprend à un modèle à répondre
-  « rien ici » — exactement ce qui manque à `load_control` ;
+  « rien ici » — exactement ce qui manquait au modèle de camions retiré ;
 - les alertes justes fournissent des images **pré-annotées** à partir des
   positions enregistrées : il reste à vérifier les boîtes, pas à tout tracer.
 
