@@ -58,8 +58,17 @@ if ($Arreter) {
     $procs = Processus-CimentsEye
     if (-not $procs) { "Rien a arreter."; return }
     foreach ($p in $procs) {
-        Stop-Process -Id $p.ProcessId -Force
-        "arrete PID $($p.ProcessId)"
+        # Arreter le pipeline emporte le processus fils qu'il a ouvert pour
+        # l'inference. Celui-ci figure encore dans la liste relevee juste
+        # avant, et le tuer a son tour echouait tout le script sur un
+        # « Cannot find a process ». Un processus deja parti est justement le
+        # resultat qu'on cherche.
+        try {
+            Stop-Process -Id $p.ProcessId -Force -ErrorAction Stop
+            "arrete PID $($p.ProcessId)"
+        } catch [Microsoft.PowerShell.Commands.ProcessCommandException] {
+            "PID $($p.ProcessId) deja arrete"
+        }
     }
     return
 }
@@ -73,7 +82,9 @@ if (-not (Test-Path $Python)) {
 $existants = Processus-CimentsEye
 if ($existants) {
     "Arret des processus deja en cours..."
-    foreach ($p in $existants) { Stop-Process -Id $p.ProcessId -Force }
+    foreach ($p in $existants) {
+        try { Stop-Process -Id $p.ProcessId -Force -ErrorAction Stop } catch {}
+    }
     Start-Sleep -Seconds 3
 }
 

@@ -524,6 +524,12 @@ class PlateReader:
             return "aucune plaque reperee sur le vehicule"
         if d["illisibles"] and not d["lues"]:
             return "plaque reperee mais illisible : contre-jour, flou ou angle trop ferme"
+        # Ne rien avoir vu et etre en train de lire sont deux etats opposes, et
+        # ils s'affichaient tous deux « lecture en cours ». Une camera braquee
+        # sur une cour vide semblait donc travailler sans fin, et on a cherche
+        # une panne la ou il n'y avait qu'une absence de vehicule.
+        if not d["regions"] and not d["lectures"]:
+            return "aucun vehicule observe pour le moment"
         return "lecture en cours"
 
     def diagnostic(self, camera: str) -> dict:
