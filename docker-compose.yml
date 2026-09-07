@@ -1,0 +1,69 @@
+# Ciment's Eye — deploiement sur le serveur d'un site.
+#
+#   docker compose up -d          l'interface et la detection
+#   docker compose logs -f        ce que voit le systeme
+#   docker compose down           tout arreter
+#
+# DEUX SERVICES, UNE SEULE IMAGE. L'interface et la detection sont deux
+# processus distincts — c'est le choix d'architecture decrit au chapitre 4 :
+# redemarrer l'un ne doit pas interrompre l'autre. Ils partagent la meme
+# image et ne different que par leur commande.
+#
+# Le relais RTSP `mediamtx` ne sert qu'en developpement, pour simuler une
+# camera IP a partir d'une webcam. Il est donc dans un profil separe et ne
+# demarre pas sur un site, ou les cameras parlent RTSP nativement :
+#
+#   docker compose --profile dev up -d
+
+services:
+
+  interface:
+    build: .
+    image: ciments-eye:latest
+    container_name: ciments_eye_interface
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - donnees:/app/data
+      - clips:/app/clips
+      # La configuration reste hors de l'image : ajouter une camera ne doit
+      # pas demander de reconstruire quoi que ce soit.
+      - ./config:/app/config
+    env_file:
+      - .env
+    command: >
+      python -m uvicorn app.api:app --host 0.0.0.0 --port 8000
+
+  detection:
+    build: .
+    image: ciments-eye:latest
+    container_name: ciments_eye_detection
+    restart: unless-stopped
+    volumes:
+      - donnees:/app/data
+      - clips:/app/clips
+      - ./config:/app/config
+    env_file:
+      - .env
+    # `-u` : sans lui, les journaux du pipeline restent bloques dans le tampon
+    # de sortie et n'apparaissent dans `docker compose logs` qu'apres coup —
+    # or c'est precisement pendant un incident qu'on les lit.
+    command: python -u -m app.pipeline
+    depends_on:
+      - interface
+
+  # --- developpement seulement ---
+  mediamtx:
+    image: bluenviron/mediamtx:latest
+    container_name: ciments_eye_mediamtx
+    restart: unless-stopped
+    profiles: ["dev"]
+    ports:
+      - "8554:8554"   # RTSP
+      - "1935:1935"   # RTMP (optionnel)
+      - "8888:8888"   # HLS (optionnel)
+
+volumes:
+  donnees:
+  clips:

@@ -1,0 +1,37 @@
+# Ce qui ne doit PAS entrer dans l'image.
+#
+# Deux raisons, et la seconde est la plus importante.
+#
+#   LE POIDS. L'environnement virtuel local, les jeux de donnees et les clips
+#   deja enregistres pesent plusieurs gigaoctets et n'ont aucune raison d'etre
+#   copies : les dependances sont reinstallees dans l'image, et l'historique
+#   appartient a chaque site.
+#
+#   LE SECRET. Le fichier .env porte le jeton du robot Telegram. Un jeton
+#   expose permettrait a un tiers d'envoyer de fausses alertes a l'equipe de
+#   securite. Il est fourni au conteneur A L'EXECUTION (env_file), jamais
+#   copie dans l'image — une image se partage, se pousse sur un registre, et
+#   tout ce qu'elle contient part avec elle.
+
+.env
+*.env
+
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+.git/
+.gitignore
+
+data/
+clips/
+backups/
+datasets/
+notebooks/
+design/
+docs/
+tests/
+
+*.zip
+*.log
