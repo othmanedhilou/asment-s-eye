@@ -14,9 +14,9 @@
     "collecte": false
   },
   "essai": {
-    "source": "videos/Screenshot 2026-09-03 124901.png",
+    "source": "videos/208_2.jpg",
     "models": [
-      "fire_smoke"
+      "epi"
     ],
     "fps": 2.0,
     "enabled": true,

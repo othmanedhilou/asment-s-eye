@@ -1,6 +1,6 @@
 {
   "arc": {
-    "detect": true,
+    "detect": false,
     "alert": true
   },
   "conveyor": {
@@ -8,11 +8,11 @@
     "alert": true
   },
   "epi": {
-    "detect": false,
+    "detect": true,
     "alert": true
   },
   "fire_smoke": {
-    "detect": true,
+    "detect": false,
     "alert": true
   },
   "person_animal": {
@@ -20,11 +20,11 @@
     "alert": true
   },
   "vehicles": {
-    "detect": true,
+    "detect": false,
     "alert": true
   },
   "fall": {
-    "detect": true,
+    "detect": false,
     "alert": true
   },
   "plate": {

@@ -196,6 +196,76 @@ def corriger_confusions(texte: str) -> str:
     return "".join(caracteres)
 
 
+def separer_sur_barres(image):
+    """Localise les deux barres de separation d'une plaque marocaine.
+
+    Une plaque marocaine porte trois groupes separes par deux barres
+    verticales : le numero de serie, la lettre arabe, le code de region. Ces
+    barres sont un repere PHYSIQUE, present sur toute plaque reglementaire, et
+    donc plus fiable que le decoupage du moteur de reconnaissance -- lequel
+    fusionne volontiers la fin de la plaque en un seul mot.
+
+    Elles ne se distinguent pas des chiffres par leur noirceur : un trait de
+    « 6 » est aussi sombre qu'une barre. Elles s'en distinguent par leur
+    LARGEUR -- environ moitie moins qu'un caractere, a hauteur egale.
+
+    Rend (fin_serie, debut_lettre, fin_lettre, debut_region) en coordonnees de
+    l'image recue, ou None si la plaque ne se decoupe pas proprement en trois.
+    Ne rien rendre est un resultat : mieux vaut la lecture ordinaire qu'un
+    decoupage invente.
+    """
+    if image is None or image.size == 0:
+        return None
+    hauteur, largeur = image.shape[:2]
+    if largeur < 60 or hauteur < 20:
+        return None
+
+    gris = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) if image.ndim == 3 else image
+
+    # L'interieur clair de la plaque : les lignes qui la traversent vraiment.
+    # Sans ce cadrage, la calandre du vehicule au-dessus et en dessous fausse
+    # tout le comptage.
+    claires = [y for y in range(hauteur) if np.median(gris[y]) > 110]
+    if len(claires) < hauteur * 0.25:
+        return None
+    haut, bas = min(claires), max(claires)
+    bande = gris[haut:bas + 1, :]
+
+    # Agrandir avant de segmenter : sur une plaque de deux cents pixels, une
+    # barre en fait sept, et un seuillage adaptatif a besoin de matiere.
+    f = 4
+    grande = cv2.resize(bande, (largeur * f, bande.shape[0] * f),
+                        interpolation=cv2.INTER_CUBIC)
+    binaire = cv2.adaptiveThreshold(grande, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                                    cv2.THRESH_BINARY_INV, 31, 12)
+    nombre, _, stats, _ = cv2.connectedComponentsWithStats(binaire, 8)
+    HB = grande.shape[0]
+
+    formes = []
+    for i in range(1, nombre):
+        x, _, w, h, aire = stats[i]
+        if h < HB * 0.30 or aire < 30:
+            continue
+        if w > HB * 1.2:          # le fond de la plaque, pas un caractere
+            continue
+        formes.append((x / f, w / f, h / f))
+    if len(formes) < 4:
+        return None
+
+    formes.sort()
+    largeurs = sorted(w for _, w, _ in formes)
+    mediane = largeurs[len(largeurs) // 2]
+
+    barres = [(x, w) for x, w, h in formes if w < mediane * 0.6 and w / h < 0.35]
+    if len(barres) != 2:
+        return None               # decoupage ambigu : on n'y touche pas
+
+    (x1, w1), (x2, w2) = barres
+    if not (0.2 < x1 / largeur < 0.75 and x1 + w1 < x2):
+        return None
+    return int(x1), int(x1 + w1), int(x2), int(x2 + w2)
+
+
 def regions_candidates(crop, max_regions: int = 4) -> list:
     """Zones du véhicule susceptibles d'être une plaque, les meilleures d'abord.
 
@@ -396,6 +466,17 @@ class PlateReader:
                     groupes[len(groupes) // 2][3] = lettre
 
             assemble = corriger_confusions("".join(g[3] for g in groupes))
+
+            # Aucune lettre arabe dans le resultat : le moteur a fusionne la
+            # fin de la plaque, et le numero serait consigne sans sa lettre de
+            # serie -- donc faux. On la retrouve par les barres.
+            if not any("\u0600" <= c <= "\u06ff" for c in assemble):
+                serie = groupes[0][3]
+                if serie.isdigit() and len(serie) >= 3:
+                    complet, score = self._completer_par_les_barres(image, serie)
+                    if complet and plausible(complet):
+                        return complet, score
+
             if plausible(assemble):
                 # La confiance d'une plaque assemblee est celle de son maillon
                 # le plus faible : un groupe mal lu suffit a la fausser.
@@ -408,6 +489,46 @@ class PlateReader:
             if plausible(candidat) and score > meilleur_score:
                 meilleur, meilleur_score = candidat, float(score)
         return meilleur, meilleur_score
+
+    def _lire_zone(self, image, alphabet: str):
+        """Lit une zone etroite en n'autorisant qu'un alphabet donne."""
+        if image is None or image.size == 0 or image.shape[1] < 6:
+            return "", 0.0
+        agrandie = cv2.resize(image, (image.shape[1] * 6, image.shape[0] * 6),
+                              interpolation=cv2.INTER_CUBIC)
+        try:
+            lectures = self._ocr.readtext(agrandie, detail=1, paragraph=False,
+                                          allowlist=alphabet,
+                                          text_threshold=0.25, low_text=0.15)
+        except Exception:
+            return "", 0.0
+        meilleur, score_max = "", 0.0
+        for _, texte, score in lectures:
+            propre = normaliser(texte)
+            if propre and float(score) > score_max:
+                meilleur, score_max = propre, float(score)
+        return meilleur, score_max
+
+    def _completer_par_les_barres(self, image, serie: str):
+        """Retrouve la lettre de serie et le code de region par decoupage.
+
+        N'est appele que lorsque la lecture d'ensemble n'a rendu aucune lettre
+        arabe -- c'est-a-dire quand le moteur a fusionne la fin de la plaque.
+        """
+        bornes = separer_sur_barres(image)
+        if bornes is None:
+            return "", 0.0
+        _, debut_lettre, fin_lettre, debut_region = bornes
+
+        lettre, score_lettre = self._lire_zone(
+            image[:, debut_lettre:fin_lettre], LETTRES_SERIE)
+        if not lettre:
+            return "", 0.0
+        region, score_region = self._lire_zone(
+            image[:, debut_region:], "0123456789")
+        if not region:
+            return "", 0.0
+        return serie + lettre[0] + region, min(score_lettre, score_region)
 
     def _relire_en_lettre(self, image, boite) -> str:
         """Relit une zone en n'autorisant que les lettres de serie."""

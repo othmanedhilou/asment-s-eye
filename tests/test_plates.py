@@ -5,6 +5,8 @@ forme, le filtrage du bruit et le vote — c'est-à-dire ce qui transforme des
 lectures médiocres en un numéro exploitable.
 """
 
+from pathlib import Path
+
 import numpy as np
 import pytest
 
@@ -495,3 +497,50 @@ def test_une_image_sautee_ne_consomme_pas_une_tentative():
 
     assert lecteur._tentatives[("cam", 1)] == 0
     assert lecteur.a_lire("cam", 1), "le véhicule doit rester lisible"
+
+
+# ── La plaque réelle d'un véhicule ────────────────────────────────────
+#
+# Ce cas vient d'un essai en conditions réelles, et il a révélé un défaut
+# qu'aucune plaque reconstruite n'aurait montré : le moteur de reconnaissance
+# ne rend que DEUX boîtes sur cette image — « 65990 » et « 95 » — cette
+# seconde avalant la barre de séparation, la lettre arabe et le code de
+# région. La relecture ciblée de la lettre, qui exige trois groupes, ne se
+# déclenchait donc jamais, et la plaque était consignée « 6599095 ».
+
+
+def test_plaque_reelle_lue_avec_sa_lettre_de_serie():
+    """La photo d'un véhicule réel, lue de bout en bout.
+
+    Marqué lent : il charge le moteur de reconnaissance. C'est le prix d'un
+    test qui porte sur une vraie image plutôt que sur une image fabriquée
+    pour lui plaire.
+    """
+    import cv2
+    import pytest
+
+    from app.plates import PlateReader
+
+    chemin = Path(__file__).parent / "donnees" / "plaque_208.jpg"
+    image = cv2.imread(str(chemin))
+    assert image is not None, f"image d'essai introuvable : {chemin}"
+
+    lecteur = PlateReader()
+    if not lecteur.ocr_disponible:
+        pytest.skip("moteur de reconnaissance indisponible")
+
+    texte, _ = lecteur.lire_region(image)
+    assert texte == "65990\u06486", \
+        f"lu {[hex(ord(c)) for c in texte]}, attendu 65990 + U+0648 + 6"
+
+
+def test_le_decoupage_sur_les_barres_s_efface_s_il_doute():
+    """Ne rien rendre est un résultat : mieux vaut la lecture ordinaire
+    qu'un découpage inventé sur une image qui n'est pas une plaque."""
+    import numpy as np
+
+    from app.plates import separer_sur_barres
+
+    assert separer_sur_barres(np.zeros((60, 200, 3), dtype=np.uint8)) is None
+    assert separer_sur_barres(np.full((60, 200, 3), 255, dtype=np.uint8)) is None
+    assert separer_sur_barres(np.zeros((10, 20, 3), dtype=np.uint8)) is None
