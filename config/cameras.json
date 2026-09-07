@@ -7,16 +7,16 @@
       "fall"
     ],
     "fps": 2.0,
-    "enabled": true,
+    "enabled": false,
     "tracking": true,
     "recording": false,
     "plates": true,
     "collecte": false
   },
   "essai": {
-    "source": "videos/208_2.jpg",
+    "source": "videos/arcs5.jpg",
     "models": [
-      "epi"
+      "arc"
     ],
     "fps": 2.0,
     "enabled": true,

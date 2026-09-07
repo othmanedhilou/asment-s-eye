@@ -491,12 +491,30 @@ def run_camera(camera_name: str, cam_cfg: dict, config: dict, registry: ModelReg
                                 etat["franchissements"] = [c.counts() for c in compteurs]
                             # Objets distincts presents par zone : un ouvrier
                             # immobile compte pour un, pas pour une image.
-                            presents = occupation(zone_filter.zones(), retenues, w, h)
-                            if presents:
-                                etat["occupation"] = presents
-                            plaques = [d.plaque for d in retenues if d.plaque]
-                            if plaques:
-                                etat["plaques"] = sorted(set(plaques))
+                            # Ecrite a chaque image, y compris vide : l'etat se
+                            # met a jour par fusion, et une zone qui se vide
+                            # garderait sinon son dernier comptage.
+                            etat["occupation"] = occupation(
+                                zone_filter.zones(), retenues, w, h)
+
+                        # Les plaques des vehicules PRESENTS dans l'image.
+                        #
+                        # Ecrite seulement lorsqu'il y en avait une, cette cle
+                        # n'etait jamais remplacee en leur absence : la derniere
+                        # plaque lue restait sur la vignette jusqu'a l'arret du
+                        # pipeline, au point de s'afficher par-dessus une image
+                        # deposee ensuite dans la meme camera.
+                        vues = sorted({d.plaque for d in retenues if d.plaque})
+                        if vues:
+                            _plaques_recentes[camera_name] = (vues, time.monotonic())
+                        else:
+                            anciennes = _plaques_recentes.get(camera_name)
+                            if anciennes and time.monotonic() - anciennes[1] < PLAQUE_AFFICHEE_S:
+                                vues = anciennes[0]
+                            else:
+                                _plaques_recentes.pop(camera_name, None)
+                        etat["plaques"] = vues
+
                         if lecteur_plaques is not None:
                             etat["lecture_plaques"] = lecteur_plaques.diagnostic(camera_name)
                         update_camera(camera_name, **etat)
@@ -634,6 +652,16 @@ class CameraSupervisor:
 # arret brutal et empecherait tout redemarrage.
 PORT_VERROU = 8791
 _verrou = None
+
+
+# Duree pendant laquelle une plaque lue reste affichee sur la vignette apres
+# la derniere image ou elle a ete vue. Sans ce repit elle clignoterait des
+# qu'un vehicule echappe a la detection sur une image isolee ; au-dela, elle
+# doit disparaitre, sans quoi elle survit au vehicule.
+PLAQUE_AFFICHEE_S = 6.0
+
+# Derniere plaque vue par camera : (plaques, instant).
+_plaques_recentes: dict[str, tuple[list[str], float]] = {}
 
 
 def verrou_unique() -> bool:

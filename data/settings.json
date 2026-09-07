@@ -1,33 +1,33 @@
 {
   "arc": {
-    "detect": false,
+    "detect": true,
     "alert": true
   },
   "conveyor": {
-    "detect": false,
+    "detect": true,
     "alert": true
   },
   "epi": {
     "detect": true,
     "alert": true
   },
+  "fall": {
+    "detect": true,
+    "alert": true
+  },
   "fire_smoke": {
-    "detect": false,
+    "detect": true,
     "alert": true
   },
   "person_animal": {
-    "detect": false,
-    "alert": true
-  },
-  "vehicles": {
-    "detect": false,
-    "alert": true
-  },
-  "fall": {
-    "detect": false,
+    "detect": true,
     "alert": true
   },
   "plate": {
+    "detect": true,
+    "alert": true
+  },
+  "vehicles": {
     "detect": true,
     "alert": true
   }
